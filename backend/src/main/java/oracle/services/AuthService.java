@@ -1,6 +1,7 @@
 package oracle.services;
 
 import java.util.List;
+import java.util.Optional;
 import oracle.exception.NoAutorizadoException;
 import oracle.jwt.JwtService;
 import oracle.model.Usuario;
@@ -28,6 +29,12 @@ public class AuthService {
     private final LoginRateLimiter rateLimiter;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
+    /**
+     * Hash descartable contra el que se compara cuando el usuario no existe,
+     * para que el coste de BCrypt no delate la existencia de la cuenta.
+     */
+    private final String hashFicticio = passwordEncoder.encode("oracle-hash-ficticio");
+
     public AuthService(
             UsuarioRepository usuarioRepository,
             ResolucionRepository resolucionRepository,
@@ -39,28 +46,33 @@ public class AuthService {
         this.rateLimiter = rateLimiter;
     }
 
-    public Mono<ApiResponse<AuthResponse>> login(LoginRequest peticion, String ip) {
+    public Mono<ApiResponse<AuthResponse>> login(LoginRequest peticion, String clave) {
         return Mono.fromCallable(() -> Trazas.medir(log, "AuthService.login usuario=" + peticion.usuario(),
                         () -> autenticar(peticion)))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(respuesta -> {
-                    rateLimiter.limpiar(ip);
+                    rateLimiter.limpiar(clave);
                     return ApiResponse.ok("Autenticacion exitosa.", respuesta);
                 })
                 .onErrorResume(NoAutorizadoException.class, ex -> {
-                    rateLimiter.registrarFallo(ip);
+                    rateLimiter.registrarFallo(clave);
                     return Mono.error(ex);
                 });
     }
 
     private AuthResponse autenticar(LoginRequest peticion) {
         String credencial = peticion.usuario().trim();
-        Usuario usuario = usuarioRepository.findByUsuarioOrEmail(credencial, credencial)
-                .orElseThrow(() -> new NoAutorizadoException("Usuario o contrasena incorrectos."));
+        Optional<Usuario> encontrado = usuarioRepository.findByUsuarioOrEmail(credencial, credencial);
 
-        if (!passwordEncoder.matches(peticion.contrasena(), usuario.getContrasena())) {
+        // Se ejecuta BCrypt SIEMPRE (contra un hash ficticio si el usuario no
+        // existe) para no filtrar por tiempo la existencia de una cuenta.
+        String hash = encontrado.map(Usuario::getContrasena).orElse(hashFicticio);
+        boolean coincide = passwordEncoder.matches(peticion.contrasena(), hash);
+        if (encontrado.isEmpty() || !coincide) {
             throw new NoAutorizadoException("Usuario o contrasena incorrectos.");
         }
+
+        Usuario usuario = encontrado.get();
         if (!Boolean.TRUE.equals(usuario.getActivo())) {
             throw new NoAutorizadoException("La cuenta esta desactivada.");
         }

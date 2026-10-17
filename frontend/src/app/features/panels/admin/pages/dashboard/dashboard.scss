@@ -93,11 +93,11 @@
   color: var(--text-3);
 }
 
-.metric--brand { --metric-accent: var(--brand); }
+.metric--brand { --metric-accent: var(--text-2); }
 .metric--accent { --metric-accent: var(--accent); }
 .metric--success { --metric-accent: var(--success); }
 
-.metric--brand .metric__icon { background: var(--brand-soft); color: var(--brand); }
+.metric--brand .metric__icon { background: var(--brand-soft); color: var(--text-2); }
 .metric--accent .metric__icon { background: var(--info-soft); color: var(--info); }
 .metric--success .metric__icon { background: var(--success-soft); color: var(--success); }
 
@@ -186,7 +186,7 @@
 
   &:hover {
     background: var(--surface-2);
-    border-color: var(--brand);
+    border-color: var(--border-strong);
   }
 }
 
@@ -228,7 +228,7 @@
 }
 
 .quick__card:hover .quick__arrow {
-  color: var(--brand);
+  color: var(--text-2);
 }
 
 .info__card {
@@ -265,7 +265,7 @@
   height: 30px;
   border-radius: var(--radius-pill);
   background: var(--brand-soft);
-  color: var(--brand);
+  color: var(--text-2);
   font-weight: 700;
   flex: none;
 }

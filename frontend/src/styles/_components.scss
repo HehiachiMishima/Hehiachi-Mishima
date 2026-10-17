@@ -209,7 +209,7 @@
     height: 36px;
     border-radius: var(--radius-xs);
     background: var(--brand-soft);
-    color: var(--brand);
+    color: var(--text-2);
     flex: none;
   }
   &__text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
@@ -400,7 +400,7 @@
 .ui-badge--success { background: var(--success-soft); color: var(--success); border-color: color-mix(in srgb, var(--success) 22%, var(--border)); }
 .ui-badge--danger { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 22%, var(--border)); }
 .ui-badge--info { background: var(--info-soft); color: var(--info); border-color: color-mix(in srgb, var(--info) 22%, var(--border)); }
-.ui-badge--brand { background: var(--brand-soft); color: var(--brand); border-color: color-mix(in srgb, var(--brand) 22%, var(--border)); }
+.ui-badge--brand { background: var(--brand-soft); color: var(--text); border-color: var(--border-strong); }
 
 .ui-dot {
   width: 7px;
@@ -565,7 +565,7 @@ body.col-resize--activo {
 
 .col-resize:hover,
 body.col-resize--activo .col-resize {
-  background: color-mix(in srgb, var(--brand) 45%, transparent);
+  background: var(--border-strong);
 }
 
 .ui-paginador {
@@ -712,7 +712,7 @@ body.col-resize--activo .col-resize {
   height: 20px;
   border-radius: 50%;
   border: 2.5px solid var(--border-strong);
-  border-top-color: var(--brand);
+  border-top-color: var(--text-3);
   animation: ui-spin 0.7s linear infinite;
 }
 

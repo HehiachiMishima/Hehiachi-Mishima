@@ -54,7 +54,6 @@ Un **unico contenedor / un unico servicio**:
 ## Requisitos
 
 - Java 21 y Node 22 (desarrollo sin Docker).
-- Docker (imagen/contenedor).
 - MySQL accesible.
 
 ---
@@ -62,31 +61,25 @@ Un **unico contenedor / un unico servicio**:
 ## Configuracion del entorno
 
 El backend lee sus credenciales de `backend/.env` (que **no se sube al
-repositorio**). Hay un archivo por entorno: para cambiar de modo, copia el
-que quieras sobre `.env`.
+repositorio**). Es un **unico archivo conmutable**: contiene los dos bloques
+de conexion (MySQL local y Aiven); para alternar, comenta uno y descomenta el
+otro. No hace falta copiar nada encima.
 
-| Archivo | Para que | Base de datos |
-| --- | --- | --- |
-| `backend/.env.local` | Desarrollo sin Docker (`mvnw` + Angular) | MySQL local |
-| `backend/.env.aiven` | Probar el contenedor con produccion | Aiven |
-
-```bash
-cp backend/.env.local backend/.env     # trabajar en local
-cp backend/.env.aiven backend/.env     # probar el contenedor con Aiven
-```
-
-O parte de la plantilla en blanco:
+Para empezar, parte de la plantilla en blanco:
 
 ```bash
 cp backend/.env.example backend/.env
 ```
 
-Render **no usa estos archivos**: inyecta las variables desde el dashboard
+Luego edita `backend/.env`: rellena los secretos y deja activo el bloque de
+conexion que corresponda (local para desarrollo; Aiven para produccion).
+
+Render **no usa el archivo**: inyecta las variables desde el dashboard
 (ver `render.yaml`).
 
 | Variable | Descripcion |
 | --- | --- |
-| `PORT` | Puerto **publico** del contenedor (nginx). Es el unico que se publica con `-p`. Render lo inyecta (`10000`). |
+| `PORT` | Puerto **publico** del contenedor (nginx). Es el unico expuesto. Render lo inyecta (`10000`). |
 | `BACKEND_PORT` | Puerto **interno** del backend Java (no se publica). Debe ser **distinto** de `PORT`. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_PARAMS` | Conexion MySQL. |
 | `JWT_SECRET` | Firma JWT, minimo 32 caracteres (`openssl rand -hex 32`). |
@@ -97,7 +90,7 @@ Render **no usa estos archivos**: inyecta las variables desde el dashboard
 
 ## Desarrollo local
 
-> Requiere `backend/.env` = perfil local: `cp backend/.env.local backend/.env`.
+> Requiere `backend/.env` con el bloque de conexion **local** activo.
 > El backend escucha en `BACKEND_PORT` (`2003`), que es lo que usa el frontend.
 
 ### Backend
@@ -121,37 +114,21 @@ SPA en `http://localhost:4200` (usa `environment.development.ts`).
 
 ---
 
-## Docker (imagen unica)
+## Docker (solo despliegue)
 
-La imagen expone **un solo puerto al exterior**: `PORT` (por defecto `10000`),
-que sirve nginx. El backend Java queda en un puerto **interno**
-(`BACKEND_PORT`, `2003`) al que solo llega nginx.
+El `Dockerfile` existe **unicamente** para empaquetar y desplegar en Render
+(un solo contenedor: nginx + Spring Boot). En local se trabaja **sin Docker**,
+corriendo backend y frontend a mano (ver *Desarrollo local*).
 
-> Regla de oro: al publicar, mapea al **puerto publico**, no al interno.
-> `-p <host>:10000` ✅ &nbsp;|  `-p 2003:2003` ❌ (nadie escucha en 2003 dentro).
-
-Construir y ejecutar **un solo contenedor** (sin compose):
-
-```bash
-docker build -t hehiachi-mishima .
-docker run --rm --env-file backend/.env -p 8080:10000 hehiachi-mishima
-```
-
-- App completa: `http://localhost:8080`
-- El host (`8080`) es libre; el lado derecho **debe** ser `PORT` (`10000` por defecto).
-
-Si cambias `PORT` (p. ej. `-e PORT=3000`), publica ese mismo:
-`docker run ... -p 8080:3000`. Nunca pongas `PORT` igual a `BACKEND_PORT`:
-el entrypoint lo detecta y aborta con un error claro.
-
-Si tu MySQL corre en el host, define `DB_HOST=host.docker.internal` en
-`backend/.env` (Docker Desktop en macOS ya resuelve ese nombre).
+> `PORT` (por defecto `10000`) es el unico puerto publicado; `BACKEND_PORT`
+> (por defecto `2003`) es interno. Nunca deben coincidir: el entrypoint lo
+> detecta y aborta con un error claro.
 
 ---
 
 ## Despliegue en Render
 
-`render.yaml` crea **un solo servicio web** (`farmacias-peruanas`) a partir
+`render.yaml` crea **un solo servicio web** (`hehiachi-mishima`) a partir
 del `Dockerfile` de la raiz.
 
 Pasos:
@@ -160,7 +137,7 @@ Pasos:
 2. En Render: **New + > Blueprint** y selecciona el repositorio.
 3. Render pedira los valores marcados con `sync: false`
    (credenciales de la base de datos y datos del administrador).
-4. Al terminar, abre la URL de `farmacias-peruanas`.
+4. Al terminar, abre la URL de `hehiachi-mishima`.
 
 Notas:
 

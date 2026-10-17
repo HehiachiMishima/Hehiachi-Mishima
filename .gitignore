@@ -3,6 +3,10 @@
 .env.*
 !.env.example
 
+# --- Certificados (CA TLS de Aiven) ---
+certs/
+*.pem
+
 # --- Sistema operativo / editores ---
 .DS_Store
 Thumbs.db

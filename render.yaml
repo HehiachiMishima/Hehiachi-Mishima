@@ -43,10 +43,11 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_ISSUER
-        value: "farmacias-peruanas"
+        value: "hehiachi-mishima"
       # Origen permitido = URL publica de este mismo servicio.
       - key: CORS_ALLOWED_ORIGINS
         fromService:
+          name: hehiachi-mishima
           type: web
           name: farmacias-peruanas
           envVarKey: RENDER_EXTERNAL_URL

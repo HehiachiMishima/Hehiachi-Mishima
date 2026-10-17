@@ -93,7 +93,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--brand);
+  color: var(--text-3);
 }
 
 .launcher__title {
@@ -134,7 +134,7 @@
   animation: ui-rise var(--transition-slow) both;
 
   &:hover {
-    border-color: var(--brand);
+    border-color: var(--border-strong);
     background: var(--surface-2);
   }
 
@@ -179,7 +179,7 @@
   width: 46px;
   height: 46px;
   border-radius: var(--radius);
-  color: var(--brand);
+  color: var(--text-2);
   background: var(--brand-soft);
 }
 
@@ -192,7 +192,7 @@
   transition: transform var(--transition), color var(--transition);
 }
 .panel-card:hover .panel-card__open {
-  color: var(--brand);
+  color: var(--text-2);
   transform: translateX(3px);
 }
 

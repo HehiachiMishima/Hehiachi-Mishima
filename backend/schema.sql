@@ -1,4 +1,3 @@
--- Active: 1791152181635@@127.0.0.1@3306@hehiachi_mishima
 -- ============================================================
 -- ESQUEMA: RBAC + Overrides
 -- ============================================================
@@ -20,8 +19,7 @@
 --
 --   * Permisos BASE (lista hardcodeada por nombre):
 --       - No se pueden eliminar.
---       - No se pueden renombrar ni cambiar descripción.
---       - Solo se permite cambiar `activo`.
+--       - No se pueden renombrar, cambiar descripción ni desactivar.
 
 CREATE DATABASE IF NOT EXISTS hehiachi_mishima CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -210,7 +208,7 @@ BEGIN
     END IF;
 END$$
 
-DELIMITER;
+DELIMITER ;
 
 -- ============================================================
 -- DATOS INICIALES
@@ -231,8 +229,8 @@ VALUES (
         'ADMINISTRADOR',
         'Rol núcleo con acceso total al sistema. No editable ni eliminable, solo se le pueden agregar permisos.',
         TRUE,
-        1,
-        1
+        0,
+        0
     )
 ON DUPLICATE KEY UPDATE
     descripcion = VALUES(descripcion);
@@ -253,113 +251,113 @@ VALUES (
         'ASIGNAR_ROLES',
         'Permite asignar roles a los usuarios.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'VER_ROLES',
         'Permite listar y consultar roles.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'CREAR_ROLES',
         'Permite crear nuevos roles.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'MODIFICAR_ROLES',
         'Permite editar roles no protegidos.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'ELIMINAR_ROLES',
         'Permite eliminar roles no protegidos.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'ASIGNAR_PERMISOS',
         'Permite asignar permisos a un rol.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'VER_PERMISOS',
         'Permite listar y consultar permisos.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'CREAR_PERMISOS',
         'Permite crear nuevos permisos.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'MODIFICAR_PERMISOS',
         'Permite editar permisos no base.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'ELIMINAR_PERMISOS',
         'Permite eliminar permisos no base.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'VER_USUARIOS',
         'Permite listar y consultar usuarios.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'CREAR_USUARIOS',
         'Permite crear nuevos usuarios.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'MODIFICAR_USUARIOS',
         'Permite editar usuarios existentes.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'ELIMINAR_USUARIOS',
         'Permite eliminar usuarios no protegidos.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'PANEL_ADMIN',
         'Permite el ingreso al panel administrador.',
         TRUE,
-        1,
-        1
+        0,
+        0
     ),
     (
         'DASHBOARD_ADMIN',
         'Permite ver el dashboard de administradores.',
         TRUE,
-        1,
-        1
+        0,
+        0
     )
 ON DUPLICATE KEY UPDATE
     descripcion = VALUES(descripcion);
@@ -407,10 +405,6 @@ END$$
 -- ------------------------------------------------------------
 -- PERMISOS BASE (por NOMBRE)
 -- ------------------------------------------------------------
-DROP TRIGGER IF EXISTS trg_permisos_base_update;
-
-DELIMITER $$
-
 CREATE TRIGGER trg_permisos_base_update
 BEFORE UPDATE ON permisos
 FOR EACH ROW
@@ -425,10 +419,6 @@ BEGIN
             SET MESSAGE_TEXT = 'No se puede modificar un permiso base. Ni siquiera se puede desactivar.';
     END IF;
 END$$
-
-DROP TRIGGER IF EXISTS trg_permisos_base_delete;
-
-DELIMITER $$
 
 CREATE TRIGGER trg_permisos_base_delete
 BEFORE DELETE ON permisos
@@ -445,4 +435,4 @@ BEGIN
     END IF;
 END$$
 
-DELIMITER;
+DELIMITER ;

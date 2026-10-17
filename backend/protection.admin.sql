@@ -1,4 +1,3 @@
--- Active: 1791152181635@@127.0.0.1@3306@hehiachi_mishima
 -- ------------------------------------------------------------
 -- USUARIO '@hehiachi' (protección TOTAL por NOMBRE)
 --   - No se puede eliminar.
@@ -54,10 +53,6 @@ BEGIN
             SET MESSAGE_TEXT = 'No se puede modificar el rol de @hehiachi.';
     END IF;
 END$$
-
-DELIMITER;
-
-DELIMITER $$
 
 -- Bloquea INSERT de overrides para @hehiachi
 CREATE TRIGGER trg_usuarios_permisos_admin_insert

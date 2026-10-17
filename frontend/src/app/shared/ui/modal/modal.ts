@@ -1,21 +1,38 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  effect,
+  inject,
+  input,
+  output,
+  viewChild,
+} from '@angular/core';
 import { Icon } from '../icon/icon';
 
 export type AnchoModal = 'sm' | 'md' | 'lg';
+
+const ENFOCABLES =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 @Component({
   selector: 'ui-modal',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Icon],
+  host: {
+    '(document:keydown)': 'alTecla($event)',
+  },
   template: `
     @if (abierto()) {
       <div class="ui-modal-backdrop" (click)="alClicFondo($event)" tabindex="-1">
         <section
+          #dialogo
           class="ui-modal"
           [class]="'ui-modal--' + ancho()"
           [class.ui-modal--compacto]="compacto()"
           role="dialog"
           aria-modal="true"
+          tabindex="-1"
           [attr.aria-label]="titulo()"
         >
           <header class="ui-modal__header">
@@ -43,6 +60,9 @@ export type AnchoModal = 'sm' | 'md' | 'lg';
   `,
 })
 export class Modal {
+  private readonly caja = viewChild<ElementRef<HTMLElement>>('dialogo');
+  private focoPrevio: HTMLElement | null = null;
+
   readonly abierto = input(false);
   readonly titulo = input('');
   readonly subtitulo = input('');
@@ -50,9 +70,67 @@ export class Modal {
   readonly compacto = input(false);
   readonly cerrar = output<void>();
 
+  constructor() {
+    effect(() => {
+      const caja = this.caja();
+      if (caja && this.focoPrevio === null) {
+        this.focoPrevio = document.activeElement as HTMLElement | null;
+        this.enfocarPrimero(caja.nativeElement);
+      } else if (!caja && this.focoPrevio !== null) {
+        this.focoPrevio.focus();
+        this.focoPrevio = null;
+      }
+    });
+  }
+
   alClicFondo(evento: MouseEvent): void {
     if (evento.target === evento.currentTarget) {
       this.cerrar.emit();
     }
+  }
+
+  alTecla(evento: KeyboardEvent): void {
+    const caja = this.caja();
+    if (!caja) {
+      return;
+    }
+    if (evento.key === 'Escape') {
+      evento.preventDefault();
+      this.cerrar.emit();
+      return;
+    }
+    if (evento.key === 'Tab') {
+      this.atraparFoco(evento, caja.nativeElement);
+    }
+  }
+
+  private enfocarPrimero(raiz: HTMLElement): void {
+    const lista = this.enfocables(raiz);
+    (lista[0] ?? raiz).focus();
+  }
+
+  private atraparFoco(evento: KeyboardEvent, raiz: HTMLElement): void {
+    const lista = this.enfocables(raiz);
+    if (lista.length === 0) {
+      evento.preventDefault();
+      raiz.focus();
+      return;
+    }
+    const primero = lista[0];
+    const ultimo = lista[lista.length - 1];
+    const activo = document.activeElement;
+    if (evento.shiftKey && (activo === primero || activo === raiz)) {
+      evento.preventDefault();
+      ultimo.focus();
+    } else if (!evento.shiftKey && activo === ultimo) {
+      evento.preventDefault();
+      primero.focus();
+    }
+  }
+
+  private enfocables(raiz: HTMLElement): HTMLElement[] {
+    return Array.from(raiz.querySelectorAll<HTMLElement>(ENFOCABLES)).filter(
+      (el) => el.getClientRects().length > 0,
+    );
   }
 }

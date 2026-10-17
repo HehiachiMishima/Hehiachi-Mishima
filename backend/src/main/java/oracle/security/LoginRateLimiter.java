@@ -35,13 +35,35 @@ public class LoginRateLimiter {
 
     /** Registra un intento fallido. */
     public void registrarFallo(String clave) {
-        if (intentos.size() > MAX_CLAVES) {
-            intentos.clear();
-        }
         Deque<Long> cola = intentos.computeIfAbsent(clave, k -> new ArrayDeque<>());
         synchronized (cola) {
             podar(cola);
             cola.addLast(System.currentTimeMillis());
+        }
+        acotarTamano();
+    }
+
+    /**
+     * Cota el numero de claves sin borrar TODOS los contadores (un clear() global
+     * regalaria intentos nuevos al atacante). Primero descarta las colas ya
+     * vencidas; si aun sobran, elimina las sobrantes de forma acotada.
+     */
+    private void acotarTamano() {
+        if (intentos.size() <= MAX_CLAVES) {
+            return;
+        }
+        long limite = System.currentTimeMillis() - VENTANA_MS;
+        var it = intentos.entrySet().iterator();
+        while (it.hasNext() && intentos.size() > MAX_CLAVES) {
+            Deque<Long> cola = it.next().getValue();
+            synchronized (cola) {
+                while (!cola.isEmpty() && cola.peekFirst() < limite) {
+                    cola.pollFirst();
+                }
+                if (cola.isEmpty()) {
+                    it.remove();
+                }
+            }
         }
     }
 
