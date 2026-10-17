@@ -1,5 +1,21 @@
 @use 'breakpoints' as bp;
 
+/**
+ * Coreografía de aparición/ocultación del sidebar "Módulos".
+ * Tres capas encadenadas: velos → panel → items en cascada.
+ * Todo con nuestro sistema: curvas de salida/entrada propias, superficies
+ * monocromas de DESIGN.md y sin dependencias externas.
+ */
+$salida: cubic-bezier(0.16, 1, 0.3, 1);
+$entrada: cubic-bezier(0.7, 0, 0.84, 0);
+$veil-dur: 500ms;
+$veil-paso: 70ms;
+$panel-dur: 650ms;
+$panel-retardo: 150ms;
+$cierre-dur: 320ms;
+$item-paso: 100ms;
+$item-retardo: 250ms;
+
 :host {
   display: block;
   min-height: 100dvh;
@@ -7,6 +23,34 @@
 
 .shell {
   min-height: 100dvh;
+}
+
+.shell__veil {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(var(--sidebar-w), 86vw);
+  transform: translateX(-100%);
+  pointer-events: none;
+  transition: transform $cierre-dur $entrada;
+}
+
+.shell__veil--1 {
+  z-index: calc(var(--z-drawer) - 2);
+  background: var(--surface-3);
+}
+
+.shell__veil--2 {
+  z-index: calc(var(--z-drawer) - 1);
+  background: var(--surface);
+}
+
+.shell--open .shell__veil {
+  transform: translateX(0);
+  transition: transform $veil-dur $salida;
+}
+
+.shell--open .shell__veil--2 {
+  transition-delay: $veil-paso;
 }
 
 .shell__sidebar {
@@ -17,7 +61,7 @@
   width: min(var(--sidebar-w), 86vw);
   z-index: var(--z-drawer);
   transform: translateX(-100%);
-  transition: transform var(--transition);
+  transition: transform $cierre-dur $entrada;
   background: var(--sidebar-bg);
   color: var(--sidebar-fg);
   border-right: 1px solid var(--sidebar-border);
@@ -26,6 +70,8 @@
 
 .shell--open .shell__sidebar {
   transform: translateX(0);
+  transition: transform $panel-dur $salida;
+  transition-delay: $panel-retardo;
 }
 
 .shell__brand {
@@ -80,6 +126,11 @@
   overflow-y: auto;
 }
 
+@mixin relevar($dur, $fade) {
+  transition: opacity $fade $salida, transform $dur $salida;
+  transition-delay: calc(#{$item-retardo} + var(--i, 0) * #{$item-paso});
+}
+
 .shell__nav-label {
   padding: 0 var(--space-3);
   margin-bottom: var(--space-2);
@@ -88,13 +139,20 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--sidebar-fg);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity $cierre-dur $entrada, transform $cierre-dur $entrada;
+}
+
+.shell--open .shell__nav-label {
+  opacity: 1;
+  transform: none;
+  @include relevar(420ms, 320ms);
 }
 
 .shell__nav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
+  display: block;
+  overflow: hidden;
   border-radius: var(--radius-sm);
   color: var(--sidebar-fg);
   font-size: var(--fs-md);
@@ -105,6 +163,36 @@
     background: var(--surface-2);
     color: var(--sidebar-fg-strong);
   }
+
+  &:focus-visible {
+    box-shadow: none;
+    outline: 2px solid var(--brand);
+    outline-offset: -2px;
+  }
+}
+
+.shell__nav-itemInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  opacity: 0;
+  transform: translateY(140%);
+  transition: opacity 200ms $entrada, transform $cierre-dur $entrada;
+
+  > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.shell--open .shell__nav-itemInner {
+  opacity: 1;
+  transform: none;
+  @include relevar(520ms, 320ms);
 }
 
 .shell__nav-item--active {
@@ -116,6 +204,15 @@
 .shell__sidebar-foot {
   padding: var(--space-3);
   border-top: 1px solid var(--sidebar-border);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity $cierre-dur $entrada, transform $cierre-dur $entrada;
+}
+
+.shell--open .shell__sidebar-foot {
+  opacity: 1;
+  transform: none;
+  @include relevar(420ms, 320ms);
 }
 
 .shell__panel-btn {
@@ -148,12 +245,14 @@
   background: var(--overlay);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--transition);
+  transition: opacity $cierre-dur $entrada;
 }
 
 .shell--open .shell__overlay {
   opacity: 1;
   pointer-events: auto;
+  transition: opacity 300ms $salida;
+  transition-delay: 100ms;
 }
 
 .shell__body {
@@ -183,6 +282,34 @@
 
 .shell__menu-btn {
   display: inline-flex;
+}
+
+.shell__menu-icon {
+  position: relative;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+}
+
+.shell__menu-icon > * {
+  position: absolute;
+  inset: 0;
+  transition: transform 460ms $salida, opacity 240ms $entrada;
+}
+
+.shell__menu-icon-close {
+  opacity: 0;
+  transform: rotate(90deg);
+}
+
+.shell--open .shell__menu-icon-open {
+  opacity: 0;
+  transform: rotate(-90deg);
+}
+
+.shell--open .shell__menu-icon-close {
+  opacity: 1;
+  transform: rotate(0deg);
 }
 
 .shell__topbar-title {
@@ -250,4 +377,16 @@
   width: 100%;
   min-width: 0;
   padding: clamp(var(--space-5), 3vw, var(--space-8));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell__veil,
+  .shell__sidebar,
+  .shell__overlay,
+  .shell__nav-label,
+  .shell__nav-itemInner,
+  .shell__sidebar-foot,
+  .shell__menu-icon > * {
+    transition-delay: 0ms !important;
+  }
 }
