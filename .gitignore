@@ -1,0 +1,14 @@
+# --- Secretos (nunca al repositorio) ---
+.env
+.env.*
+!.env.example
+
+# --- Sistema operativo / editores ---
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+
+# --- Logs ---
+*.log
