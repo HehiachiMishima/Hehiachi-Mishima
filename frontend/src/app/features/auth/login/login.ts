@@ -6,10 +6,11 @@ import { Auth } from '../../../core/services/auth';
 import { Carga } from '../../../core/services/carga';
 import { Notificaciones } from '../../../core/services/notificaciones';
 import { Icon } from '../../../shared/ui/icon/icon';
+import { LightPillar } from '../../../shared/ui/light-pillar/light-pillar';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, Icon],
+  imports: [ReactiveFormsModule, Icon, LightPillar],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })

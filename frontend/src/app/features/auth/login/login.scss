@@ -1,9 +1,12 @@
 @use 'breakpoints' as bp;
 
 .login {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: 1.05fr 1fr;
   min-height: 100dvh;
+  background: #1d1d1f;
 
   @include bp.down(lg) {
     grid-template-columns: 1fr;
@@ -62,27 +65,18 @@
   }
 }
 
-.login__brand-glow {
-  position: absolute;
-  width: 460px;
-  height: 460px;
-  right: -160px;
-  bottom: -180px;
-  border-radius: 50%;
-  background: var(--gradient-iridescent-spectrum);
-  opacity: 0.22;
-  filter: blur(70px);
-}
-
 .login__panel {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-8);
-  background: var(--bg);
+  background: transparent;
 }
 
 .login__card {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 400px;
   background: var(--surface);
