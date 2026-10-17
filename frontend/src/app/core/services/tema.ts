@@ -15,18 +15,49 @@ export class TemaService {
     this.aplicar(this._tema());
   }
 
-  alternar(): void {
-    this.establecer(this._tema() === 'light' ? 'dark' : 'light');
+  alternar(origen?: Event): void {
+    this.cambiar(this._tema() === 'light' ? 'dark' : 'light', origen);
   }
 
   establecer(tema: Tema): void {
-    this._tema.set(tema);
-    this.aplicar(tema);
-    try {
-      localStorage.setItem(CLAVE, tema);
-    } catch {
-      /* almacenamiento no disponible */
+    this.cambiar(tema);
+  }
+
+  private cambiar(tema: Tema, origen?: Event): void {
+    const actualizar = (): void => {
+      this._tema.set(tema);
+      this.aplicar(tema);
+      try {
+        localStorage.setItem(CLAVE, tema);
+      } catch {
+        /* almacenamiento no disponible */
+      }
+    };
+
+    if (typeof document.startViewTransition !== 'function' || this.reducido()) {
+      actualizar();
+      return;
     }
+
+    this.anclar(origen);
+    document.startViewTransition(actualizar);
+  }
+
+  private anclar(origen?: Event): void {
+    const ancla = origen?.currentTarget;
+    const raiz = document.documentElement;
+    if (!(ancla instanceof Element)) {
+      raiz.style.removeProperty('--vt-x');
+      raiz.style.removeProperty('--vt-y');
+      return;
+    }
+    const caja = ancla.getBoundingClientRect();
+    raiz.style.setProperty('--vt-x', `${caja.left + caja.width / 2}px`);
+    raiz.style.setProperty('--vt-y', `${caja.top + caja.height / 2}px`);
+  }
+
+  private reducido(): boolean {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   }
 
   private aplicar(tema: Tema): void {

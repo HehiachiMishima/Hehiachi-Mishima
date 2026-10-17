@@ -46,8 +46,8 @@ export class Launcher {
     this.notificaciones.error('Acceso denegado', `No tienes permiso para acceder a ${panel.nombre}.`);
   }
 
-  alternarTema(): void {
-    this.tema.alternar();
+  alternarTema(evento: Event): void {
+    this.tema.alternar(evento);
   }
 
   cerrarSesion(): void {

@@ -50,8 +50,8 @@ export class AdminShell {
     return typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches;
   }
 
-  alternarTema(): void {
-    this.tema.alternar();
+  alternarTema(evento: Event): void {
+    this.tema.alternar(evento);
   }
 
   irAPaneles(): void {
