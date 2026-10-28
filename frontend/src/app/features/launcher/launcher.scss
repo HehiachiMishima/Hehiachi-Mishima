@@ -5,6 +5,10 @@
   background: var(--bg);
 }
 
+&:active {
+  transform: none;
+}
+
 .launcher__topbar {
   position: sticky;
   top: 0;
@@ -128,18 +132,24 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-xs);
   cursor: pointer;
-  transition: border-color var(--transition), background var(--transition);
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition),
+    transform var(--transition);
   animation: ui-rise var(--transition-slow) both;
 
   &:hover {
-    border-color: var(--border-strong);
-    background: var(--surface-2);
+    border-color: color-mix(in srgb, var(--brand) 42%, var(--border));
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
   }
 
   &:active {
-    background: var(--surface-3);
+    transform: translateY(0) scale(0.99);
   }
 }
 
@@ -151,7 +161,9 @@
   cursor: not-allowed;
 
   &:hover {
-    border-color: var(--border-strong);
+    border-color: var(--border);
+    box-shadow: var(--shadow-xs);
+    transform: none;
   }
 
   .panel-card__icon {
@@ -179,7 +191,7 @@
   width: 46px;
   height: 46px;
   border-radius: var(--radius);
-  color: var(--text-2);
+  color: var(--brand-strong);
   background: var(--brand-soft);
 }
 
@@ -215,4 +227,22 @@
 .panel-card--locked .panel-card__icon,
 .panel-card--locked .panel-card__name {
   filter: grayscale(0.2);
+}
+
+.launcher__brand-name {
+  color: var(--text);
+}
+
+.launcher__topbar {
+  box-shadow: var(--shadow-xs);
+}
+
+.launcher__user {
+  border-color: var(--border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-card {
+    transform: none;
+  }
 }

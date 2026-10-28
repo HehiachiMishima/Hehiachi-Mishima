@@ -23,6 +23,7 @@ $item-retardo: 250ms;
 
 .shell {
   min-height: 100dvh;
+  background: var(--bg);
 }
 
 .shell__veil {
@@ -199,6 +200,7 @@ $item-retardo: 250ms;
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active-fg);
   font-weight: 600;
+  box-shadow: inset 3px 0 var(--brand);
 }
 
 .shell__sidebar-foot {
@@ -274,6 +276,7 @@ $item-retardo: 250ms;
   padding: 0 var(--space-6);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
 
   @include bp.down(md) {
     padding: 0 var(--space-4);
@@ -377,6 +380,13 @@ $item-retardo: 250ms;
   width: 100%;
   min-width: 0;
   padding: clamp(var(--space-5), 3vw, var(--space-8));
+}
+
+.shell__panel-btn {
+  &:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

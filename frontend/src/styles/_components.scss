@@ -1,5 +1,104 @@
 @use 'breakpoints' as bp;
 
+// Paleta de administración aislada del login y del resto de la aplicación.
+.launcher,
+.shell,
+.denied {
+  --brand: #3156e8;
+  --brand-strong: #2645ce;
+  --brand-hover: #2645ce;
+  --brand-soft: #e9eeff;
+  --brand-contrast: #ffffff;
+  --accent: #7141ce;
+  --success: #087c54;
+  --success-soft: #e3f6ed;
+  --warning: #8a4f08;
+  --warning-soft: #fff2dc;
+  --danger: #c0394c;
+  --danger-soft: #ffeaee;
+  --danger-contrast: #ffffff;
+  --info: #7141ce;
+  --info-soft: #f0eaff;
+  --filter-bg: #f5f7ff;
+  --filter-border: #c9d4e6;
+
+  --bg: #f4f7fd;
+  --surface: #ffffff;
+  --surface-2: #f2f5fc;
+  --surface-3: #e7edf8;
+  --overlay: rgba(15, 25, 48, 0.46);
+  --border: #dfe6f2;
+  --border-strong: #c9d4e6;
+  --text: #17213a;
+  --text-2: #46536e;
+  --text-3: #67748d;
+
+  --sidebar-bg: #ffffff;
+  --sidebar-fg: #596781;
+  --sidebar-fg-strong: #17213a;
+  --sidebar-active-bg: #e9eeff;
+  --sidebar-active-fg: var(--brand-strong);
+  --sidebar-border: #dfe6f2;
+
+  --color-graphite: #7141ce;
+  --color-link-blue: #3156e8;
+  --ring: 0 0 0 4px rgba(49, 86, 232, 0.25);
+  --shadow-xs: 0 1px 3px rgba(25, 40, 78, 0.08);
+  --shadow-sm: 0 1px 3px rgba(25, 40, 78, 0.06), 0 8px 20px rgba(25, 40, 78, 0.06);
+  --shadow-lg: 0 18px 48px rgba(25, 40, 78, 0.18);
+
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+}
+
+:root[data-theme='dark'] .launcher,
+:root[data-theme='dark'] .shell,
+:root[data-theme='dark'] .denied {
+  --brand-soft: #28365e;
+  --brand-strong: #cbd5ff;
+  --brand-contrast: #ffffff;
+  --accent: #b49aff;
+  --success: #5ae0a6;
+  --success-soft: #173a32;
+  --warning: #ffd078;
+  --warning-soft: #3d301d;
+  --danger: #ff8293;
+  --danger-soft: #43232d;
+  --danger-contrast: #2a1017;
+  --info: #b49aff;
+  --info-soft: #33294f;
+  --filter-bg: #202a43;
+  --filter-border: #435371;
+
+  --bg: #111827;
+  --surface: #181f31;
+  --surface-2: #1f2940;
+  --surface-3: #293650;
+  --overlay: rgba(5, 10, 22, 0.76);
+  --border: #2e3b57;
+  --border-strong: #435371;
+  --text: #f3f5fc;
+  --text-2: #bdc7da;
+  --text-3: #9aa8c1;
+
+  --sidebar-bg: #181f31;
+  --sidebar-fg: #b1bdd4;
+  --sidebar-fg-strong: #f3f5fc;
+  --sidebar-active-bg: #29385f;
+  --sidebar-active-fg: #cbd5ff;
+  --sidebar-border: #2e3b57;
+
+  --color-graphite: #b49aff;
+  --color-link-blue: #91a8ff;
+  --ring: 0 0 0 4px rgba(119, 148, 255, 0.36);
+  --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-lg: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
 @keyframes ui-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -91,7 +190,7 @@
 
 .ui-btn--danger {
   --btn-bg: var(--danger);
-  --btn-fg: #fff;
+  --btn-fg: var(--danger-contrast, #fff);
   --btn-border: transparent;
   &:hover { --btn-bg: color-mix(in srgb, var(--danger) 84%, black); }
 }
@@ -116,6 +215,11 @@
   &:hover { background: var(--surface-3); color: var(--text); }
   &:active { opacity: 0.85; }
   &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.shell .ui-icon-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .ui-icon-btn--danger:hover { background: var(--danger-soft); color: var(--danger); }
@@ -402,6 +506,12 @@
 .ui-badge--info { background: var(--info-soft); color: var(--info); border-color: color-mix(in srgb, var(--info) 22%, var(--border)); }
 .ui-badge--brand { background: var(--brand-soft); color: var(--text); border-color: var(--border-strong); }
 
+.launcher .ui-badge--brand,
+.shell .ui-badge--brand {
+  color: var(--brand-strong);
+  border-color: color-mix(in srgb, var(--brand) 28%, var(--border));
+}
+
 .ui-dot {
   width: 7px;
   height: 7px;
@@ -438,6 +548,20 @@
 }
 
 .toolbar__grow { flex: 1; min-width: 200px; }
+
+.shell :is(.toolbar, .perm-toolbar) :is(.ui-input, select) {
+  background: var(--filter-bg);
+  border-color: var(--filter-border);
+}
+
+.shell :is(.toolbar, .perm-toolbar) .ui-input::placeholder {
+  color: var(--text-2);
+  opacity: 1;
+}
+
+.shell :is(.toolbar, .perm-toolbar) .ui-search ui-icon {
+  color: var(--brand-strong);
+}
 
 .table-card {
   background: var(--surface);
@@ -836,6 +960,22 @@ body.col-resize--activo .col-resize {
   background: var(--danger-soft);
   color: var(--danger);
   flex: none;
+}
+
+.launcher .ui-avatar,
+.shell .ui-avatar,
+.denied .ui-avatar {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.shell .role-item__icon {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.shell .row-actions .ui-icon-btn--danger:hover {
+  color: var(--danger-contrast);
 }
 .confirm__text { min-width: 0; }
 .confirm__title { font-weight: 600; color: var(--text); }
