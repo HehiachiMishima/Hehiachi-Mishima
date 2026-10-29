@@ -42,4 +42,19 @@ public class Usuario extends Auditable {
 
     @Column(name = "activo", nullable = false)
     private Boolean activo = Boolean.TRUE;
+
+    /**
+     * Version de credenciales (claim "ver" del JWT). Se incrementa al cambiar la
+     * contrasena, el nombre de usuario o al desactivar la cuenta: revoca los
+     * tokens emitidos antes. Los contadores de bloqueo (intentos_fallidos,
+     * bloqueado_hasta) NO se mapean: se actualizan con UPDATE atomicos en
+     * UsuarioRepository para no pisar escrituras concurrentes con save().
+     */
+    @Column(name = "credenciales_version", nullable = false)
+    private Integer credencialesVersion = 0;
+
+    /** Incrementa la version de credenciales (revoca los JWT vigentes). */
+    public void revocarCredenciales() {
+        credencialesVersion = (credencialesVersion == null ? 0 : credencialesVersion) + 1;
+    }
 }

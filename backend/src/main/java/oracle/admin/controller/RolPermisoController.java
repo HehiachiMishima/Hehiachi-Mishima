@@ -49,8 +49,9 @@ public class RolPermisoController {
         return rolPermisoService.quitar(rolId, permisoId);
     }
 
+    /** Consulta de solo lectura sobre roles: basta VER_ROLES (ux H15). */
     @GetMapping("/permisos/{permisoId}/roles")
-    @PreAuthorize("hasAuthority('VER_PERMISOS') and hasAuthority('VER_ROLES')")
+    @PreAuthorize("hasAuthority('VER_ROLES')")
     public Mono<ApiResponse<List<RolResponse>>> rolesConPermiso(@PathVariable Long permisoId) {
         return rolPermisoService.listarPorPermiso(permisoId);
     }

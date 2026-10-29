@@ -1,13 +1,8 @@
 package oracle.admin.service;
 
-import oracle.common.support.ActorActual;
-import oracle.common.support.Trazas;
-
 import java.time.LocalDateTime;
 import java.util.List;
-import oracle.common.exception.ConflictoException;
-import oracle.common.exception.OperacionNoPermitidaException;
-import oracle.common.exception.RecursoNoEncontradoException;
+import lombok.extern.slf4j.Slf4j;
 import oracle.admin.model.Permiso;
 import oracle.admin.model.Rol;
 import oracle.admin.model.RolPermiso;
@@ -15,20 +10,31 @@ import oracle.admin.repository.PermisoRepository;
 import oracle.admin.repository.RolPermisoRepository;
 import oracle.admin.repository.RolRepository;
 import oracle.admin.request.RolPermisoAsignarRequest;
-import oracle.common.response.ApiResponse;
 import oracle.admin.response.PermisoResponse;
 import oracle.admin.response.RolPermisoResponse;
 import oracle.admin.response.RolResponse;
-import oracle.common.security.AutorizacionCache;
+import oracle.auditoria.AccionAuditoria;
+import oracle.auditoria.ContextoAuditoria;
+import oracle.auditoria.Detalle;
+import oracle.auditoria.EntidadAuditoria;
+import oracle.auditoria.RegistroAuditoria;
 import oracle.common.config.Transacciones;
+import oracle.common.exception.ConflictoException;
+import oracle.common.exception.OperacionNoPermitidaException;
+import oracle.common.exception.RecursoNoEncontradoException;
+import oracle.common.response.ApiResponse;
+import oracle.common.security.AutorizacionCache;
+import oracle.common.support.ActorActual;
+import oracle.common.support.Trazas;
 import org.springframework.stereotype.Service;
-import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 /**
  * Plantilla RBAC rol-permiso (roles_permisos). ADMINISTRADOR solo recibe
- * permisos: quitarlos queda bloqueado, igual que el trigger de la base.
+ * permisos (y solo de otro ADMINISTRADOR); quitarlos queda bloqueado, igual
+ * que el trigger de la base. Nadie concede ni retira un permiso que no tiene
+ * ni altera un rol propio.
  */
 @Slf4j
 @Service
@@ -39,32 +45,38 @@ public class RolPermisoService {
     private final RolPermisoRepository rolPermisoRepository;
     private final AutorizacionCache autorizacionCache;
     private final Transacciones transacciones;
+    private final GuardiaPrivilegios guardia;
+    private final RegistroAuditoria auditoria;
 
     public RolPermisoService(
             RolRepository rolRepository,
             PermisoRepository permisoRepository,
             RolPermisoRepository rolPermisoRepository,
             AutorizacionCache autorizacionCache,
-            Transacciones transacciones) {
+            Transacciones transacciones,
+            GuardiaPrivilegios guardia,
+            RegistroAuditoria auditoria) {
         this.rolRepository = rolRepository;
         this.permisoRepository = permisoRepository;
         this.rolPermisoRepository = rolPermisoRepository;
         this.autorizacionCache = autorizacionCache;
         this.transacciones = transacciones;
+        this.guardia = guardia;
+        this.auditoria = auditoria;
     }
 
     /** Agregar un permiso al rol (unico por par). */
     public Mono<ApiResponse<RolPermisoResponse>> asignar(Long rolId, RolPermisoAsignarRequest peticion) {
         Long actor = ActorActual.id();
-        return Mono.fromCallable(() -> Trazas.medir(log,
-                        "RolPermisoService.asignar rolId=" + rolId + " permisoId=" + peticion.permisoId(),
-                        () -> transacciones.ejecutar(() -> {
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        return Mono.fromCallable(() -> Trazas.medir(log, "RolPermisoService.asignar", () -> transacciones.ejecutar(() -> {
                             Rol rol = obtenerRol(rolId);
-                            Permiso permiso = permisoRepository.findById(peticion.permisoId())
-                                    .orElseThrow(() -> new RecursoNoEncontradoException(
-                                            "No existe el permiso con id " + peticion.permisoId() + "."));
+                            Permiso permiso = obtenerPermiso(peticion.permisoId());
+                            guardia.exigirAdministradorSiRolAdmin(actor, rol.getNombre());
+                            guardia.exigirRolAjeno(actor, rolId);
+                            guardia.exigirPoseer(actor, List.of(permiso.getNombre()));
 
-                            if (rolPermisoRepository.existsByRolIdAndPermisoId(rolId, peticion.permisoId())) {
+                            if (rolPermisoRepository.existsByRolIdAndPermisoId(rolId, permiso.getId())) {
                                 throw new ConflictoException("El rol '" + rol.getNombre()
                                         + "' ya tiene el permiso '" + permiso.getNombre() + "'.");
                             }
@@ -77,6 +89,9 @@ public class RolPermisoService {
                             rolPermisoRepository.save(plantilla);
                             autorizacionCache.invalidarTodo();
 
+                            auditoria.exito(ctx, AccionAuditoria.PERMISO_ASIGNADO_ROL, EntidadAuditoria.ROL_PERMISO,
+                                    rolId + ":" + permiso.getId(),
+                                    Detalle.de("rol", rol.getNombre(), "permiso", permiso.getNombre()));
                             return ApiResponse.ok("Permiso agregado al rol.", RolPermisoResponse.of(plantilla));
                         })))
                 .subscribeOn(Schedulers.boundedElastic());
@@ -84,20 +99,26 @@ public class RolPermisoService {
 
     /** Quitar un permiso del rol (bloqueado para ADMINISTRADOR). */
     public Mono<ApiResponse<Void>> quitar(Long rolId, Long permisoId) {
-        return Mono.<Void>fromRunnable(() -> Trazas.medir(log,
-                        "RolPermisoService.quitar rolId=" + rolId + " permisoId=" + permisoId,
-                        () -> transacciones.ejecutar(() -> {
+        Long actor = ActorActual.id();
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        return Mono.<Void>fromRunnable(() -> Trazas.medir(log, "RolPermisoService.quitar", () -> transacciones.ejecutar(() -> {
                             Rol rol = obtenerRol(rolId);
                             if (Protecciones.esRolAdministrador(rol.getNombre())) {
                                 throw new OperacionNoPermitidaException(
-                                        "No se pueden quitar permisos al rol ADMINISTRADOR. Solo se pueden agregar.");
+                                        "Al rol ADMINISTRADOR no se le pueden quitar permisos. Solo se pueden agregar.");
                             }
+                            Permiso permiso = obtenerPermiso(permisoId);
+                            guardia.exigirRolAjeno(actor, rolId);
+                            guardia.exigirPoseer(actor, List.of(permiso.getNombre()));
                             if (!rolPermisoRepository.existsByRolIdAndPermisoId(rolId, permisoId)) {
                                 throw new RecursoNoEncontradoException("El rol '" + rol.getNombre()
-                                        + "' no tiene el permiso con id " + permisoId + ".");
+                                        + "' no tiene el permiso '" + permiso.getNombre() + "'.");
                             }
                             rolPermisoRepository.eliminarPar(rolId, permisoId);
                             autorizacionCache.invalidarTodo();
+                            auditoria.exito(ctx, AccionAuditoria.PERMISO_REVOCADO_ROL, EntidadAuditoria.ROL_PERMISO,
+                                    rolId + ":" + permisoId,
+                                    Detalle.de("rol", rol.getNombre(), "permiso", permiso.getNombre()));
                             return null;
                         })))
                 .subscribeOn(Schedulers.boundedElastic())
@@ -106,7 +127,7 @@ public class RolPermisoService {
 
     /** Permisos de un rol. */
     public Mono<ApiResponse<List<PermisoResponse>>> listarPorRol(Long rolId) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "RolPermisoService.listarPorRol rolId=" + rolId, () -> {
+        return Mono.fromCallable(() -> Trazas.medir(log, "RolPermisoService.listarPorRol", () -> {
                     obtenerRol(rolId);
                     return rolPermisoRepository.permisosDeRol(rolId).stream().map(PermisoResponse::of).toList();
                 }))
@@ -116,7 +137,7 @@ public class RolPermisoService {
 
     /** Roles que tienen un permiso. */
     public Mono<ApiResponse<List<RolResponse>>> listarPorPermiso(Long permisoId) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "RolPermisoService.listarPorPermiso permisoId=" + permisoId, () -> {
+        return Mono.fromCallable(() -> Trazas.medir(log, "RolPermisoService.listarPorPermiso", () -> {
                     if (!permisoRepository.existsById(permisoId)) {
                         throw new RecursoNoEncontradoException("No existe el permiso con id " + permisoId + ".");
                     }
@@ -129,5 +150,10 @@ public class RolPermisoService {
     private Rol obtenerRol(Long id) {
         return rolRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No existe el rol con id " + id + "."));
+    }
+
+    private Permiso obtenerPermiso(Long id) {
+        return permisoRepository.findById(id)
+                .orElseThrow(() -> new RecursoNoEncontradoException("No existe el permiso con id " + id + "."));
     }
 }

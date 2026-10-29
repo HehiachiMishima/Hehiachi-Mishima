@@ -7,9 +7,9 @@ import jakarta.validation.constraints.NotNull;
  * Resuelve por MIN(otorgado) => deny-overrides.
  */
 public record UsuarioPermisoOverrideRequest(
-        @NotNull(message = "El permisoId es obligatorio.")
+        @NotNull(message = "El permiso es obligatorio.")
         Long permisoId,
 
-        @NotNull(message = "El campo otorgado (true=grant/false=deny) es obligatorio.")
+        @NotNull(message = "Indica si el permiso se concede (true) o se deniega (false).")
         Boolean otorgado) {
 }

@@ -37,8 +37,9 @@ export class PermisosApi {
     return this.api.delete<void>(`/permisos/${id}`);
   }
 
-  cambiarActivo(id: number, activo: boolean): Observable<Permiso> {
-    return this.api.patch<Permiso>(`/permisos/${id}/activo`, { activo });
+  /** `motivo` (opcional, máx. 200) queda en el detalle de la auditoría. */
+  cambiarActivo(id: number, activo: boolean, motivo?: string): Observable<Permiso> {
+    return this.api.patch<Permiso>(`/permisos/${id}/activo`, motivo ? { activo, motivo } : { activo });
   }
 
   roles(id: number): Observable<Rol[]> {

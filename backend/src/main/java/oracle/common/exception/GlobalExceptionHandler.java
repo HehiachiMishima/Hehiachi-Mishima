@@ -1,11 +1,16 @@
 package oracle.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import oracle.auditoria.AccionAuditoria;
+import oracle.auditoria.ContextoAuditoria;
+import oracle.auditoria.Detalle;
+import oracle.auditoria.RegistroAuditoria;
+import oracle.auditoria.ResultadoAuditoria;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.sql.SQLException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.QueryTimeoutException;
@@ -13,9 +18,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.BindException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -24,12 +29,21 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Punto unico donde las excepciones del backend se convierten en respuestas HTTP.
- * Toda excepcion que lancen los services cae aqui y sale como ApiError.
+ * Las denegaciones (403 de @PreAuthorize, de las reglas de proteccion o de un
+ * trigger 45000) quedan ademas en la bitacora como ACCESO_DENEGADO.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    static final String SIN_PERMISO = "No tienes el permiso necesario para esta operación.";
+
+    private final RegistroAuditoria auditoria;
+
+    public GlobalExceptionHandler(RegistroAuditoria auditoria) {
+        this.auditoria = auditoria;
+    }
 
     @ExceptionHandler(RecursoNoEncontradoException.class)
     public ResponseEntity<ApiError> noEncontrado(RecursoNoEncontradoException ex, HttpServletRequest req) {
@@ -43,11 +57,20 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(LimiteExcedidoException.class)
     public ResponseEntity<ApiError> limiteExcedido(LimiteExcedidoException ex, HttpServletRequest req) {
-        return cuerpo(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), req);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", "60")
+                .body(ApiError.de(429, HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase(), ex.getMessage(),
+                        req.getRequestURI()));
+    }
+
+    @ExceptionHandler(PeticionInvalidaException.class)
+    public ResponseEntity<ApiError> peticionInvalida(PeticionInvalidaException ex, HttpServletRequest req) {
+        return cuerpo(HttpStatus.BAD_REQUEST, ex.getMessage(), req);
     }
 
     @ExceptionHandler(OperacionNoPermitidaException.class)
     public ResponseEntity<ApiError> noPermitido(OperacionNoPermitidaException ex, HttpServletRequest req) {
+        registrarDenegacion(req, ex.getMessage());
         return cuerpo(HttpStatus.FORBIDDEN, ex.getMessage(), req);
     }
 
@@ -57,7 +80,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> accesoDenegado(AccessDeniedException ex, HttpServletRequest req) {
-        return cuerpo(HttpStatus.FORBIDDEN, "No tiene el permiso requerido para esta operacion.", req);
+        registrarDenegacion(req, "sin_permiso");
+        return cuerpo(HttpStatus.FORBIDDEN, SIN_PERMISO, req);
     }
 
     @ExceptionHandler(ConflictoException.class)
@@ -65,34 +89,37 @@ public class GlobalExceptionHandler {
         return cuerpo(HttpStatus.CONFLICT, ex.getMessage(), req);
     }
 
-    /** Validaciones jakarta (@NotBlank, @Size...) declaradas en los Request. */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> validacion(MethodArgumentNotValidException ex, HttpServletRequest req) {
+    /**
+     * Validaciones jakarta (@NotBlank, @Size...) de @RequestBody y errores de
+     * enlace de @ModelAttribute (MethodArgumentNotValidException extiende BindException).
+     */
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ApiError> validacion(BindException ex, HttpServletRequest req) {
         Map<String, String> campos = new LinkedHashMap<>();
-        ex.getBindingResult().getFieldErrors()
-                .forEach(f -> campos.put(f.getField(), f.getDefaultMessage()));
+        ex.getBindingResult().getFieldErrors().forEach(f -> campos.putIfAbsent(f.getField(),
+                f.isBindingFailure() ? "El valor no tiene un formato válido." : f.getDefaultMessage()));
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiError.conCampos(400, "Validacion fallida",
-                        "Hay campos invalidos en la peticion.", req.getRequestURI(), campos));
+                        "Hay campos inválidos en la petición.", req.getRequestURI(), campos));
     }
 
     // ------------------------------------------------------------------
     // Excepciones de infraestructura de Spring MVC. Sin estos handlers las
     // capturaria el catch-all y devolverian 500 en vez del codigo correcto.
-    // ---------------------------------------------------------------------
+    // ------------------------------------------------------------------
 
     /** Cuerpo JSON ausente o mal formado. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> cuerpoIlegible(HttpMessageNotReadableException ex, HttpServletRequest req) {
         return cuerpo(HttpStatus.BAD_REQUEST,
-                "El cuerpo de la peticion es obligatorio y debe ser un JSON valido.", req);
+                "El cuerpo de la petición es obligatorio y debe ser un JSON válido.", req);
     }
 
     /** Path variable / query param con tipo incorrecto (p. ej. id no numerico). */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiError> tipoInvalido(MethodArgumentTypeMismatchException ex, HttpServletRequest req) {
         return cuerpo(HttpStatus.BAD_REQUEST,
-                "El parametro '" + ex.getName() + "' tiene un formato invalido.", req);
+                "El parámetro '" + ex.getName() + "' tiene un formato inválido.", req);
     }
 
     /** Falta un parametro obligatorio de la peticion. */
@@ -100,7 +127,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> parametroFaltante(
             MissingServletRequestParameterException ex, HttpServletRequest req) {
         return cuerpo(HttpStatus.BAD_REQUEST,
-                "Falta el parametro obligatorio '" + ex.getParameterName() + "'.", req);
+                "Falta el parámetro obligatorio '" + ex.getParameterName() + "'.", req);
     }
 
     /** Metodo HTTP no soportado por el recurso. */
@@ -108,7 +135,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> metodoNoSoportado(
             HttpRequestMethodNotSupportedException ex, HttpServletRequest req) {
         return cuerpo(HttpStatus.METHOD_NOT_ALLOWED,
-                "El metodo " + ex.getMethod() + " no esta permitido en esta ruta.", req);
+                "El método " + ex.getMethod() + " no está permitido en esta ruta.", req);
     }
 
     /** Content-Type no soportado. */
@@ -116,7 +143,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> tipoContenidoNoSoportado(
             HttpMediaTypeNotSupportedException ex, HttpServletRequest req) {
         return cuerpo(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-                "El Content-Type de la peticion no esta soportado. Use application/json.", req);
+                "El Content-Type de la petición no está soportado. Usa application/json.", req);
     }
 
     /** Ruta inexistente: ninguna coincidencia de handler ni recurso estatico. */
@@ -135,11 +162,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> baseDeDatos(DataAccessException ex, HttpServletRequest req) {
         SQLException sql = causaSql(ex);
         if (sql != null && "45000".equals(sql.getSQLState())) {
+            registrarDenegacion(req, sql.getMessage());
             return cuerpo(HttpStatus.FORBIDDEN, sql.getMessage(), req);
         }
         if (sql != null && sql.getErrorCode() == 1451) {
             return cuerpo(HttpStatus.CONFLICT,
-                    "El registro esta en uso por otros datos y no se puede eliminar.", req);
+                    "El registro está en uso por otros datos y no se puede eliminar.", req);
         }
         if (sql != null && sql.getErrorCode() == 1062) {
             return cuerpo(HttpStatus.CONFLICT, "Ya existe un registro con esos datos.", req);
@@ -147,11 +175,11 @@ public class GlobalExceptionHandler {
         if (ex instanceof DataIntegrityViolationException) {
             log.warn("Violacion de integridad: {}", ex.getMessage());
             return cuerpo(HttpStatus.CONFLICT,
-                    "La operacion viola una restriccion de integridad del esquema.", req);
+                    "La operación viola una restricción de integridad de los datos.", req);
         }
         if (ex instanceof QueryTimeoutException) {
             return cuerpo(HttpStatus.SERVICE_UNAVAILABLE,
-                    "La base de datos tardo demasiado en responder. Intente de nuevo.", req);
+                    "La base de datos tardó demasiado en responder. Inténtalo de nuevo.", req);
         }
         log.error("Error de acceso a datos", ex);
         return cuerpo(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno inesperado.", req);
@@ -173,6 +201,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> inesperado(Exception ex, HttpServletRequest req) {
         log.error("Error inesperado", ex);
         return cuerpo(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno inesperado.", req);
+    }
+
+    private void registrarDenegacion(HttpServletRequest req, String motivo) {
+        auditoria.registrar(ContextoAuditoria.actual(), AccionAuditoria.ACCESO_DENEGADO, null, null,
+                ResultadoAuditoria.DENEGADO,
+                Detalle.de("motivo", motivo, "metodo", req.getMethod(), "ruta", req.getRequestURI()));
     }
 
     private ResponseEntity<ApiError> cuerpo(HttpStatus status, String mensaje, HttpServletRequest req) {

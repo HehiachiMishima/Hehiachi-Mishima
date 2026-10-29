@@ -16,9 +16,19 @@ public interface UsuarioPermisoRepository extends JpaRepository<UsuarioPermiso, 
 
     boolean existsByUsuarioIdAndPermisoId(Long usuarioId, Long permisoId);
 
-    List<UsuarioPermiso> findByUsuarioId(Long usuarioId);
+    /** Overrides del usuario con usuario y permiso cargados en la misma consulta (sin N+1). */
+    @Query("""
+            SELECT up FROM UsuarioPermiso up JOIN FETCH up.usuario JOIN FETCH up.permiso
+            WHERE up.usuario.id = :usuarioId ORDER BY up.permiso.nombre
+            """)
+    List<UsuarioPermiso> deUsuario(@Param("usuarioId") Long usuarioId);
 
-    List<UsuarioPermiso> findByUsuarioIdAndOtorgado(Long usuarioId, Boolean otorgado);
+    /** Overrides grant (TRUE) o deny (FALSE) del usuario, sin N+1. */
+    @Query("""
+            SELECT up FROM UsuarioPermiso up JOIN FETCH up.usuario JOIN FETCH up.permiso
+            WHERE up.usuario.id = :usuarioId AND up.otorgado = :otorgado ORDER BY up.permiso.nombre
+            """)
+    List<UsuarioPermiso> deUsuarioPorTipo(@Param("usuarioId") Long usuarioId, @Param("otorgado") Boolean otorgado);
 
     @Transactional
     @Modifying

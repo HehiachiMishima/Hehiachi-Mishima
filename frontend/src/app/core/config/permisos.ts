@@ -18,4 +18,15 @@ export const PERMISOS = {
   MODIFICAR_PERMISOS: 'MODIFICAR_PERMISOS',
   ELIMINAR_PERMISOS: 'ELIMINAR_PERMISOS',
   ASIGNAR_PERMISOS: 'ASIGNAR_PERMISOS',
+
+  VER_AUDITORIA: 'VER_AUDITORIA',
 } as const;
+
+/**
+ * Nombre legible de un código de permiso ("VER_USUARIOS" → "Ver usuarios").
+ * Sirve para mensajes al usuario cuando no se dispone de la descripción del catálogo.
+ */
+export function etiquetaPermiso(codigo: string): string {
+  const texto = codigo.toLowerCase().replace(/_/g, ' ').trim();
+  return texto ? texto[0].toUpperCase() + texto.slice(1) : codigo;
+}

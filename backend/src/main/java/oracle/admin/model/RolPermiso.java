@@ -2,6 +2,7 @@ package oracle.admin.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -14,22 +15,22 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.data.annotation.CreatedDate;
 
+/** Plantilla RBAC. No extiende Auditable: la tabla solo tiene creado_*. */
 @Entity
 @Table(name = "roles_permisos")
 @Getter
 @Setter
-/** Plantilla RBAC. No extiende Auditable: la tabla solo tiene creado_*. */
 public class RolPermiso {
 
     @EmbeddedId
     private RolPermisoId id = new RolPermisoId();
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("rolId")
     @JoinColumn(name = "rol_id")
     private Rol rol;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("permisoId")
     @JoinColumn(name = "permiso_id")
     private Permiso permiso;

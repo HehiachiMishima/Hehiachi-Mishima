@@ -1,3 +1,4 @@
+-- Active: 1791152181635@@127.0.0.1@3306@hehiachi_mishima
 -- ============================================================
 -- ESQUEMA: RBAC + Overrides
 -- ============================================================
@@ -20,7 +21,17 @@
 --   * Permisos BASE (lista hardcodeada por nombre):
 --       - No se pueden eliminar.
 --       - No se pueden renombrar, cambiar descripción ni desactivar.
-
+--
+--   * Usuario '@hehiachi': ver protection.admin.sql.
+--
+--   * Bitácora `auditoria_eventos`: APPEND-ONLY (triggers bloquean
+--     UPDATE y DELETE). Ver sección 7.
+--
+-- Idempotencia: el script puede re-ejecutarse completo. Tablas con
+-- IF NOT EXISTS, vistas con OR REPLACE, triggers con DROP + CREATE y
+-- seed con upsert. Para BDs ya existentes aplicar además
+-- backend/migrations/V2__auditoria.sql (columnas nuevas de usuarios,
+-- cambios de índices, auditoría y VER_AUDITORIA).
 CREATE DATABASE IF NOT EXISTS hehiachi_mishima CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE hehiachi_mishima;
@@ -46,6 +57,10 @@ DROP TRIGGER IF EXISTS trg_permisos_base_update;
 
 DROP TRIGGER IF EXISTS trg_permisos_base_delete;
 
+DROP TRIGGER IF EXISTS trg_auditoria_eventos_no_update;
+
+DROP TRIGGER IF EXISTS trg_auditoria_eventos_no_delete;
+
 DROP TRIGGER IF EXISTS trg_transacciones_after_insert;
 
 DROP TRIGGER IF EXISTS trg_transacciones_after_update;
@@ -66,6 +81,9 @@ CREATE TABLE IF NOT EXISTS usuarios (
     email VARCHAR(100) NOT NULL COMMENT 'Correo electrónico único.',
     telefono VARCHAR(20) NULL COMMENT 'Teléfono de contacto. Opcional.',
     activo BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'TRUE = puede iniciar sesión; FALSE = bloqueado.',
+    credenciales_version INT NOT NULL DEFAULT 0 COMMENT 'Se incrementa al cambiar contraseña o desactivar. El JWT lleva el claim ver; si no coincide, el token queda revocado.',
+    intentos_fallidos INT NOT NULL DEFAULT 0 COMMENT 'Logins fallidos consecutivos. Se pone a 0 tras un login correcto.',
+    bloqueado_hasta TIMESTAMP(6) NULL DEFAULT NULL COMMENT 'Bloqueo temporal por fuerza bruta (UTC). NULL = sin bloqueo.',
     creado_por BIGINT DEFAULT NULL COMMENT 'ID del usuario que creó este registro. NULL si es el primero. 0 = sistema/seeding.',
     actualizado_por BIGINT NOT NULL COMMENT 'ID del usuario que actualizó el registro por última vez. 0 = sistema/seeding.',
     creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora exacta de creación.',
@@ -74,7 +92,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     CONSTRAINT uq_usuarios_email UNIQUE (email),
     INDEX idx_usuarios_activo_nombre (activo, apellido, nombre) COMMENT 'Listado de activos/bloqueados ordenado alfabéticamente. Cubre también filtro solo por activo.',
     INDEX idx_usuarios_nombre (apellido, nombre) COMMENT 'Listado general ordenado alfabéticamente, sin filtrar por estado.',
-    INDEX idx_usuarios_creado_en (creado_en) COMMENT 'Ordenamiento temporal por fecha de alta.'
+    INDEX idx_usuarios_creado_activo (creado_en, activo) COMMENT 'Altas por mes (analítica): rango por creado_en y SUM(activo) cubiertos sin leer la fila.'
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Usuarios del sistema. @hehiachi está protegido por nombre en triggers.';
 
 -- ============================================================
@@ -155,6 +173,39 @@ CREATE TABLE IF NOT EXISTS usuarios_permisos (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Overrides individuales de permisos.';
 
 -- ============================================================
+-- 7) auditoria_eventos — bitácora append-only
+-- ============================================================
+-- Solo INSERT y SELECT. UPDATE/DELETE bloqueados por trigger.
+-- accion/entidad/resultado son códigos controlados por la app:
+-- se guardan en ASCII (claves de índice 4x más pequeñas que utf8mb4)
+-- con collation _ci para que el filtro no dependa de mayúsculas.
+-- ip, user_agent, id_correlacion y actor_usuario vienen del cliente:
+-- se quedan en utf8mb4 para que un valor raro nunca rompa el INSERT.
+-- ocurrido_en es UTC (la conexión JDBC usa serverTimezone=UTC).
+-- Orden canónico de lectura: ocurrido_en DESC, id DESC (todos los
+-- índices secundarios llevan `id` implícito al final → sin filesort).
+CREATE TABLE IF NOT EXISTS auditoria_eventos (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Identificador del evento.',
+    ocurrido_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Instante del evento (UTC).',
+    actor_id BIGINT NULL COMMENT 'Usuario que actúa. NULL = anónimo (login fallido), 0 = sistema.',
+    actor_usuario VARCHAR(100) NULL COMMENT 'Snapshot del login del actor (o credencial intentada en LOGIN_FALLIDO).',
+    accion VARCHAR(40) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL COMMENT 'Código de acción (catálogo en la app).',
+    entidad VARCHAR(30) CHARACTER SET ascii COLLATE ascii_general_ci NULL COMMENT 'USUARIO, ROL, PERMISO, USUARIO_ROL, ROL_PERMISO, USUARIO_PERMISO, SESION.',
+    entidad_id VARCHAR(64) NULL COMMENT 'Id afectado; compuesto como "usuarioId:rolId".',
+    resultado VARCHAR(10) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL COMMENT 'EXITO, FALLO, DENEGADO.',
+    ip VARCHAR(45) NULL COMMENT 'IP del cliente (IPv4/IPv6).',
+    user_agent VARCHAR(255) NULL COMMENT 'User-Agent truncado a 255.',
+    id_correlacion VARCHAR(64) NULL COMMENT 'X-Request-Id de la petición.',
+    detalle JSON NULL COMMENT '{antes,despues} o {motivo}. NUNCA contraseñas, hashes ni tokens.',
+    CONSTRAINT ck_auditoria_eventos_resultado CHECK (resultado IN ('EXITO', 'FALLO', 'DENEGADO')),
+    INDEX idx_auditoria_ocurrido (ocurrido_en) COMMENT 'Listado general por rango de fechas, orden DESC.',
+    INDEX idx_auditoria_actor (actor_id, ocurrido_en) COMMENT 'Actividad de un actor.',
+    INDEX idx_auditoria_entidad (entidad, entidad_id, ocurrido_en) COMMENT 'Historia de una entidad concreta.',
+    INDEX idx_auditoria_accion (accion, ocurrido_en) COMMENT 'Filtro por tipo de acción.',
+    INDEX idx_auditoria_resultado (resultado, ocurrido_en) COMMENT 'Filtro por resultado (FALLO/DENEGADO).'
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Bitácora de auditoría append-only (UPDATE/DELETE bloqueados por trigger).';
+
+-- ============================================================
 -- VISTAS DE RESOLUCIÓN — respetan activo de rol y permiso
 -- ============================================================
 -- Resolución:
@@ -232,8 +283,9 @@ VALUES (
         0,
         0
     )
+AS nuevo
 ON DUPLICATE KEY UPDATE
-    descripcion = VALUES(descripcion);
+    descripcion = nuevo.descripcion;
 
 -- ------------------------------------------------------------
 -- Permisos BASE (protegidos por nombre en triggers)
@@ -358,9 +410,17 @@ VALUES (
         TRUE,
         0,
         0
+    ),
+    (
+        'VER_AUDITORIA',
+        'Permite consultar y exportar la bitácora de auditoría.',
+        TRUE,
+        0,
+        0
     )
+AS nuevo
 ON DUPLICATE KEY UPDATE
-    descripcion = VALUES(descripcion);
+    descripcion = nuevo.descripcion;
 
 -- ============================================================
 -- TRIGGERS DE PROTECCIÓN
@@ -404,6 +464,8 @@ END$$
 
 -- ------------------------------------------------------------
 -- PERMISOS BASE (por NOMBRE)
+-- La lista se repite en: protection.admin.sql, migrations/V2__auditoria.sql
+-- y oracle.admin.service.Protecciones.PERMISOS_BASE. Mantenerlas iguales.
 -- ------------------------------------------------------------
 CREATE TRIGGER trg_permisos_base_update
 BEFORE UPDATE ON permisos
@@ -413,7 +475,7 @@ BEGIN
         'ASIGNAR_ROLES', 'VER_ROLES', 'CREAR_ROLES', 'MODIFICAR_ROLES', 'ELIMINAR_ROLES',
         'ASIGNAR_PERMISOS', 'VER_PERMISOS', 'CREAR_PERMISOS', 'MODIFICAR_PERMISOS', 'ELIMINAR_PERMISOS',
         'VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS',
-        'PANEL_ADMIN', 'DASHBOARD_ADMIN'
+        'PANEL_ADMIN', 'DASHBOARD_ADMIN', 'VER_AUDITORIA'
     ) THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'No se puede modificar un permiso base. Ni siquiera se puede desactivar.';
@@ -428,11 +490,32 @@ BEGIN
         'ASIGNAR_ROLES', 'VER_ROLES', 'CREAR_ROLES', 'MODIFICAR_ROLES', 'ELIMINAR_ROLES',
         'ASIGNAR_PERMISOS', 'VER_PERMISOS', 'CREAR_PERMISOS', 'MODIFICAR_PERMISOS', 'ELIMINAR_PERMISOS',
         'VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS',
-        'PANEL_ADMIN', 'DASHBOARD_ADMIN'
+        'PANEL_ADMIN', 'DASHBOARD_ADMIN', 'VER_AUDITORIA'
     ) THEN
         SIGNAL SQLSTATE '45000'
             SET MESSAGE_TEXT = 'No se puede eliminar un permiso base. Es inmutable e intocable.';
     END IF;
+END$$
+
+-- ------------------------------------------------------------
+-- BITÁCORA DE AUDITORÍA: append-only
+-- (TRUNCATE/DROP no disparan triggers: retirar esos privilegios
+--  al usuario de la aplicación; ver migrations/V2__auditoria.sql)
+-- ------------------------------------------------------------
+CREATE TRIGGER trg_auditoria_eventos_no_update
+BEFORE UPDATE ON auditoria_eventos
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La bitácora de auditoría es append-only: no se puede modificar un evento.';
+END$$
+
+CREATE TRIGGER trg_auditoria_eventos_no_delete
+BEFORE DELETE ON auditoria_eventos
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La bitácora de auditoría es append-only: no se puede eliminar un evento.';
 END$$
 
 DELIMITER ;

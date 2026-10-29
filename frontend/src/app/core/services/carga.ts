@@ -1,7 +1,9 @@
-import { Service, computed, signal } from '@angular/core';
+import { Service, computed, inject, signal } from '@angular/core';
+import { Anunciador } from './anunciador';
 
 @Service()
 export class Carga {
+  private readonly anunciador = inject(Anunciador);
   private readonly estado = signal<{ visible: boolean; texto: string }>({
     visible: false,
     texto: '',
@@ -12,6 +14,7 @@ export class Carga {
 
   mostrar(texto = 'Cargando…'): void {
     this.estado.set({ visible: true, texto });
+    this.anunciador.anunciar(texto);
   }
 
   ocultar(): void {

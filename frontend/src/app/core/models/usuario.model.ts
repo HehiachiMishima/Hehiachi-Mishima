@@ -10,6 +10,8 @@ export interface Usuario {
   actualizadoEn: string | null;
   creadoPor: number | null;
   actualizadoPor: number | null;
+  /** true si la entidad está protegida (base del sistema o la propia cuenta): la UI deshabilita las acciones. */
+  protegido?: boolean;
 }
 
 export interface UsuarioCrearRequest {
@@ -38,4 +40,11 @@ export interface UsuarioFiltro {
   apellido?: string;
   email?: string;
   activo?: boolean;
+}
+
+/** Fila de GET /usuarios/resumen: roles asignados y permisos efectivos (deny-wins) del usuario. */
+export interface UsuarioResumen {
+  usuarioId: number;
+  roles: string[];
+  permisos: string[];
 }

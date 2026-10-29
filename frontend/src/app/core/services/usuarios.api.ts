@@ -1,7 +1,6 @@
 import { Service, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
-  Permiso,
   PermisoEfectivo,
   PermisoFinal,
   Rol,
@@ -11,6 +10,7 @@ import {
   UsuarioFiltro,
   UsuarioPermisoDetalle,
   UsuarioPermisoOverride,
+  UsuarioResumen,
 } from '../models';
 import { Api } from './api';
 
@@ -24,6 +24,14 @@ export class UsuariosApi {
 
   buscar(filtro: UsuarioFiltro): Observable<Usuario[]> {
     return this.api.get<Usuario[]>('/usuarios/buscar', { ...filtro });
+  }
+
+  /**
+   * Roles y permisos efectivos en una sola petición. Con `ids` (máx. 500,
+   * p. ej. la página visible) solo resuelve esos usuarios.
+   */
+  resumen(ids?: readonly number[]): Observable<UsuarioResumen[]> {
+    return this.api.get<UsuarioResumen[]>('/usuarios/resumen', ids?.length ? { ids: ids.join(',') } : undefined);
   }
 
   obtener(id: number): Observable<Usuario> {
@@ -42,8 +50,9 @@ export class UsuariosApi {
     return this.api.delete<void>(`/usuarios/${id}`);
   }
 
-  cambiarActivo(id: number, activo: boolean): Observable<Usuario> {
-    return this.api.patch<Usuario>(`/usuarios/${id}/activo`, { activo });
+  /** `motivo` (opcional, máx. 200) queda en el detalle de la auditoría. */
+  cambiarActivo(id: number, activo: boolean, motivo?: string): Observable<Usuario> {
+    return this.api.patch<Usuario>(`/usuarios/${id}/activo`, motivo ? { activo, motivo } : { activo });
   }
 
   roles(id: number): Observable<Rol[]> {
@@ -61,16 +70,6 @@ export class UsuariosApi {
   /** Overrides individuales (grant/deny) del usuario. */
   permisos(id: number): Observable<UsuarioPermisoDetalle[]> {
     return this.api.get<UsuarioPermisoDetalle[]>(`/usuarios/${id}/permisos`);
-  }
-
-  /** Overrides que deniegan un permiso al usuario. */
-  permisosDenegados(id: number): Observable<UsuarioPermisoDetalle[]> {
-    return this.api.get<UsuarioPermisoDetalle[]>(`/usuarios/${id}/permisos/denegados`);
-  }
-
-  /** Permisos del catálogo que tienen algún override para el usuario. */
-  permisosConOverride(id: number): Observable<Permiso[]> {
-    return this.api.get<Permiso[]>(`/usuarios/${id}/permisos/con-override`);
   }
 
   /** Concede (otorgado=true) o deniega (otorgado=false) un permiso al usuario. */

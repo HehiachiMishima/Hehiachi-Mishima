@@ -7,6 +7,8 @@ export interface Permiso {
   actualizadoEn: string | null;
   creadoPor: number | null;
   actualizadoPor: number | null;
+  /** true si la entidad está protegida (base del sistema o la propia cuenta): la UI deshabilita las acciones. */
+  protegido?: boolean;
 }
 
 export interface PermisoCrearRequest {
@@ -49,6 +51,8 @@ export interface PermisoEfectivo {
   permisoId: number;
   otorgado: boolean;
   origen: 'ROL' | 'OVERRIDE' | string;
+  /** Rol(es) de origen cuando origen = ROL; explica por qué se concede el permiso. */
+  roles?: string[];
 }
 
 /** Fila de v_permisos_finales: permitido = MIN(otorgado) => deny-overrides aplicado. */

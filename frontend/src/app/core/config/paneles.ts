@@ -1,5 +1,7 @@
 import { PERMISOS } from './permisos';
 
+export type GrupoModulo = 'supervision' | 'gestion';
+
 export interface ModuloPanel {
   id: string;
   nombre: string;
@@ -7,6 +9,7 @@ export interface ModuloPanel {
   icono: string;
   ruta: string;
   permiso: string;
+  grupo: GrupoModulo;
 }
 
 export interface PanelDef {
@@ -20,6 +23,11 @@ export interface PanelDef {
   modulos: ModuloPanel[];
 }
 
+export const NOMBRE_GRUPO: Record<GrupoModulo, string> = {
+  supervision: 'Supervisión',
+  gestion: 'Gestión',
+};
+
 export const PANEL_ADMIN: PanelDef = {
   id: 'admin',
   nombre: 'Administración',
@@ -31,11 +39,21 @@ export const PANEL_ADMIN: PanelDef = {
   modulos: [
     {
       id: 'dashboard',
-      nombre: 'Dashboard',
-      descripcion: 'Resumen operativo del control de accesos.',
+      nombre: 'Resumen',
+      descripcion: 'Indicadores clave y riesgos del control de accesos.',
       icono: 'dashboard',
       ruta: 'dashboard',
       permiso: PERMISOS.DASHBOARD_ADMIN,
+      grupo: 'supervision',
+    },
+    {
+      id: 'auditoria',
+      nombre: 'Auditoría',
+      descripcion: 'Bitácora inmutable de accesos y cambios.',
+      icono: 'history',
+      ruta: 'auditoria',
+      permiso: PERMISOS.VER_AUDITORIA,
+      grupo: 'supervision',
     },
     {
       id: 'usuarios',
@@ -44,6 +62,7 @@ export const PANEL_ADMIN: PanelDef = {
       icono: 'usuarios',
       ruta: 'usuarios',
       permiso: PERMISOS.VER_USUARIOS,
+      grupo: 'gestion',
     },
     {
       id: 'roles',
@@ -52,6 +71,7 @@ export const PANEL_ADMIN: PanelDef = {
       icono: 'roles',
       ruta: 'roles',
       permiso: PERMISOS.VER_ROLES,
+      grupo: 'gestion',
     },
     {
       id: 'permisos',
@@ -60,16 +80,17 @@ export const PANEL_ADMIN: PanelDef = {
       icono: 'permisos',
       ruta: 'permisos',
       permiso: PERMISOS.VER_PERMISOS,
+      grupo: 'gestion',
     },
   ],
-}
+};
 
 export const PANELES: PanelDef[] = [PANEL_ADMIN];
 
-export function primerModuloAccesible(panel: PanelDef, permisos: readonly string[]): ModuloPanel | undefined {
-  return panel.modulos.find((modulo) => permisos.includes(modulo.permiso));
+export function panelesAccesibles(permisos: readonly string[]): PanelDef[] {
+  return PANELES.filter((panel) => permisos.includes(panel.permiso));
 }
 
-export function tienePermiso(permisos: readonly string[], permiso: string): boolean {
-  return permisos.includes(permiso);
+export function primerModuloAccesible(panel: PanelDef, permisos: readonly string[]): ModuloPanel | undefined {
+  return panel.modulos.find((modulo) => permisos.includes(modulo.permiso));
 }

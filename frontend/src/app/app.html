@@ -1,3 +1,12 @@
-<router-outlet />
+<a class="skip-link" href="#contenido" (click)="saltarAlContenido($event)">Saltar al contenido principal</a>
+
+<div class="app-contenido" [attr.inert]="carga.visible() ? '' : null" [attr.aria-busy]="carga.visible() || null">
+  <router-outlet />
+</div>
+
 <ui-loader />
 <ui-toast-host />
+<app-aviso-sesion />
+
+<div class="u-sr-only" role="status" aria-live="polite" aria-atomic="true">{{ anunciador.cortes() }}</div>
+<div class="u-sr-only" role="alert" aria-live="assertive" aria-atomic="true">{{ anunciador.urgente() }}</div>

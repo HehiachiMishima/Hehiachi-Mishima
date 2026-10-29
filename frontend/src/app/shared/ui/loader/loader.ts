@@ -4,9 +4,10 @@ import { Carga } from '../../../core/services/carga';
 @Component({
   selector: 'ui-loader',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // El texto lo anuncia Carga mediante el Anunciador; la capa es solo visual.
   template: `
     @if (carga.visible()) {
-      <div class="loader" role="status" aria-live="polite">
+      <div class="loader" aria-hidden="true">
         <div class="loader__box">
           <span class="loader__ring"></span>
           <p class="loader__text">{{ carga.texto() }}</p>

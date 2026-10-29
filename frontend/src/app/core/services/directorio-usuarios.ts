@@ -1,30 +1,35 @@
-import { Service, inject, signal } from '@angular/core';
+import { Service, computed, inject, signal } from '@angular/core';
+import { PERMISOS } from '../config/permisos';
 import { Usuario } from '../models';
+import { SesionStore } from './sesion';
 import { UsuariosApi } from './usuarios.api';
 
 /**
- * Caché id → nombre de usuario para resolver las columnas creado_por / actualizado_por.
- * Se alimenta con la lista de /usuarios cuando la página ya la cargó, o la pide una sola vez.
+ * Caché id → login de usuario para resolver actores (creado_por, auditoría…).
+ * Se alimenta con la lista de /usuarios cuando la página ya la cargó, o la pide
+ * una sola vez si la sesión tiene VER_USUARIOS (sin permiso no se pide nada).
  */
 @Service()
 export class DirectorioUsuarios {
   private readonly usuariosApi = inject(UsuariosApi);
+  private readonly sesion = inject(SesionStore);
 
-  private readonly nombres = signal<Map<number, string>>(new Map());
-  readonly mapa = this.nombres.asReadonly();
+  private readonly usuarios = signal<Usuario[]>([]);
+  readonly lista = this.usuarios.asReadonly();
+  private readonly porId = computed(() => new Map(this.usuarios().map((usuario) => [usuario.id, usuario.usuario])));
 
   private cargando = false;
   private cargado = false;
 
   /** Alimenta el directorio con una lista ya obtenida (evita una petición extra). */
   establecer(lista: Usuario[]): void {
-    this.nombres.set(new Map(lista.map((usuario) => [usuario.id, usuario.usuario])));
+    this.usuarios.set(lista);
     this.cargado = true;
   }
 
   /** Carga el directorio una sola vez. */
   cargar(): void {
-    if (this.cargado || this.cargando) {
+    if (this.cargado || this.cargando || !this.sesion.tienePermiso(PERMISOS.VER_USUARIOS)) {
       return;
     }
     this.cargando = true;
@@ -40,6 +45,6 @@ export class DirectorioUsuarios {
   }
 
   nombre(id: number): string | null {
-    return this.nombres().get(id) ?? null;
+    return this.porId().get(id) ?? null;
   }
 }

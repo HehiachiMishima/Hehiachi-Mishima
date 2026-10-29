@@ -1,32 +1,49 @@
 package oracle.auth;
 
-import oracle.common.security.AutorizacionCache;
-import oracle.common.support.ActorActual;
-import oracle.common.support.Auditoria;
-import oracle.common.support.Trazas;
-import oracle.common.config.Transacciones;
-
+import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
-import oracle.common.exception.NoAutorizadoException;
-import oracle.common.exception.OperacionNoPermitidaException;
-import oracle.common.security.JwtService;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import lombok.extern.slf4j.Slf4j;
 import oracle.admin.model.Usuario;
 import oracle.admin.repository.ResolucionRepository;
 import oracle.admin.repository.UsuarioRepository;
-import oracle.common.response.ApiResponse;
 import oracle.admin.response.UsuarioResponse;
+import oracle.admin.service.Protecciones;
+import oracle.auditoria.AccionAuditoria;
+import oracle.auditoria.ContextoAuditoria;
+import oracle.auditoria.Detalle;
+import oracle.auditoria.EntidadAuditoria;
+import oracle.auditoria.RegistroAuditoria;
+import oracle.auditoria.ResultadoAuditoria;
+import oracle.common.config.Transacciones;
+import oracle.common.exception.NoAutorizadoException;
+import oracle.common.exception.OperacionNoPermitidaException;
+import oracle.common.response.ApiResponse;
+import oracle.common.security.AutorizacionCache;
+import oracle.common.security.JwtService;
 import oracle.common.security.LoginRateLimiter;
+import oracle.common.support.Auditoria;
+import oracle.common.support.Trazas;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-/** Autenticacion: valida credenciales, respeta el kill switch y emite JWT. */
+/**
+ * Autenticacion: valida credenciales, aplica el bloqueo por cuenta, respeta el
+ * kill switch y emite JWT. Nunca registra (ni en logs ni en la bitacora) la
+ * credencial tecleada si no corresponde a una cuenta existente.
+ */
 @Slf4j
 @Service
 public class AuthService {
+
+    /** Mensaje unico para no revelar si la cuenta existe, esta bloqueada o desactivada. */
+    static final String CREDENCIALES_INVALIDAS = "Usuario o contraseña incorrectos.";
 
     private final UsuarioRepository usuarioRepository;
     private final ResolucionRepository resolucionRepository;
@@ -35,6 +52,11 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AutorizacionCache autorizacionCache;
     private final Transacciones transacciones;
+    private final RegistroAuditoria auditoria;
+    private final Protecciones protecciones;
+    private final int umbralBloqueo;
+    private final int maxMinutosBloqueo;
+    private final SecretKeySpec claveHuella;
 
     /**
      * Hash descartable contra el que se compara cuando el usuario no existe,
@@ -49,30 +71,39 @@ public class AuthService {
             LoginRateLimiter rateLimiter,
             PasswordEncoder passwordEncoder,
             AutorizacionCache autorizacionCache,
-            Transacciones transacciones) {
-        this.autorizacionCache = autorizacionCache;
+            Transacciones transacciones,
+            RegistroAuditoria auditoria,
+            Protecciones protecciones,
+            @Value("${app.seguridad.bloqueo.umbral:5}") int umbralBloqueo,
+            @Value("${app.seguridad.bloqueo.max-minutos:60}") int maxMinutosBloqueo,
+            @Value("${app.jwt.secret}") String secreto) {
         this.usuarioRepository = usuarioRepository;
         this.resolucionRepository = resolucionRepository;
         this.jwtService = jwtService;
         this.rateLimiter = rateLimiter;
         this.passwordEncoder = passwordEncoder;
+        this.autorizacionCache = autorizacionCache;
         this.transacciones = transacciones;
-        this.hashFicticio = passwordEncoder.encode("oracle-hash-ficticio");
+        this.auditoria = auditoria;
+        this.protecciones = protecciones;
+        this.umbralBloqueo = umbralBloqueo;
+        this.maxMinutosBloqueo = maxMinutosBloqueo;
+        this.claveHuella = new SecretKeySpec(secreto.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        this.hashFicticio = passwordEncoder.encode("oracle-hash-ficticio-0");
     }
 
+    /**
+     * Login. El cupo del limitador ya se reservo en el controlador; aqui, si
+     * es correcto, se limpia el cubo IP+usuario y se devuelve el intento al cubo IP.
+     */
     public Mono<ApiResponse<AuthResponse>> login(LoginRequest peticion, String claveUsuario, String claveIp) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "AuthService.login usuario=" + peticion.usuario(),
-                        () -> autenticar(peticion)))
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        return Mono.fromCallable(() -> Trazas.medir(log, "AuthService.login", () -> autenticar(peticion, ctx)))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(respuesta -> {
                     rateLimiter.limpiar(claveUsuario);
-                    rateLimiter.limpiar(claveIp);
-                    return ApiResponse.ok("Autenticacion exitosa.", respuesta);
-                })
-                .onErrorResume(NoAutorizadoException.class, ex -> {
-                    rateLimiter.registrarFallo(claveUsuario);
-                    rateLimiter.registrarFallo(claveIp);
-                    return Mono.error(ex);
+                    rateLimiter.liberar(claveIp);
+                    return ApiResponse.ok("Inicio de sesión correcto.", respuesta);
                 });
     }
 
@@ -84,71 +115,123 @@ public class AuthService {
     public Mono<ApiResponse<SesionResponse>> sesionActual(Long usuarioId) {
         return Mono.fromCallable(() -> {
                     Usuario usuario = usuarioRepository.findById(usuarioId)
-                            .orElseThrow(() -> new NoAutorizadoException("La sesion ya no es valida."));
+                            .orElseThrow(() -> new NoAutorizadoException("Tu sesión ya no es válida."));
                     if (!Boolean.TRUE.equals(usuario.getActivo())) {
-                        throw new NoAutorizadoException("La cuenta esta desactivada.");
+                        throw new NoAutorizadoException("Tu cuenta está desactivada.");
                     }
                     List<String> permisos = autorizacionCache.cargar(usuarioId).autoridades().stream()
                             .map(a -> a.getAuthority())
                             .toList();
-                    return ApiResponse.ok("Sesion vigente.", new SesionResponse(UsuarioResponse.of(usuario), permisos));
+                    return ApiResponse.ok("Sesión vigente.",
+                            new SesionResponse(UsuarioResponse.of(usuario, true), permisos));
                 })
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
-     * Cambio de la propia contrasena. Exige la contrasena actual como
-     * confirmacion de identidad, valida que la nueva sea distinta y guarda el
-     * nuevo hash. No invalida los JWT vigentes (el token no caduca al cambiar
-     * la clave), pero si la cuenta esta desactivada se rechaza.
+     * Cambio de la propia contrasena. Exige la actual, sube la version de
+     * credenciales (revoca TODOS los tokens anteriores, incluidos los robados) y
+     * devuelve un token nuevo para que esta sesion continue.
      */
-    public Mono<ApiResponse<Void>> cambiarContrasena(Long usuarioId, CambiarContrasenaRequest peticion) {
-        Long actor = ActorActual.id();
-        return Mono.<Void>fromRunnable(() -> Trazas.medir(log,
-                        "AuthService.cambiarContrasena usuarioId=" + usuarioId,
-                        () -> transacciones.ejecutar(() -> {
+    public Mono<ApiResponse<AuthResponse>> cambiarContrasena(Long usuarioId, CambiarContrasenaRequest peticion) {
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        return Mono.fromCallable(() -> Trazas.medir(log, "AuthService.cambiarContrasena", () -> transacciones.ejecutar(() -> {
                             Usuario usuario = usuarioRepository.findById(usuarioId)
-                                    .orElseThrow(() -> new NoAutorizadoException("La sesion ya no es valida."));
+                                    .orElseThrow(() -> new NoAutorizadoException("Tu sesión ya no es válida."));
                             if (!Boolean.TRUE.equals(usuario.getActivo())) {
-                                throw new NoAutorizadoException("La cuenta esta desactivada.");
+                                throw new NoAutorizadoException("Tu cuenta está desactivada.");
+                            }
+                            if (Protecciones.esUsuarioRaiz(usuario.getUsuario())) {
+                                throw new OperacionNoPermitidaException("La contraseña de " + Protecciones.USUARIO_RAIZ
+                                        + " está protegida en la base de datos y no se puede cambiar desde la aplicación.");
                             }
                             if (!passwordEncoder.matches(peticion.contrasenaActual(), usuario.getContrasena())) {
-                                throw new NoAutorizadoException("La contrasena actual no es correcta.");
+                                auditoria.registrar(ctx, AccionAuditoria.CONTRASENA_CAMBIADA, EntidadAuditoria.USUARIO,
+                                        usuarioId, ResultadoAuditoria.FALLO, Detalle.motivo("contrasena_actual_incorrecta"));
+                                throw new NoAutorizadoException("Tu contraseña actual no es correcta.");
                             }
                             if (passwordEncoder.matches(peticion.contrasenaNueva(), usuario.getContrasena())) {
                                 throw new OperacionNoPermitidaException(
-                                        "La contrasena nueva debe ser distinta a la actual.");
+                                        "La contraseña nueva debe ser distinta de la actual.");
                             }
                             usuario.setContrasena(passwordEncoder.encode(peticion.contrasenaNueva()));
-                            Auditoria.alActualizar(usuario, actor);
+                            usuario.revocarCredenciales();
+                            Auditoria.alActualizar(usuario, usuarioId);
                             usuarioRepository.save(usuario);
                             autorizacionCache.invalidar(usuarioId);
-                            return null;
+                            auditoria.exito(ctx, AccionAuditoria.CONTRASENA_CAMBIADA, EntidadAuditoria.USUARIO,
+                                    usuarioId, Detalle.de("origen", "propia"));
+                            return ApiResponse.ok("Contraseña actualizada.", emitir(usuario));
                         })))
-                .subscribeOn(Schedulers.boundedElastic())
-                .then(Mono.fromSupplier(() -> ApiResponse.<Void>ok("Contrasena actualizada.", null)));
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
-    private AuthResponse autenticar(LoginRequest peticion) {
+    private AuthResponse autenticar(LoginRequest peticion, ContextoAuditoria ctx) {
         String credencial = peticion.usuario().trim();
-        Optional<Usuario> encontrado = usuarioRepository.findByUsuarioOrEmail(credencial, credencial);
+        // Primero por usuario exacto y despues por email: nunca 2 filas (evita el 500 por cruce usuario/email).
+        Optional<Usuario> encontrado = usuarioRepository.findByUsuario(credencial)
+                .or(() -> usuarioRepository.findByEmail(credencial));
+
+        if (encontrado.isPresent() && usuarioRepository.contarBloqueoVigente(encontrado.get().getId()) > 0) {
+            Usuario u = encontrado.get();
+            auditoria.registrar(ctx, AccionAuditoria.LOGIN_BLOQUEADO, EntidadAuditoria.SESION, u.getId(),
+                    ResultadoAuditoria.DENEGADO, Detalle.motivo("cuenta_bloqueada"));
+            throw new NoAutorizadoException(CREDENCIALES_INVALIDAS);
+        }
 
         // Se ejecuta BCrypt SIEMPRE (contra un hash ficticio si el usuario no
         // existe) para no filtrar por tiempo la existencia de una cuenta.
         String hash = encontrado.map(Usuario::getContrasena).orElse(hashFicticio);
         boolean coincide = passwordEncoder.matches(peticion.contrasena(), hash);
-        if (encontrado.isEmpty() || !coincide) {
-            throw new NoAutorizadoException("Usuario o contrasena incorrectos.");
+
+        if (encontrado.isEmpty()) {
+            // La credencial puede ser una contrasena tecleada en el campo equivocado:
+            // solo se guarda una huella HMAC (correlaciona reintentos sin revelarla).
+            auditoria.registrar(ctx, AccionAuditoria.LOGIN_FALLIDO, EntidadAuditoria.SESION, null,
+                    ResultadoAuditoria.FALLO,
+                    Detalle.de("motivo", "credencial_desconocida", "huella", huella(credencial)));
+            throw new NoAutorizadoException(CREDENCIALES_INVALIDAS);
         }
 
         Usuario usuario = encontrado.get();
+        ContextoAuditoria conUsuario = ctx.conActor(null, usuario.getUsuario());
+        if (!coincide) {
+            usuarioRepository.registrarFallo(usuario.getId(), umbralBloqueo, maxMinutosBloqueo);
+            boolean bloqueada = usuarioRepository.contarBloqueoVigente(usuario.getId()) > 0;
+            auditoria.registrar(conUsuario, AccionAuditoria.LOGIN_FALLIDO, EntidadAuditoria.SESION, usuario.getId(),
+                    ResultadoAuditoria.FALLO,
+                    Detalle.con(Detalle.motivo("contrasena_incorrecta"), "bloqueada", bloqueada ? Boolean.TRUE : null));
+            throw new NoAutorizadoException(CREDENCIALES_INVALIDAS);
+        }
         if (!Boolean.TRUE.equals(usuario.getActivo())) {
-            throw new NoAutorizadoException("La cuenta esta desactivada.");
+            // Mismo mensaje generico: no confirma que la contrasena era correcta.
+            auditoria.registrar(conUsuario, AccionAuditoria.LOGIN_FALLIDO, EntidadAuditoria.SESION, usuario.getId(),
+                    ResultadoAuditoria.FALLO, Detalle.motivo("cuenta_desactivada"));
+            throw new NoAutorizadoException(CREDENCIALES_INVALIDAS);
         }
 
+        usuarioRepository.reiniciarIntentos(usuario.getId());
+        AuthResponse respuesta = emitir(usuario);
+        auditoria.exito(ctx.conActor(usuario.getId(), usuario.getUsuario()), AccionAuditoria.LOGIN_EXITOSO,
+                EntidadAuditoria.SESION, usuario.getId(), null);
+        return respuesta;
+    }
+
+    private AuthResponse emitir(Usuario usuario) {
         List<String> permisos = resolucionRepository.nombresPermitidos(usuario.getId());
         JwtService.TokenGenerado token = jwtService.generar(usuario);
+        return new AuthResponse(token.valor(), "Bearer", token.expiraEn(), UsuarioResponse.of(usuario, true), permisos);
+    }
 
-        return new AuthResponse(token.valor(), "Bearer", token.expiraEn(), UsuarioResponse.of(usuario), permisos);
+    /** HMAC-SHA256 truncado (12 hex) con el secreto de la app: no es reversible ni atacable por diccionario sin la clave. */
+    private String huella(String credencial) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(claveHuella);
+            byte[] h = mac.doFinal(credencial.toLowerCase(java.util.Locale.ROOT).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(h, 0, 6);
+        } catch (java.security.GeneralSecurityException ex) {
+            return null;
+        }
     }
 }

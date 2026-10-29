@@ -1,56 +1,96 @@
 # ============================================================
-# Stack LOCAL completo (opcional): MySQL 8.4 + la misma imagen que Render.
+# Ejecuta LOCALMENTE la MISMA imagen que se despliega en Render.
 #
-#   docker compose up --build
-#   -> app en http://localhost:10000  (health: /api/health)
+# Por defecto la app apunta a la BD EXTERNA definida en backend/.env
+# (copia backend/.env.example -> backend/.env y completa DB_*, JWT_*,
+# USER_*):
 #
-# - MySQL aplica al crearse el volumen: schema.sql, panel.bitacora.sql y
-#   panel.inbound.sql (en ese orden). protection.admin.sql y data.sql se
-#   ejecutan DESPUES del primer arranque (ver README > Base de datos).
-# - Secretos (JWT_SECRET, USER_*) se leen de backend/.env si existe; las
-#   variables DB_* de abajo lo sobrescriben para apuntar al MySQL del compose.
+#   docker compose up --build            # http://localhost:10000
+#   curl -i http://localhost:10000/api/health
+#
+# Perfil opcional "db-local" (desactivado por defecto): MySQL 8.4 en
+# contenedor con backend/schema.sql aplicado al crear el volumen, y una
+# segunda instancia de la app conectada a el en el puerto 10001:
+#
+#   docker compose --profile db-local up --build mysql app-db-local
+#   # luego (una sola vez): protection.admin.sql y, si aplica, migraciones
+#   docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" hehiachi_mishima < /sql/protection.admin.sql'
+#   docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" hehiachi_mishima < /migrations/V2__auditoria.sql'
 # ============================================================
+
+x-app: &app
+  image: acceso-base:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+  init: false              # supervisord ya es el PID 1
+  read_only: true          # solo /run/app y /tmp son escribibles
+  tmpfs:
+    - /run/app:uid=10001,gid=10001,mode=0700
+    - /tmp:uid=10001,gid=10001
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  stop_grace_period: 60s   # >= 15 s (nginx) + 30 s (backend) de supervisord
+  mem_limit: 512m          # mismo techo que el plan free/starter de Render
+  restart: unless-stopped
+  env_file:
+    - path: ./backend/.env
+      required: true
+
 services:
+  app:
+    <<: *app
+    environment:
+      PORT: "10000"
+      BACKEND_PORT: "2003"
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "10000:10000"
+
+  # ---------------- Perfil opcional: BD local ----------------
   mysql:
     image: mysql:8.4
+    profiles: ["db-local"]
     environment:
-      MYSQL_DATABASE: farmacias_peruanas
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-local}
       TZ: UTC
     command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      # schema.sql crea la BD hehiachi_mishima, tablas, vistas, triggers y seed.
       - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ./backend/panel.bitacora.sql:/docker-entrypoint-initdb.d/02-panel.bitacora.sql:ro
-      - ./backend/panel.inbound.sql:/docker-entrypoint-initdb.d/03-panel.inbound.sql:ro
+      # Scripts que se aplican a mano (ver cabecera).
+      - ./backend/protection.admin.sql:/sql/protection.admin.sql:ro
+      - ./backend/migrations:/migrations:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD:-root-local}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 5s
       timeout: 5s
       retries: 30
 
-  app:
-    build: .
+  app-db-local:
+    <<: *app
+    profiles: ["db-local"]
     depends_on:
       mysql:
         condition: service_healthy
-    env_file:
-      - path: ./backend/.env
-        required: false
     environment:
       PORT: "10000"
       BACKEND_PORT: "2003"
+      SPRING_PROFILES_ACTIVE: prod
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_NAME: hehiachi_mishima
       DB_USER: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-local}
       DB_PARAMS: useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-      CORS_ALLOWED_ORIGINS: http://localhost:10000
+      CORS_ALLOWED_ORIGINS: http://localhost:10001
     ports:
-      - "10000:10000"
+      - "10001:10000"
 
 volumes:
   mysql-data:

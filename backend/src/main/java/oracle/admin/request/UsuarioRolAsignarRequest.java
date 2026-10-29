@@ -4,6 +4,6 @@ import jakarta.validation.constraints.NotNull;
 
 /** Asignar un rol a un usuario. */
 public record UsuarioRolAsignarRequest(
-        @NotNull(message = "El rolId es obligatorio.")
+        @NotNull(message = "El rol es obligatorio.")
         Long rolId) {
 }

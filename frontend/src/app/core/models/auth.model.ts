@@ -20,3 +20,14 @@ export interface Sesion {
   usuario: Usuario;
   permisos: string[];
 }
+
+/** GET /auth/sesion: identidad y permisos vigentes ahora mismo. */
+export interface SesionVigente {
+  usuario: Usuario;
+  permisos: string[];
+}
+
+export interface CambiarContrasenaRequest {
+  contrasenaActual: string;
+  contrasenaNueva: string;
+}

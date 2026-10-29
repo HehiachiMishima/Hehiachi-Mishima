@@ -1,198 +1,104 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 # ============================================================
-# Imagen UNICA: Angular (frontend) + Spring Boot (backend) + nginx.
+# Imagen UNICA para Render: Angular (SPA) + Spring Boot (API) + nginx.
 #
-#   - nginx sirve el SPA en el puerto PUBLICO (PORT) y reenvia /api
-#     al backend, que corre en un puerto INTERNO (BACKEND_PORT).
-#   - supervisord arranca ambos procesos dentro del mismo contenedor.
-#   - Un solo contenedor => un solo servicio en Render.
+#   - nginx sirve el SPA en el puerto PUBLICO (PORT, lo inyecta Render)
+#     y reenvia /api al backend, que escucha SOLO en 127.0.0.1:BACKEND_PORT.
+#   - supervisord es el PID 1: arranca ambos procesos, reenvia SIGTERM y
+#     los detiene en orden (nginx drena -> Spring graceful shutdown).
+#   - Todo corre como usuario NO root (uid 10001).
+#   - La base de datos es EXTERNA (Aiven/MySQL): no se incluye aqui.
+#   - backend/.env NUNCA entra en la imagen (.dockerignore); la config llega
+#     por variables de entorno (Render, docker run --env-file, compose).
 #
-# PUERTOS:
-#   PORT          -> puerto publico (nginx). Es el UNICO que se publica
-#                    con -p. Render lo inyecta (10000). Por defecto 10000.
-#   BACKEND_PORT  -> puerto interno del backend Java (por defecto 2003).
-#                    NO se publica nunca; solo nginx lo usa por dentro.
+# Build:   docker build -t acceso-base:local .
+# Run:     docker run --rm -p 10000:10000 --env-file backend/.env acceso-base:local
 #
-# El archivo backend/.env NO se copia: las credenciales entran como
-# variables de entorno (Render las inyecta, docker run -e / --env-file).
+# Imagenes base fijadas por digest (reproducible). Para actualizar:
+#   docker buildx imagetools inspect <imagen:tag> --format '{{json .Manifest.Digest}}'
 # ============================================================
 
-# ---------- Etapa 1: build del frontend ----------
-FROM node:22-alpine AS frontend
+ARG NODE_IMAGE=node:24-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee3f4077d765542f85
+ARG MAVEN_IMAGE=maven:3.9-eclipse-temurin-25-alpine@sha256:781f1da87cd3d142e66e47cc149c4582a652fb7f574648206d1e956170c0dc90
+ARG RUNTIME_IMAGE=eclipse-temurin:25-jre-alpine@sha256:b7528962e65d43064d8a8b67ba175367896bc948363ea2d3fcd7f10d34e1f048
+
+# ---------- Etapa 1: frontend (Angular) ----------
+FROM ${NODE_IMAGE} AS frontend
 WORKDIR /app
+ENV NG_CLI_ANALYTICS=false CI=true
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm,sharing=locked \
+    npm ci --no-audit --no-fund --prefer-offline
 COPY frontend/ ./
-RUN npm run build -- --configuration production
+RUN --mount=type=cache,target=/app/.angular/cache,sharing=locked \
+    npx ng build --configuration production
+# Hashes CSP de los <script> inline del index.html generado.
+COPY deploy/csp-hashes.mjs /tmp/csp-hashes.mjs
+RUN node /tmp/csp-hashes.mjs dist/frontend/browser/index.html /app/csp-script-hashes.txt
 
-# ---------- Etapa 2: build del backend ----------
-FROM maven:3.9-eclipse-temurin-25 AS backend
-WORKDIR /app
+# ---------- Etapa 2: backend (Spring Boot) ----------
+FROM ${MAVEN_IMAGE} AS backend
+WORKDIR /build
 COPY backend/pom.xml ./
-RUN mvn -B -q -DskipTests dependency:go-offline
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
+    mvn -B -ntp -q dependency:go-offline
 COPY backend/src ./src
-RUN mvn -B -q -DskipTests clean package
+# Jar extraido (app.jar + lib/): arranque mas rapido y capas cacheables.
+RUN --mount=type=cache,target=/root/.m2,sharing=locked \
+    mvn -B -ntp -q -DskipTests package \
+    && cp target/*.jar app.jar \
+    && java -Djarmode=tools -jar app.jar extract --destination /extraido
 
 # ---------- Etapa 3: runtime ----------
-FROM eclipse-temurin:25-jre-alpine
+FROM ${RUNTIME_IMAGE}
 
+ARG VCS_REF=desconocido
+LABEL org.opencontainers.image.title="acceso-base" \
+      org.opencontainers.image.description="Plataforma de control de accesos: Angular + Spring Boot detras de nginx" \
+      org.opencontainers.image.revision="${VCS_REF}"
+
+# nginx + supervisord + envsubst (gettext). tini no hace falta: supervisord
+# es PID 1, reenvia senales y recoge procesos huerfanos.
 RUN apk add --no-cache nginx supervisor gettext \
-    && mkdir -p /run/nginx
+    && addgroup -S -g 10001 app \
+    && adduser -S -D -H -u 10001 -G app -h /app -s /sbin/nologin app \
+    && mkdir -p /run/app /etc/nginx/plantillas \
+    && chown app:app /run/app \
+    && rm -f /etc/nginx/http.d/default.conf
 
-# Backend (jar ejecutable) y frontend (SPA compilado).
-COPY --from=backend /app/target/*.jar /app/app.jar
+# Dependencias primero (cambian poco) y luego el codigo de la app.
+COPY --from=backend /extraido/lib /app/lib
+COPY --from=backend /extraido/app.jar /app/app.jar
 COPY --from=frontend /app/dist/frontend/browser /usr/share/nginx/html
+COPY --from=frontend /app/csp-script-hashes.txt /app/csp-script-hashes.txt
 
-# --- Config de nginx: sirve el SPA y proxifica /api al backend ---
-RUN cat > /etc/nginx/http.d/default.conf.template <<'NGINX'
-# Protocolo original del cliente: Render termina TLS antes de nginx y envia
-# X-Forwarded-Proto=https. Se reenvia tal cual al backend; sin esto Spring
-# veria "http" y trataria las peticiones del propio dominio como CORS.
-map $http_x_forwarded_proto $proto_cliente {
-    default $http_x_forwarded_proto;
-    ''      $scheme;
-}
+COPY deploy/nginx/ /etc/nginx/plantillas/
+COPY deploy/supervisord.conf /etc/supervisord.conf
+COPY --chmod=0755 deploy/entrypoint.sh /entrypoint.sh
+COPY --chmod=0755 deploy/run-backend.sh /usr/local/bin/run-backend
+COPY --chmod=0755 deploy/run-nginx.sh /usr/local/bin/run-nginx
+COPY --chmod=0755 deploy/supervisor-fatal-listener.sh /usr/local/bin/supervisor-fatal-listener
 
-# Solo se pide "upgrade" cuando el cliente lo solicita (WebSocket); el
-# resto de peticiones reutiliza conexiones keep-alive hacia el backend.
-map $http_upgrade $conexion_backend {
-    default upgrade;
-    ''      '';
-}
-
-upstream backend {
-    server 127.0.0.1:${BACKEND_PORT};
-    keepalive 64;
-}
-
-server {
-    listen ${PORT};
-    server_name _;
-    server_tokens off;
-
-    root /usr/share/nginx/html;
-    index index.html;
-    client_max_body_size 20m;
-
-    gzip on;
-    gzip_comp_level 5;
-    gzip_min_length 1024;
-    gzip_proxied any;
-    gzip_vary on;
-    gzip_types text/plain text/css text/javascript application/javascript application/json application/xml image/svg+xml font/woff2;
-
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "DENY" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
-
-    location /api/ {
-        proxy_pass http://backend;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $proto_cliente;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $conexion_backend;
-        proxy_connect_timeout 15s;
-        proxy_read_timeout 60s;
-        proxy_send_timeout 60s;
-        # Exportaciones en flujo (chunked): entregar al cliente sin acumular.
-        proxy_buffering off;
-    }
-
-    # Assets con hash en el nombre (Angular outputHashing=all): cache larga.
-    location ~* \.(?:js|css|woff2?|ttf|eot|png|jpe?g|gif|svg|webp|ico)$ {
-        add_header Cache-Control "public, max-age=31536000, immutable";
-        add_header X-Content-Type-Options "nosniff" always;
-        try_files $uri =404;
-    }
-
-    # index.html nunca se cachea: asi cada deploy se ve al instante.
-    location = /index.html {
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-        add_header X-Content-Type-Options "nosniff" always;
-        add_header X-Frame-Options "DENY" always;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-NGINX
-
-# --- Wrapper para lanzar nginx en primer plano (evita problemas de quoting) ---
-RUN printf '#!/bin/sh\nexec nginx -g "daemon off;"\n' > /usr/local/bin/run-nginx \
-    && chmod +x /usr/local/bin/run-nginx
-
-# --- Wrapper del backend: JAVA_OPTS permite ajustar la JVM sin rebuild ---
-RUN printf '#!/bin/sh\nexec java $JAVA_OPTS -jar /app/app.jar --server.port="$BACKEND_PORT"\n' > /usr/local/bin/run-backend \
-    && chmod +x /usr/local/bin/run-backend
-
-# --- Supervisord: arranca backend y nginx en el mismo contenedor ---
-RUN cat > /etc/supervisord.conf <<'SUPERVISORD'
-[supervisord]
-nodaemon=true
-logfile=/dev/null
-logfile_maxbytes=0
-pidfile=/run/supervisord.pid
-
-[program:backend]
-command=/usr/local/bin/run-backend
-directory=/app
-autorestart=true
-startsecs=5
-stopwaitsecs=35
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
-
-[program:nginx]
-command=/usr/local/bin/run-nginx
-autorestart=true
-priority=20
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
-SUPERVISORD
-
-# --- Entrypoint: resuelve los puertos, genera la config de nginx y arranca ---
-RUN cat > /entrypoint.sh <<'SH'
-#!/bin/sh
-set -e
-
-PORT="${PORT:-10000}"
-BACKEND_PORT="${BACKEND_PORT:-2003}"
-export PORT BACKEND_PORT
-
-if [ "$PORT" = "$BACKEND_PORT" ]; then
-  echo "ERROR: PORT y BACKEND_PORT no pueden coincidir (=$PORT):" >&2
-  echo "       nginx (publico) y el backend (interno) chocarian en el mismo puerto." >&2
-  exit 1
-fi
-
-envsubst '${PORT} ${BACKEND_PORT}' \
-  < /etc/nginx/http.d/default.conf.template \
-  > /etc/nginx/http.d/default.conf
-
-exec /usr/bin/supervisord -c /etc/supervisord.conf
-SH
-RUN chmod +x /entrypoint.sh
-
-# PORT = publico (Render lo inyecta; por defecto 10000).
-# BACKEND_PORT = interno del backend (por defecto 2003). Deben ser distintos.
-# SPRING_PROFILES_ACTIVE=prod activa application-prod.properties (logs JSON).
+# PORT          publico (nginx). Render lo inyecta; por defecto 10000.
+# BACKEND_PORT  interno del backend (solo 127.0.0.1). Distinto de PORT.
+# JAVA_OPTS     dimensionado para 512 MB (plan free/starter de Render):
+#   heap <= 50% (~256 MB) + metaspace/code cache acotados deja margen a
+#   nginx + supervisord; SerialGC es el GC mas ligero con 0.1-0.5 CPU;
+#   ExitOnOutOfMemoryError => supervisord/Render reinician en vez de
+#   quedar un proceso zombi. En planes de >=2 GB: MaxRAMPercentage=70 y G1.
 ENV PORT=10000 \
     BACKEND_PORT=2003 \
     SPRING_PROFILES_ACTIVE=prod \
-    JAVA_OPTS="-XX:MaxRAMPercentage=70 -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/urandom"
+    TZ=UTC \
+    JAVA_OPTS="-XX:MaxRAMPercentage=50 -XX:InitialRAMPercentage=25 -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=64m -Xss512k -XX:+ExitOnOutOfMemoryError"
+
+USER app:app
+WORKDIR /app
 EXPOSE 10000
+STOPSIGNAL SIGTERM
 
 # Sano = nginx responde y el backend contesta /api/health (204).
-HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD wget -q --spider "http://127.0.0.1:${PORT}/api/health" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD wget -q -O /dev/null "http://127.0.0.1:${PORT}/api/health" || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

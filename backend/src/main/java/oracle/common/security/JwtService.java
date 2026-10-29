@@ -15,9 +15,16 @@ import org.springframework.stereotype.Service;
  * su longitud al construir los beans en SecurityConfig. El token solo lleva
  * la identidad; los permisos se resuelven por peticion contra la vista final
  * para que un deny o una desactivacion tengan efecto inmediato.
+ *
+ * El claim "ver" es usuarios.credenciales_version al emitirlo: al cambiar la
+ * contrasena, el nombre de usuario o desactivar la cuenta la version sube y
+ * PermisosJwtConverter rechaza los tokens anteriores (revocacion).
  */
 @Service
 public class JwtService {
+
+    /** Claim con la version de credenciales del usuario. */
+    public static final String CLAIM_VERSION = "ver";
 
     private final JwtEncoder encoder;
     private final String emisor;
@@ -41,6 +48,7 @@ public class JwtService {
                 .issuer(emisor)
                 .subject(String.valueOf(usuario.getId()))
                 .claim("usuario", usuario.getUsuario())
+                .claim(CLAIM_VERSION, usuario.getCredencialesVersion())
                 .issuedAt(ahora)
                 .expiresAt(expira)
                 .build();

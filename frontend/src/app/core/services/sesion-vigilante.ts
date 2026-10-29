@@ -1,57 +1,77 @@
-import { Service, effect, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { DestroyRef, Service, effect, inject, signal } from '@angular/core';
 import { CONFIG } from '../config/configuracion';
 import { Sesion } from '../models';
-import { Notificaciones } from './notificaciones';
+import { Anunciador } from './anunciador';
+import { Auth } from './auth';
 import { SesionStore } from './sesion';
 
 /**
- * Vigila el ciclo de vida de la sesión: al llegar la hora de vencimiento
- * del token cierra la sesión, avisa y redirige al login, aunque el usuario
- * no haya hecho ninguna petición (el backend solo responde 401 al usarlo).
+ * Vigila el ciclo de vida de la sesión:
+ * - avisa con antelación de que el token va a vencer (WCAG 2.2.1);
+ * - al vencer cierra la sesión y lleva al login, aunque no haya peticiones;
+ * - al recuperar el foco de la ventana relee los permisos vigentes.
  */
 @Service()
 export class SesionVigilante {
   private readonly sesionStore = inject(SesionStore);
-  private readonly notificaciones = inject(Notificaciones);
-  private readonly router = inject(Router);
+  private readonly auth = inject(Auth);
+  private readonly anunciador = inject(Anunciador);
   private temporizador?: ReturnType<typeof setTimeout>;
+  private temporizadorAviso?: ReturnType<typeof setTimeout>;
+
+  /** Hora de vencimiento cuando el aviso está visible; null si no hay aviso. */
+  readonly aviso = signal<Date | null>(null);
 
   constructor() {
     effect(() => this.programar(this.sesionStore.sesion()));
+
+    const alEnfocar = (): void => {
+      if (document.visibilityState === 'visible') {
+        this.auth.refrescarSesion().subscribe({ error: () => undefined });
+      }
+    };
+    window.addEventListener('focus', alEnfocar);
+    inject(DestroyRef).onDestroy(() => {
+      window.removeEventListener('focus', alEnfocar);
+      this.cancelar();
+    });
+  }
+
+  descartarAviso(): void {
+    this.aviso.set(null);
   }
 
   private programar(sesion: Sesion | null): void {
     this.cancelar();
+    this.aviso.set(null);
     if (!sesion?.expiraEn) {
       return;
     }
 
-    const restante = new Date(sesion.expiraEn).getTime() - Date.now() - CONFIG.sesion.margenExpiracionMs;
+    const vence = new Date(sesion.expiraEn);
+    const restante = vence.getTime() - Date.now() - CONFIG.sesion.margenExpiracionMs;
     if (restante <= 0) {
-      this.expirar();
+      this.auth.expulsar('expirada');
       return;
     }
-    this.temporizador = setTimeout(() => this.expirar(), restante);
+    this.temporizador = setTimeout(() => {
+      this.aviso.set(null);
+      this.auth.expulsar('expirada');
+    }, restante);
+
+    const hastaAviso = restante - CONFIG.sesion.avisoExpiracionMs;
+    this.temporizadorAviso = setTimeout(() => this.avisar(vence), Math.max(0, hastaAviso));
+  }
+
+  private avisar(vence: Date): void {
+    this.aviso.set(vence);
+    this.anunciador.anunciar('Tu sesión vencerá en unos minutos. Guarda tus cambios.', 'assertive');
   }
 
   private cancelar(): void {
-    if (this.temporizador !== undefined) {
-      clearTimeout(this.temporizador);
-      this.temporizador = undefined;
-    }
-  }
-
-  private expirar(): void {
-    if (this.sesionStore.sesion() === null) {
-      return;
-    }
-    this.sesionStore.limpiar();
-    this.notificaciones.advertencia('Sesión expirada', 'Vuelve a iniciar sesión para continuar.');
-    if (!this.router.url.startsWith(CONFIG.rutas.login)) {
-      void this.router.navigate([CONFIG.rutas.login], {
-        queryParams: { returnUrl: this.router.url },
-      });
-    }
+    clearTimeout(this.temporizador);
+    clearTimeout(this.temporizadorAviso);
+    this.temporizador = undefined;
+    this.temporizadorAviso = undefined;
   }
 }

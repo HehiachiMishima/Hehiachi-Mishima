@@ -1,6 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { CONFIG } from '../../../core/config/configuracion';
+import { formatearNumero } from '../../util/formato';
 import { Icon } from '../icon/icon';
 
+let secuencia = 0;
+
+/**
+ * Paginador con rango visible ("Mostrando 1–10 de 57"), tamaño de página y
+ * navegación. Los extremos usan aria-disabled para no perder el foco.
+ */
 @Component({
   selector: 'ui-paginador',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -8,12 +16,25 @@ import { Icon } from '../icon/icon';
   template: `
     @if (total() > 0) {
       <div class="ui-paginador">
+        <p class="ui-paginador__info">
+          Mostrando <strong>{{ desde() }}–{{ hasta() }}</strong> de <strong>{{ totalTexto() }}</strong>
+        </p>
+
+        <label class="ui-paginador__size" [for]="idTamano">
+          Filas por página
+          <select [id]="idTamano" [value]="porPagina()" (change)="cambiarTamano($event)">
+            @for (opcion of opciones(); track opcion) {
+              <option [value]="opcion" [selected]="opcion === porPagina()">{{ opcion }}</option>
+            }
+          </select>
+        </label>
+
         @if (totalPaginas() > 1) {
           <nav class="ui-paginador__nav" aria-label="Paginación">
             <button
               type="button"
               class="ui-paginador__btn"
-              [disabled]="pagina() <= 1"
+              [attr.aria-disabled]="pagina() <= 1 || null"
               (click)="ir(pagina() - 1)"
               aria-label="Página anterior"
             >
@@ -29,6 +50,7 @@ import { Icon } from '../icon/icon';
                   class="ui-paginador__btn"
                   [class.ui-paginador__btn--activa]="p === pagina()"
                   [attr.aria-current]="p === pagina() ? 'page' : null"
+                  [attr.aria-label]="'Página ' + p"
                   (click)="ir(p)"
                 >
                   {{ p }}
@@ -39,7 +61,7 @@ import { Icon } from '../icon/icon';
             <button
               type="button"
               class="ui-paginador__btn"
-              [disabled]="pagina() >= totalPaginas()"
+              [attr.aria-disabled]="pagina() >= totalPaginas() || null"
               (click)="ir(pagina() + 1)"
               aria-label="Página siguiente"
             >
@@ -52,15 +74,18 @@ import { Icon } from '../icon/icon';
   `,
 })
 export class Paginador {
+  readonly idTamano = `ui-paginador-tamano-${++secuencia}`;
+
   readonly pagina = input<number>(1);
   readonly total = input<number>(0);
   readonly porPagina = input<number>(10);
-  readonly opciones = input<number[]>([10, 25, 50]);
+  readonly opciones = input<readonly number[]>(CONFIG.paginacion.opciones);
 
   readonly paginaCambia = output<number>();
   readonly porPaginaCambia = output<number>();
 
   readonly totalPaginas = computed(() => Math.max(1, Math.ceil(this.total() / this.porPagina())));
+  readonly totalTexto = computed(() => formatearNumero(this.total()));
 
   readonly desde = computed(() =>
     this.total() === 0 ? 0 : (this.pagina() - 1) * this.porPagina() + 1,

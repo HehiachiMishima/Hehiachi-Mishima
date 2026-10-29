@@ -2,6 +2,7 @@ package oracle.admin.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -23,12 +24,12 @@ public class UsuarioRol {
     @EmbeddedId
     private UsuarioRolId id = new UsuarioRolId();
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("usuarioId")
     @JoinColumn(name = "usuario_id")
     private Usuario usuario;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("rolId")
     @JoinColumn(name = "rol_id")
     private Rol rol;

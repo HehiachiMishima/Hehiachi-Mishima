@@ -1,169 +1,253 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { catchError, forkJoin, of } from 'rxjs';
-import { PANEL_ADMIN } from '../../../../../core/config/paneles';
-import { PERMISOS } from '../../../../../core/config/permisos';
+import { Observable, catchError, finalize, forkJoin, map, of } from 'rxjs';
+import {
+  ACCIONES_PRIVILEGIO,
+  RangoAuditoria,
+  actorDeEvento,
+  etiquetaAccion,
+  inicioDeRango,
+  objetivoDeEvento,
+} from '../../../../../core/config/auditoria';
+import { CONFIG } from '../../../../../core/config/configuracion';
+import { PANEL_ADMIN, PANELES } from '../../../../../core/config/paneles';
+import { PERMISOS, etiquetaPermiso } from '../../../../../core/config/permisos';
+import { AnaliticaAdmin, AuditoriaEvento, FiltroAuditoria } from '../../../../../core/models';
+import { AnaliticaApi } from '../../../../../core/services/analitica.api';
+import { AuditoriaApi } from '../../../../../core/services/auditoria.api';
 import { Auth } from '../../../../../core/services/auth';
-import { Permiso, Rol, Usuario } from '../../../../../core/models';
-import { PermisosApi } from '../../../../../core/services/permisos.api';
-import { RolesApi } from '../../../../../core/services/roles.api';
-import { UsuariosApi } from '../../../../../core/services/usuarios.api';
+import { FechaHoraPipe } from '../../../../../shared/pipes/fecha-hora.pipe';
 import { BarChart, BarraDato } from '../../../../../shared/ui/charts/bar-chart';
-import { DonutChart, SegmentoDonut } from '../../../../../shared/ui/charts/donut-chart';
-import { GaugeChart } from '../../../../../shared/ui/charts/gauge-chart';
+import { BarraHorizontal, BarrasHorizontales } from '../../../../../shared/ui/charts/barras-horizontales';
 import { Icon } from '../../../../../shared/ui/icon/icon';
+import { fechaRelativa, isoUtc } from '../../../../../shared/util/fechas';
+import { formatearNumero, porcentaje } from '../../../../../shared/util/formato';
 
-interface Metrica {
+type Tono = 'brand' | 'success' | 'warning' | 'danger';
+
+interface Kpi {
   id: string;
   etiqueta: string;
   icono: string;
-  valor: number | null;
+  valor: string;
   detalle: string;
-  acento: 'brand' | 'accent' | 'success';
+  tono: Tono;
+  enlace?: { ruta: string; params?: Record<string, string>; texto: string };
 }
+
+/** Indicador de la bitácora: null mientras carga; NaN si no está disponible. */
+interface KpiAuditoria {
+  id: string;
+  etiqueta: string;
+  icono: string;
+  rango: RangoAuditoria;
+  acciones: string[];
+  valor: number | null;
+}
+
+const MES = new Intl.DateTimeFormat('es', { month: 'short', year: '2-digit' });
 
 @Component({
   selector: 'app-admin-dashboard',
-  imports: [RouterLink, Icon, DonutChart, BarChart, GaugeChart],
+  imports: [RouterLink, Icon, BarChart, BarrasHorizontales, FechaHoraPipe],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
 export class Dashboard {
   private readonly auth = inject(Auth);
-  private readonly usuariosApi = inject(UsuariosApi);
-  private readonly rolesApi = inject(RolesApi);
-  private readonly permisosApi = inject(PermisosApi);
+  private readonly analiticaApi = inject(AnaliticaApi);
+  private readonly auditoriaApi = inject(AuditoriaApi);
 
-  private readonly permisos = this.auth.permisos;
   readonly usuario = this.auth.usuario;
   readonly panelRuta = PANEL_ADMIN.ruta;
+  readonly rutaAuditoria = CONFIG.rutas.auditoria;
+  readonly puedeAuditoria = computed(() => this.auth.permisos().includes(PERMISOS.VER_AUDITORIA));
 
   readonly cargando = signal(true);
+  readonly error = signal(false);
+  readonly datos = signal<AnaliticaAdmin | null>(null);
+  readonly actualizadoEn = signal<Date | null>(null);
+  private readonly ahora = signal(Date.now());
 
-  private readonly usuariosTotal = signal<number | null>(null);
-  private readonly usuariosActivos = signal<number | null>(null);
-  private readonly rolesTotal = signal<number | null>(null);
-  private readonly permisosTotal = signal<number | null>(null);
+  readonly kpisAuditoria = signal<KpiAuditoria[]>([]);
+  readonly eventosSeguridad = signal<AuditoriaEvento[] | null>(null);
 
-  readonly metricas = computed<Metrica[]>(() => [
-    {
-      id: 'usuarios',
-      etiqueta: 'Usuarios',
-      icono: 'usuarios',
-      valor: this.usuariosTotal(),
-      detalle: this.usuariosActivos() !== null ? `${this.usuariosActivos()} activos` : 'Requiere permiso',
-      acento: 'brand',
-    },
-    {
-      id: 'roles',
-      etiqueta: 'Roles',
-      icono: 'roles',
-      valor: this.rolesTotal(),
-      detalle: this.rolesTotal() !== null ? 'Agrupadores de permisos' : 'Requiere permiso',
-      acento: 'accent',
-    },
-    {
-      id: 'permisos',
-      etiqueta: 'Permisos',
-      icono: 'permisos',
-      valor: this.permisosTotal(),
-      detalle: this.permisosTotal() !== null ? 'Catálogo del sistema' : 'Requiere permiso',
-      acento: 'success',
-    },
-  ]);
+  readonly etiquetaAccion = etiquetaAccion;
+  readonly actor = actorDeEvento;
+  readonly objetivo = objetivoDeEvento;
 
-  readonly modulos = computed(() =>
-    PANEL_ADMIN.modulos.filter((modulo) => this.permisos().includes(modulo.permiso)),
-  );
-
-  readonly hayDatosUsuarios = computed(() => (this.usuariosTotal() ?? 0) > 0);
-
-  readonly segmentosUsuarios = computed<SegmentoDonut[]>(() => {
-    const total = this.usuariosTotal();
-    if (total === null || total <= 0) {
-      return [];
-    }
-    const activos = this.usuariosActivos() ?? 0;
-    const inactivos = Math.max(0, total - activos);
-    return [
-      { etiqueta: 'Activos', valor: activos, color: 'var(--success)' },
-      { etiqueta: 'Inactivos', valor: inactivos, color: 'var(--danger)' },
-    ].filter((segmento) => segmento.valor > 0);
+  readonly hace = computed(() => {
+    this.ahora();
+    const fecha = this.actualizadoEn();
+    return fecha ? fechaRelativa(fecha) : '';
   });
-
-  readonly pctActivos = computed(() => {
-    const total = this.usuariosTotal();
-    if (!total) {
-      return 0;
-    }
-    return Math.round(((this.usuariosActivos() ?? 0) / total) * 100);
-  });
-
-  readonly barrasEntidades = computed<BarraDato[]>(() => {
-    const items: BarraDato[] = [];
-    const usuarios = this.usuariosTotal();
-    const roles = this.rolesTotal();
-    const permisos = this.permisosTotal();
-
-    if (usuarios !== null) {
-      items.push({ etiqueta: 'Usuarios', valor: usuarios, color: 'var(--brand)' });
-    }
-    if (roles !== null) {
-      items.push({ etiqueta: 'Roles', valor: roles, color: 'var(--color-graphite)' });
-    }
-    if (permisos !== null) {
-      items.push({ etiqueta: 'Permisos', valor: permisos, color: 'var(--success)' });
-    }
-    return items;
-  });
-
-  readonly hayBarras = computed(() => this.barrasEntidades().length > 0);
 
   readonly saludo = computed(() => {
-    const hora = new Date().getHours();
-    if (hora < 12) {
-      return 'Buenos días';
-    }
-    if (hora < 19) {
-      return 'Buenas tardes';
-    }
-    return 'Buenas noches';
+    const hora = new Date(this.ahora()).getHours();
+    return hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches';
   });
 
+  readonly kpis = computed<Kpi[]>(() => {
+    const k = this.datos()?.kpis;
+    if (!k) {
+      return [];
+    }
+    const excepciones = k.overridesGrant + k.overridesDeny;
+    const lista: Kpi[] = [
+      {
+        id: 'activas',
+        etiqueta: 'Cuentas activas',
+        icono: 'usuarios',
+        valor: formatearNumero(k.usuariosActivos),
+        detalle: `de ${formatearNumero(k.usuarios)} · ${porcentaje(k.usuariosActivos, k.usuarios)} %`,
+        tono: 'brand',
+        enlace: { ruta: `${this.panelRuta}/usuarios`, params: { estado: 'activos' }, texto: 'Ver cuentas' },
+      },
+      {
+        id: 'sin-rol',
+        etiqueta: 'Cuentas sin rol',
+        icono: 'alertTriangle',
+        valor: formatearNumero(k.usuariosSinRol),
+        detalle: k.usuariosSinRol > 0 ? 'Sin acceso o solo con ajustes individuales' : 'Todas las cuentas tienen rol',
+        tono: k.usuariosSinRol > 0 ? 'warning' : 'success',
+        enlace: k.usuariosSinRol > 0 ? { ruta: `${this.panelRuta}/usuarios`, params: { sinRol: '1' }, texto: 'Revisar cuentas' } : undefined,
+      },
+      {
+        id: 'excepciones',
+        etiqueta: 'Excepciones individuales',
+        icono: 'key',
+        valor: formatearNumero(excepciones),
+        detalle: `${k.overridesGrant} ${k.overridesGrant === 1 ? 'concesión' : 'concesiones'} · ${k.overridesDeny} ${k.overridesDeny === 1 ? 'denegación' : 'denegaciones'}`,
+        tono: k.overridesGrant > 0 ? 'warning' : 'brand',
+      },
+      {
+        id: 'roles',
+        etiqueta: 'Roles activos',
+        icono: 'roles',
+        valor: formatearNumero(k.rolesActivos),
+        detalle: `de ${formatearNumero(k.roles)}`,
+        tono: 'brand',
+      },
+      {
+        id: 'permisos',
+        etiqueta: 'Permisos activos',
+        icono: 'permisos',
+        valor: formatearNumero(k.permisosActivos),
+        detalle: `de ${formatearNumero(k.permisos)}`,
+        tono: 'brand',
+      },
+    ];
+    return lista;
+  });
+
+  readonly usuariosPorRol = computed<BarraHorizontal[]>(() =>
+    [...(this.datos()?.usuariosPorRol ?? [])]
+      .sort((a, b) => b.valor - a.valor)
+      .map((fila) => ({ etiqueta: fila.etiqueta, valor: fila.valor, apagada: fila.valor === 0 })),
+  );
+
+  readonly permisosExtendidos = computed<BarraHorizontal[]>(() =>
+    (this.datos()?.permisosMasOtorgados ?? [])
+      .slice(0, 12)
+      .map((fila) => ({ etiqueta: etiquetaPermiso(fila.etiqueta), secundario: fila.etiqueta, valor: fila.valor })),
+  );
+
+  readonly altas = computed<BarraDato[]>(() =>
+    (this.datos()?.altasPorMes ?? []).map((punto) => ({
+      etiqueta: this.mes(punto.periodo),
+      valor: punto.valor,
+      color: 'var(--chart-1)',
+      detalle: `${punto.secundario} siguen activas`,
+    })),
+  );
+
+  /** Cobertura solo de los paneles que existen en el frontend. */
+  readonly cobertura = computed(() => {
+    const filas = this.datos()?.coberturaPaneles ?? [];
+    return PANELES.map((panel) => ({
+      nombre: panel.nombre,
+      valor: filas.find((fila) => fila.etiqueta === panel.permiso || fila.etiqueta === panel.nombre)?.valor ?? null,
+    })).filter((fila) => fila.valor !== null);
+  });
+
+  readonly modulos = computed(() =>
+    PANEL_ADMIN.modulos.filter((modulo) => modulo.id !== 'dashboard' && this.auth.permisos().includes(modulo.permiso)),
+  );
+
   constructor() {
+    const reloj = setInterval(() => this.ahora.set(Date.now()), 60_000);
+    inject(DestroyRef).onDestroy(() => clearInterval(reloj));
     this.cargar();
   }
 
-  private cargar(): void {
-    const permisos = this.permisos();
-    const puedeUsuarios = permisos.includes(PERMISOS.VER_USUARIOS);
-    const puedeRoles = permisos.includes(PERMISOS.VER_ROLES);
-    const puedePermisos = permisos.includes(PERMISOS.VER_PERMISOS);
+  cargar(): void {
+    this.cargando.set(true);
+    this.error.set(false);
+    this.analiticaApi
+      .admin()
+      .pipe(finalize(() => this.cargando.set(false)))
+      .subscribe({
+        next: (datos) => {
+          this.datos.set(datos);
+          this.actualizadoEn.set(new Date());
+        },
+        error: () => this.error.set(true),
+      });
+    if (this.puedeAuditoria()) {
+      this.cargarAuditoria();
+    }
+  }
 
-    const usuarios$ = puedeUsuarios
-      ? this.usuariosApi.listar().pipe(catchError(() => of([] as Usuario[])))
-      : of([] as Usuario[]);
-    const roles$ = puedeRoles
-      ? this.rolesApi.listar().pipe(catchError(() => of([] as Rol[])))
-      : of([] as Rol[]);
-    const permisos$ = puedePermisos
-      ? this.permisosApi.listar().pipe(catchError(() => of([] as Permiso[])))
-      : of([] as Permiso[]);
+  enlaceAuditoria(kpi: KpiAuditoria): Record<string, string> {
+    return kpi.acciones.length === 1 ? { accion: kpi.acciones[0], rango: kpi.rango } : { vista: 'privilegios', rango: kpi.rango };
+  }
 
-    forkJoin({ usuarios: usuarios$, roles: roles$, permisos: permisos$ }).subscribe(
-      ({ usuarios, roles, permisos: permisosLista }) => {
-        if (puedeUsuarios) {
-          this.usuariosTotal.set(usuarios.length);
-          this.usuariosActivos.set(usuarios.filter((usuario) => usuario.activo).length);
-        }
-        if (puedeRoles) {
-          this.rolesTotal.set(roles.length);
-        }
-        if (puedePermisos) {
-          this.permisosTotal.set(permisosLista.length);
-        }
-        this.cargando.set(false);
-      },
+  valorAuditoria(kpi: KpiAuditoria): string {
+    return kpi.valor === null ? '' : Number.isNaN(kpi.valor) ? 'No disponible' : formatearNumero(kpi.valor);
+  }
+
+  private cargarAuditoria(): void {
+    const definiciones: Omit<KpiAuditoria, 'valor'>[] = [
+      { id: 'fallidos', etiqueta: 'Inicios de sesión fallidos (24 h)', icono: 'alertTriangle', rango: '24h', acciones: ['LOGIN_FALLIDO'] },
+      { id: 'denegados', etiqueta: 'Accesos denegados (7 días)', icono: 'lock', rango: '7d', acciones: ['ACCESO_DENEGADO'] },
+      { id: 'privilegios', etiqueta: 'Cambios de privilegios (7 días)', icono: 'shieldCheck', rango: '7d', acciones: ACCIONES_PRIVILEGIO },
+    ];
+    this.kpisAuditoria.set(definiciones.map((definicion) => ({ ...definicion, valor: null })));
+    for (const definicion of definiciones) {
+      this.contar(definicion.acciones, definicion.rango).subscribe((valor) =>
+        this.kpisAuditoria.update((lista) => lista.map((kpi) => (kpi.id === definicion.id ? { ...kpi, valor } : kpi))),
+      );
+    }
+
+    const ultimos = (resultado: string): Observable<AuditoriaEvento[]> =>
+      this.auditoriaApi.buscar({ resultado, pagina: 1, tamano: 5 }).pipe(map((pagina) => pagina.contenido ?? []));
+    this.eventosSeguridad.set(null);
+    forkJoin([ultimos('FALLO'), ultimos('DENEGADO')])
+      .pipe(catchError(() => of([[], []] as AuditoriaEvento[][])))
+      .subscribe(([fallos, denegados]) =>
+        this.eventosSeguridad.set(
+          [...fallos, ...denegados].sort((a, b) => b.ocurridoEn.localeCompare(a.ocurridoEn)).slice(0, 5),
+        ),
+      );
+  }
+
+  /** Total de eventos (lee `total` con tamano=1); suma varias acciones. NaN si falla. */
+  private contar(acciones: string[], rango: RangoAuditoria): Observable<number> {
+    const desde = inicioDeRango(rango);
+    const filtro = (accion: string): FiltroAuditoria => ({
+      accion,
+      desde: desde ? isoUtc(desde) : undefined,
+      pagina: 1,
+      tamano: 1,
+    });
+    return forkJoin(acciones.map((accion) => this.auditoriaApi.buscar(filtro(accion)).pipe(map((pagina) => pagina.total)))).pipe(
+      map((totales) => totales.reduce((suma, total) => suma + total, 0)),
+      catchError(() => of(Number.NaN)),
     );
+  }
+
+  private mes(periodo: string): string {
+    const [anio, mes] = periodo.split('-').map(Number);
+    return anio && mes ? MES.format(new Date(anio, mes - 1, 1)) : periodo;
   }
 }

@@ -34,7 +34,7 @@ public class AnaliticaAdminService {
         return Mono.fromCallable(() -> Trazas.medir(log, "AnaliticaAdminService.analitica", () ->
                         cacheRespuestas.obtener(CLAVE, () -> ejecutor.esperar(calcular()))))
                 .subscribeOn(Schedulers.boundedElastic())
-                .map(datos -> ApiResponse.ok("Analitica calculada.", datos));
+                .map(datos -> ApiResponse.ok("Analítica calculada.", datos));
     }
 
     private Mono<AnaliticaAdminResponse> calcular() {

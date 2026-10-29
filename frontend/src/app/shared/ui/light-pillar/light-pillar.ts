@@ -324,7 +324,13 @@ export class LightPillar implements AfterViewInit, OnDestroy {
       return rgb;
     };
 
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    // La preferencia se sigue en vivo: cambiarla con la página abierta surte efecto.
+    const consultaMovimiento = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    let reduce = consultaMovimiento?.matches ?? false;
+    const onMotionChange = (evento: MediaQueryListEvent): void => {
+      reduce = evento.matches;
+      wake();
+    };
     const view = { width: 1, height: 1, ratio: 1 };
     const pointer = { x: 0, y: 0, inside: false };
     const pulses: Pulse[] = [];
@@ -539,6 +545,7 @@ export class LightPillar implements AfterViewInit, OnDestroy {
     window.addEventListener('pointerdown', onPointerDown, { passive: true });
     document.documentElement.addEventListener('pointerleave', onPointerLeave);
     document.addEventListener('visibilitychange', onVisibility);
+    consultaMovimiento?.addEventListener('change', onMotionChange);
     resize();
 
     this.wake = () => {
@@ -556,6 +563,7 @@ export class LightPillar implements AfterViewInit, OnDestroy {
       window.removeEventListener('pointerdown', onPointerDown);
       document.documentElement.removeEventListener('pointerleave', onPointerLeave);
       document.removeEventListener('visibilitychange', onVisibility);
+      consultaMovimiento?.removeEventListener('change', onMotionChange);
       if (texture) gl.deleteTexture(texture);
       gl.deleteFramebuffer(framebuffer);
       gl.deleteProgram(marchProgram.program);

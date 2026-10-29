@@ -1,24 +1,42 @@
-import { DatePipe } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { finalize } from 'rxjs';
-import { mensajeDeError } from '../../../../../core/errors/error.util';
 import { PERMISOS } from '../../../../../core/config/permisos';
-import { Notificaciones } from '../../../../../core/services/notificaciones';
-import { DirectorioUsuarios } from '../../../../../core/services/directorio-usuarios';
-import { PermisosApi } from '../../../../../core/services/permisos.api';
+import { MOTIVO_PROTECCION, permisoProtegido } from '../../../../../core/config/protecciones';
+import { mensajeDeError } from '../../../../../core/errors/error.util';
 import { Permiso, Rol } from '../../../../../core/models';
+import { Anunciador } from '../../../../../core/services/anunciador';
+import { DirectorioUsuarios } from '../../../../../core/services/directorio-usuarios';
+import { Notificaciones } from '../../../../../core/services/notificaciones';
+import { PermisosApi } from '../../../../../core/services/permisos.api';
 import { HasPermiso } from '../../../../../shared/directives/has-permiso.directive';
 import { ColumnasRedimensionables } from '../../../../../shared/directives/columnas-redimensionables.directive';
+import { aplicarErroresServidor, enfocarPrimerInvalido, errorServidor } from '../../../../../shared/forms/errores-formulario';
+import { ActorLabelPipe } from '../../../../../shared/pipes/actor-label.pipe';
+import { FechaHoraPipe } from '../../../../../shared/pipes/fecha-hora.pipe';
+import { Confirmacion } from '../../../../../shared/ui/confirmacion/confirmacion';
 import { EmptyState } from '../../../../../shared/ui/empty-state/empty-state';
 import { Icon } from '../../../../../shared/ui/icon/icon';
 import { Modal } from '../../../../../shared/ui/modal/modal';
 import { Paginador } from '../../../../../shared/ui/paginador/paginador';
-import { ActorLabelPipe } from '../../../../../shared/pipes/actor-label.pipe';
+import { crearEstadoUrl, numeroUrl, opcionUrl, paginar, textoUrl } from '../../../../../shared/util/estado-url';
+
+type Estado = '' | 'activos' | 'inactivos';
 
 @Component({
   selector: 'app-admin-permisos',
-  imports: [ReactiveFormsModule, DatePipe, ActorLabelPipe, Icon, Modal, EmptyState, HasPermiso, ColumnasRedimensionables, Paginador],
+  imports: [
+    ReactiveFormsModule,
+    ActorLabelPipe,
+    FechaHoraPipe,
+    Icon,
+    Modal,
+    Confirmacion,
+    EmptyState,
+    HasPermiso,
+    ColumnasRedimensionables,
+    Paginador,
+  ],
   templateUrl: './permisos.html',
   styleUrl: './permisos.scss',
 })
@@ -26,51 +44,40 @@ export class Permisos {
   private readonly fb = inject(FormBuilder);
   private readonly permisosApi = inject(PermisosApi);
   private readonly notificaciones = inject(Notificaciones);
+  private readonly anunciador = inject(Anunciador);
   private readonly directorio = inject(DirectorioUsuarios);
+  private readonly estadoUrl = crearEstadoUrl();
 
   readonly permisos = PERMISOS;
+  readonly motivoProteccion = MOTIVO_PROTECCION.permiso;
+  readonly protegido = permisoProtegido;
+
+  // Estado en la URL (?q=&estado=&pagina=&tamano=).
+  readonly q = input('', { transform: textoUrl });
+  readonly estado = input<Estado, unknown>('', { transform: opcionUrl<Estado>(['', 'activos', 'inactivos'], '') });
+  readonly pagina = input(1, { transform: numeroUrl(1) });
+  readonly tamano = input(10, { transform: numeroUrl(10) });
+  readonly textoBusqueda = linkedSignal(() => this.q());
 
   readonly cargando = signal(true);
   readonly error = signal<string | null>(null);
   readonly permisosLista = signal<Permiso[]>([]);
-  readonly busqueda = signal('');
 
   readonly filtrados = computed(() => {
-    const termino = this.busqueda().trim().toLowerCase();
-    const lista = this.permisosLista();
-    if (!termino) {
-      return lista;
-    }
-    return lista.filter((permiso) =>
-      [permiso.nombre, permiso.descripcion ?? ''].some((campo) => campo.toLowerCase().includes(termino)),
+    const termino = this.q().trim().toLowerCase();
+    const estado = this.estado();
+    return this.permisosLista().filter(
+      (permiso) =>
+        (!termino ||
+          [permiso.nombre, permiso.descripcion ?? ''].some((campo) => campo.toLowerCase().includes(termino))) &&
+        (estado === '' || permiso.activo === (estado === 'activos')),
     );
   });
 
-  readonly pagina = signal(1);
-  readonly porPagina = signal(10);
-
-  readonly totalPaginas = computed(() =>
-    Math.max(1, Math.ceil(this.filtrados().length / this.porPagina())),
-  );
-
-  readonly paginaActual = computed(() =>
-    Math.min(Math.max(1, this.pagina()), this.totalPaginas()),
-  );
-
-  readonly paginados = computed(() => {
-    const inicio = (this.paginaActual() - 1) * this.porPagina();
-    return this.filtrados().slice(inicio, inicio + this.porPagina());
-  });
-
-  buscar(valor: string): void {
-    this.busqueda.set(valor);
-    this.pagina.set(1);
-  }
-
-  cambiarPorPagina(valor: number): void {
-    this.porPagina.set(valor);
-    this.pagina.set(1);
-  }
+  private readonly paginacion = computed(() => paginar(this.filtrados(), this.pagina(), this.tamano()));
+  readonly paginados = computed(() => this.paginacion().items);
+  readonly paginaActual = computed(() => this.paginacion().pagina);
+  readonly hayFiltros = computed(() => !!this.q() || !!this.estado());
 
   readonly formAbierto = signal(false);
   readonly editando = signal<Permiso | null>(null);
@@ -78,13 +85,14 @@ export class Permisos {
 
   readonly formulario = this.fb.nonNullable.group({
     nombre: ['', [Validators.required, Validators.maxLength(100)]],
-    descripcion: [''],
+    descripcion: ['', [Validators.maxLength(255)]],
     activo: [true],
   });
 
-  readonly eliminarAbierto = signal(false);
   readonly aEliminar = signal<Permiso | null>(null);
   readonly eliminando = signal(false);
+  readonly aDesactivar = signal<Permiso | null>(null);
+  readonly cambiandoEstado = signal(false);
 
   readonly rolesAbierto = signal(false);
   readonly permisoRoles = signal<Permiso | null>(null);
@@ -97,20 +105,52 @@ export class Permisos {
   }
 
   cargar(): void {
+    if (this.cargando() && this.permisosLista().length) {
+      return;
+    }
     this.cargando.set(true);
     this.error.set(null);
     this.permisosApi
       .listar()
       .pipe(finalize(() => this.cargando.set(false)))
       .subscribe({
-        next: (lista) => this.permisosLista.set(lista),
+        next: (lista) => {
+          this.permisosLista.set(lista);
+          this.anunciador.anunciar(`${this.filtrados().length} permisos`);
+        },
         error: (err: unknown) => this.error.set(mensajeDeError(err)),
       });
   }
 
-  campoInvalido(campo: 'nombre'): boolean {
+  buscar(valor: string): void {
+    this.textoBusqueda.set(valor);
+    this.estadoUrl.fijar({ q: valor.trim(), pagina: null }, true);
+  }
+
+  filtrarEstado(estado: Estado): void {
+    this.estadoUrl.fijar({ estado, pagina: null });
+  }
+
+  limpiarFiltros(): void {
+    this.textoBusqueda.set('');
+    this.estadoUrl.fijar({ q: null, estado: null, pagina: null });
+  }
+
+  irAPagina(pagina: number): void {
+    this.estadoUrl.fijar({ pagina: pagina > 1 ? pagina : null });
+  }
+
+  cambiarTamano(tamano: number): void {
+    this.estadoUrl.fijar({ tamano: tamano !== 10 ? tamano : null, pagina: null });
+  }
+
+  campoInvalido(campo: 'nombre' | 'descripcion'): boolean {
     const control = this.formulario.controls[campo];
     return control.touched && control.invalid;
+  }
+
+  errorServidor(campo: string): string | null {
+    return errorServidor(this.formulario, campo);
   }
 
   abrirCrear(): void {
@@ -120,6 +160,9 @@ export class Permisos {
   }
 
   abrirEditar(permiso: Permiso): void {
+    if (this.protegido(permiso)) {
+      return;
+    }
     this.editando.set(permiso);
     this.formulario.reset({
       nombre: permiso.nombre,
@@ -140,50 +183,82 @@ export class Permisos {
     }
     if (this.formulario.invalid) {
       this.formulario.markAllAsTouched();
+      enfocarPrimerInvalido();
       return;
     }
 
     const valores = this.formulario.getRawValue();
     const editando = this.editando();
     const peticion = {
-      nombre: valores.nombre,
-      descripcion: valores.descripcion || null,
+      nombre: valores.nombre.trim(),
+      descripcion: valores.descripcion.trim() || null,
       activo: valores.activo,
     };
 
     this.guardando.set(true);
-    const peticion$ = editando
-      ? this.permisosApi.actualizar(editando.id, peticion)
-      : this.permisosApi.crear(peticion);
+    const peticion$ = editando ? this.permisosApi.actualizar(editando.id, peticion) : this.permisosApi.crear(peticion);
 
     peticion$.pipe(finalize(() => this.guardando.set(false))).subscribe({
       next: (permiso) => {
-        this.notificaciones.exito('Guardado', `Permiso ${permiso.nombre} ${editando ? 'actualizado' : 'creado'}.`);
+        this.permisosLista.update((lista) =>
+          editando ? lista.map((item) => (item.id === permiso.id ? permiso : item)) : [permiso, ...lista],
+        );
+        this.notificaciones.exito(editando ? 'Permiso actualizado' : 'Permiso creado', permiso.nombre);
         this.cerrarForm();
-        this.cargar();
       },
-      error: (err: unknown) => this.notificaciones.error('No se pudo guardar', mensajeDeError(err)),
+      error: (err: unknown) => {
+        const enCampo = aplicarErroresServidor(this.formulario, err, () => ({
+          campo: 'nombre',
+          mensaje: 'Ya existe un permiso con ese nombre.',
+        }));
+        if (!enCampo) {
+          this.notificaciones.errorHttp('No se pudo guardar el permiso', err);
+        }
+      },
     });
   }
 
-  toggleActivo(permiso: Permiso): void {
-    this.permisosApi.cambiarActivo(permiso.id, !permiso.activo).subscribe({
-      next: (actualizado) => {
-        this.permisosLista.update((lista) =>
-          lista.map((item) => (item.id === actualizado.id ? actualizado : item)),
-        );
-        this.notificaciones.info(
-          actualizado.activo ? 'Permiso activado' : 'Permiso desactivado',
-          actualizado.nombre,
-        );
-      },
-      error: (err: unknown) => this.notificaciones.error('No se pudo actualizar', mensajeDeError(err)),
-    });
+  /** Activar es inmediato; desactivar pide confirmación porque afecta a todos los usuarios. */
+  alternarActivo(permiso: Permiso): void {
+    if (this.protegido(permiso)) {
+      return;
+    }
+    if (permiso.activo) {
+      this.aDesactivar.set(permiso);
+    } else {
+      this.cambiarEstado(permiso, true);
+    }
+  }
+
+  confirmarDesactivar(motivo: string): void {
+    const permiso = this.aDesactivar();
+    if (permiso) {
+      this.cambiarEstado(permiso, false, motivo);
+    }
+  }
+
+  private cambiarEstado(permiso: Permiso, activo: boolean, motivo?: string): void {
+    if (this.cambiandoEstado()) {
+      return;
+    }
+    this.cambiandoEstado.set(true);
+    this.permisosApi
+      .cambiarActivo(permiso.id, activo, motivo)
+      .pipe(finalize(() => this.cambiandoEstado.set(false)))
+      .subscribe({
+        next: (actualizado) => {
+          this.permisosLista.update((lista) => lista.map((item) => (item.id === actualizado.id ? actualizado : item)));
+          this.aDesactivar.set(null);
+          this.notificaciones.info(activo ? 'Permiso activado' : 'Permiso desactivado', actualizado.nombre);
+        },
+        error: (err: unknown) => this.notificaciones.errorHttp('No se pudo cambiar el estado', err),
+      });
   }
 
   confirmarEliminar(permiso: Permiso): void {
-    this.aEliminar.set(permiso);
-    this.eliminarAbierto.set(true);
+    if (!this.protegido(permiso)) {
+      this.aEliminar.set(permiso);
+    }
   }
 
   eliminar(): void {
@@ -198,11 +273,10 @@ export class Permisos {
       .subscribe({
         next: () => {
           this.permisosLista.update((lista) => lista.filter((item) => item.id !== permiso.id));
-          this.notificaciones.exito('Eliminado', `Permiso ${permiso.nombre} eliminado.`);
-          this.eliminarAbierto.set(false);
+          this.notificaciones.exito('Permiso eliminado', permiso.nombre);
           this.aEliminar.set(null);
         },
-        error: (err: unknown) => this.notificaciones.error('No se pudo eliminar', mensajeDeError(err)),
+        error: (err: unknown) => this.notificaciones.errorHttp('No se pudo eliminar el permiso', err),
       });
   }
 
@@ -215,7 +289,7 @@ export class Permisos {
       .pipe(finalize(() => this.cargandoRoles.set(false)))
       .subscribe({
         next: (roles) => this.rolesConPermiso.set(roles),
-        error: (err: unknown) => this.notificaciones.error('No se pudieron cargar los roles', mensajeDeError(err)),
+        error: (err: unknown) => this.notificaciones.errorHttp('No se pudieron cargar los roles', err),
       });
   }
 }

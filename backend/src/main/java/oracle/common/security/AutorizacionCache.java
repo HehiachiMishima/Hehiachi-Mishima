@@ -11,6 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Cachea (Caffeine, TTL corto) las autoridades de un usuario para no ejecutar
@@ -27,7 +29,7 @@ import org.springframework.stereotype.Component;
 public class AutorizacionCache {
 
     /** Autorizacion resuelta de un usuario. */
-    public record Autorizacion(boolean activo, String usuario, List<SimpleGrantedAuthority> autoridades) {
+    public record Autorizacion(boolean activo, String usuario, int version, List<SimpleGrantedAuthority> autoridades) {
     }
 
     private final UsuarioRepository usuarioRepository;
@@ -58,16 +60,34 @@ public class AutorizacionCache {
         return cache.get(usuarioId, this::consultar);
     }
 
-    /** Invalida la entrada de un usuario (tras cambiar sus roles/permisos/estado). */
+    /**
+     * Invalida la entrada de un usuario (tras cambiar sus roles/permisos/estado).
+     * Si hay transaccion activa se invalida otra vez tras el COMMIT: una peticion
+     * concurrente que releyera la fila antigua antes del commit no deja en cache
+     * un valor obsoleto durante el TTL.
+     */
     public void invalidar(Long usuarioId) {
         if (usuarioId != null) {
             cache.invalidate(usuarioId);
+            trasCommit(() -> cache.invalidate(usuarioId));
         }
     }
 
     /** Invalida todas las entradas (cambios de rol o de permisos globales). */
     public void invalidarTodo() {
         cache.invalidateAll();
+        trasCommit(cache::invalidateAll);
+    }
+
+    private static void trasCommit(Runnable accion) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    accion.run();
+                }
+            });
+        }
     }
 
     private Autorizacion consultar(Long usuarioId) {
@@ -77,6 +97,6 @@ public class AutorizacionCache {
         List<SimpleGrantedAuthority> autoridades = resolucionRepository.nombresPermitidos(usuarioId).stream()
                 .map(SimpleGrantedAuthority::new)
                 .toList();
-        return new Autorizacion(activo, usuario.getUsuario(), autoridades);
+        return new Autorizacion(activo, usuario.getUsuario(), usuario.getCredencialesVersion(), autoridades);
     }
 }

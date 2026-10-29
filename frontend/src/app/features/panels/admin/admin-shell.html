@@ -1,11 +1,8 @@
-<div class="shell" [class.shell--open]="menuAbierto()">
-  <span class="shell__veil shell__veil--1" aria-hidden="true"></span>
-  <span class="shell__veil shell__veil--2" aria-hidden="true"></span>
-
-  <aside id="shell-nav" class="shell__sidebar" [attr.inert]="menuAbierto() ? null : ''">
+<div class="shell" [class.shell--open]="menuAbierto()" [class.shell--fija]="escritorio()">
+  <aside id="shell-nav" class="shell__sidebar" aria-label="Barra lateral" [attr.inert]="escritorio() || menuAbierto() ? null : ''">
     <div class="shell__brand">
       <span class="shell__brand-mark">
-        <img src="logoImg.png" alt="Hehiachi Mishima" width="44" height="44"/>
+        <img src="logoImg.png" alt="" width="28" height="28" />
       </span>
       <span class="shell__brand-text">
         <span class="shell__brand-title">{{ panel.nombre }}</span>
@@ -13,41 +10,54 @@
       </span>
     </div>
 
-    <nav class="shell__nav">
-      <p class="shell__nav-label" [style.--i]="0">Módulos</p>
-      @for (modulo of modulos(); track modulo.id; let i = $index) {
-        <a
-          class="shell__nav-item"
-          [style.--i]="i + 1"
-          [routerLink]="modulo.ruta"
-          routerLinkActive="shell__nav-item--active"
-          (click)="cerrarMenu()"
-        >
-          <span class="shell__nav-itemInner">
-            <ui-icon [name]="modulo.icono" [size]="18" />
-            <span>{{ modulo.nombre }}</span>
-          </span>
-        </a>
+    <nav #navegacion class="shell__nav" aria-label="Módulos">
+      @for (grupo of grupos(); track grupo.id; let g = $index) {
+        <p class="shell__nav-label" [style.--i]="posicion(g, -1)" [id]="'nav-grupo-' + grupo.id">{{ grupo.nombre }}</p>
+        <ul class="shell__nav-grupo" [attr.aria-labelledby]="'nav-grupo-' + grupo.id">
+          @for (modulo of grupo.modulos; track modulo.id; let i = $index) {
+            <li>
+              <a
+                class="shell__nav-item"
+                [style.--i]="posicion(g, i)"
+                [routerLink]="modulo.ruta"
+                routerLinkActive="shell__nav-item--active"
+                ariaCurrentWhenActive="page"
+                (click)="alNavegar()"
+              >
+                <span class="shell__nav-itemInner">
+                  <ui-icon [name]="modulo.icono" [size]="18" />
+                  <span>{{ modulo.nombre }}</span>
+                </span>
+              </a>
+            </li>
+          }
+        </ul>
       }
     </nav>
 
-    <div class="shell__sidebar-foot" [style.--i]="modulos().length + 2">
-      <button type="button" class="shell__panel-btn" (click)="irAPaneles()">
-        <ui-icon name="panel" [size]="18" />
-        Cambiar de panel
-      </button>
-    </div>
+    @if (variosPaneles()) {
+      <div class="shell__sidebar-foot" [style.--i]="totalNavegacion() + 2">
+        <button type="button" class="shell__panel-btn" (click)="irAPaneles()">
+          <ui-icon name="panel" [size]="18" />
+          Cambiar de panel
+        </button>
+      </div>
+    }
   </aside>
 
-  <div class="shell__overlay" (click)="cerrarMenu()"></div>
+  @if (!escritorio()) {
+    <div class="shell__overlay" aria-hidden="true" (click)="cerrarMenu()"></div>
+  }
 
-  <div class="shell__body">
+  <div class="shell__body" [attr.inert]="!escritorio() && menuAbierto() ? '' : null">
     <header class="shell__topbar">
+      @if (!escritorio()) {
       <button
+        #botonMenu
         type="button"
         class="ui-icon-btn shell__menu-btn"
         (click)="alternarMenu()"
-        aria-label="Menú"
+        [attr.aria-label]="menuAbierto() ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'"
         [attr.aria-expanded]="menuAbierto()"
         aria-controls="shell-nav"
       >
@@ -56,35 +66,30 @@
           <ui-icon class="shell__menu-icon-close" name="close" [size]="20" />
         </span>
       </button>
+      }
 
-      <div class="shell__topbar-title">
-        <span class="shell__crumb">Panel</span>
-        <span class="shell__crumb-sep">/</span>
-        <span class="shell__crumb-current">{{ panel.nombre }}</span>
-      </div>
+      <nav class="shell__topbar-title" aria-label="Ruta de navegación">
+        <a class="shell__crumb" [routerLink]="panel.ruta">{{ panel.nombre }}</a>
+        @if (moduloActual(); as modulo) {
+          <span class="shell__crumb-sep" aria-hidden="true">/</span>
+          <span class="shell__crumb-current" aria-current="page">{{ modulo.nombre }}</span>
+        }
+      </nav>
 
       <div class="shell__topbar-actions">
-        <button type="button" class="ui-icon-btn" (click)="alternarTema($event)" aria-label="Cambiar tema">
+        <button
+          type="button"
+          class="ui-icon-btn"
+          (click)="alternarTema($event)"
+          [attr.aria-label]="tema.tema() === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+        >
           <ui-icon [name]="tema.tema() === 'dark' ? 'sun' : 'moon'" [size]="18" />
         </button>
-
-        @if (usuario(); as u) {
-          <div class="shell__user">
-            <span class="ui-avatar">{{ iniciales() }}</span>
-            <span class="shell__user-info">
-              <span class="shell__user-name">{{ u.nombre }} {{ u.apellido }}</span>
-              <span class="shell__user-mail">{{ u.email }}</span>
-            </span>
-          </div>
-        }
-
-        <button type="button" class="ui-icon-btn" (click)="cerrarSesion()" aria-label="Cerrar sesión">
-          <ui-icon name="logout" [size]="18" />
-        </button>
+        <app-menu-cuenta />
       </div>
     </header>
 
-    <main class="shell__content">
+    <main id="contenido" class="shell__content" tabindex="-1">
       <router-outlet />
     </main>
   </div>

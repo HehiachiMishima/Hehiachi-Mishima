@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -25,6 +26,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * dispatch ASYNC posterior. Por eso, cuando la peticion entra en modo async, el
  * registro se hace en un AsyncListener (con el estado y la duracion reales) en
  * lugar del finally del filtro. No registra la query string para no volcar PII.
+ *
+ * El X-Request-Id entrante solo se acepta si cumple [A-Za-z0-9_-]{1,64} (mismo
+ * largo que auditoria_eventos.id_correlacion): un valor mas largo o con otros
+ * caracteres haria fallar el INSERT de la bitacora o permitiria log forging,
+ * asi que se sustituye por un UUID. Siempre se devuelve en la respuesta.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
@@ -33,8 +39,11 @@ public class RegistroPeticiones extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(RegistroPeticiones.class);
 
     public static final String CABECERA_CORRELACION = "X-Request-Id";
-    public static final String MDC_CORRELACION = "correlationId";
-    private static final int MAX_LARGO_CORRELACION = 128;
+    /** Clave del MDC (sale como campo "requestId" en los logs JSON). */
+    public static final String MDC_CORRELACION = "requestId";
+    /** Atributo de la peticion con el id resuelto (lo lee la bitacora en dispatch async). */
+    public static final String ATRIBUTO_CORRELACION = RegistroPeticiones.class.getName() + ".correlacion";
+    private static final Pattern CORRELACION_VALIDA = Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
 
     @Override
     protected boolean shouldNotFilterAsyncDispatch() {
@@ -47,6 +56,7 @@ public class RegistroPeticiones extends OncePerRequestFilter {
             throws ServletException, IOException {
         long inicio = System.nanoTime();
         String correlacion = resolverCorrelacion(peticion);
+        peticion.setAttribute(ATRIBUTO_CORRELACION, correlacion);
         MDC.put(MDC_CORRELACION, correlacion);
         respuesta.setHeader(CABECERA_CORRELACION, correlacion);
         try {
@@ -111,8 +121,12 @@ public class RegistroPeticiones extends OncePerRequestFilter {
     }
 
     private String resolverCorrelacion(HttpServletRequest peticion) {
+        Object previo = peticion.getAttribute(ATRIBUTO_CORRELACION);
+        if (previo instanceof String ya) {
+            return ya; // dispatch async: se conserva el id del dispatch original
+        }
         String entrante = peticion.getHeader(CABECERA_CORRELACION);
-        if (entrante != null && !entrante.isBlank() && entrante.length() <= MAX_LARGO_CORRELACION) {
+        if (entrante != null && CORRELACION_VALIDA.matcher(entrante).matches()) {
             return entrante;
         }
         return UUID.randomUUID().toString();

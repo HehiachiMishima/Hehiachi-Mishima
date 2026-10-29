@@ -1,20 +1,15 @@
 @use 'breakpoints' as bp;
 
 /**
- * Coreografía de aparición/ocultación del sidebar "Módulos".
- * Tres capas encadenadas: velos → panel → items en cascada.
- * Todo con nuestro sistema: curvas de salida/entrada propias, superficies
- * monocromas de DESIGN.md y sin dependencias externas.
+ * Shell de administración.
+ * - ≥1024 px (.shell--fija): barra lateral fija y siempre visible, sin velo;
+ *   el contenido se desplaza a su derecha.
+ * - <1024 px: la barra lateral es un panel modal que entra desde la izquierda
+ *   (foco, inert y Escape los gestiona admin-shell.ts).
+ * La barra lateral es un marco oscuro en ambos temas (tokens --sidebar-*).
  */
-$salida: cubic-bezier(0.16, 1, 0.3, 1);
-$entrada: cubic-bezier(0.7, 0, 0.84, 0);
-$veil-dur: 500ms;
-$veil-paso: 70ms;
-$panel-dur: 650ms;
-$panel-retardo: 150ms;
-$cierre-dur: 320ms;
-$item-paso: 100ms;
-$item-retardo: 250ms;
+$cierre: 220ms;
+$apertura: 320ms;
 
 :host {
   display: block;
@@ -26,53 +21,38 @@ $item-retardo: 250ms;
   background: var(--bg);
 }
 
-.shell__veil {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: min(var(--sidebar-w), 86vw);
-  transform: translateX(-100%);
-  pointer-events: none;
-  transition: transform $cierre-dur $entrada;
-}
-
-.shell__veil--1 {
-  z-index: calc(var(--z-drawer) - 2);
-  background: var(--surface-3);
-}
-
-.shell__veil--2 {
-  z-index: calc(var(--z-drawer) - 1);
-  background: var(--surface);
-}
-
-.shell--open .shell__veil {
-  transform: translateX(0);
-  transition: transform $veil-dur $salida;
-}
-
-.shell--open .shell__veil--2 {
-  transition-delay: $veil-paso;
-}
-
+/* ===================== Barra lateral ===================== */
 .shell__sidebar {
+  /* Foco visible sobre fondo oscuro. */
+  --focus: var(--sidebar-focus);
+
   display: flex;
   flex-direction: column;
   position: fixed;
   inset: 0 auto 0 0;
   width: min(var(--sidebar-w), 86vw);
   z-index: var(--z-drawer);
-  transform: translateX(-100%);
-  transition: transform $cierre-dur $entrada;
   background: var(--sidebar-bg);
   color: var(--sidebar-fg);
   border-right: 1px solid var(--sidebar-border);
-  will-change: transform;
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform $cierre var(--ease-in), visibility 0s linear $cierre;
 }
 
 .shell--open .shell__sidebar {
-  transform: translateX(0);
-  transition: transform $panel-dur $salida;
-  transition-delay: $panel-retardo;
+  transform: none;
+  visibility: visible;
+  box-shadow: var(--shadow-lg);
+  transition: transform $apertura var(--ease-out), visibility 0s;
+}
+
+.shell--fija .shell__sidebar {
+  z-index: var(--z-sidebar);
+  transform: none;
+  visibility: visible;
+  box-shadow: none;
+  transition: none;
 }
 
 .shell__brand {
@@ -80,21 +60,23 @@ $item-retardo: 250ms;
   align-items: center;
   gap: var(--space-3);
   height: var(--topbar-h);
-  padding: 0 var(--space-5);
+  padding: 0 var(--space-4);
   border-bottom: 1px solid var(--sidebar-border);
+  flex: none;
 }
 
 .shell__brand-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
+  flex: none;
   border-radius: var(--radius-sm);
   background: #ffffff;
-  border: 1px solid var(--sidebar-border);
   padding: 2px;
 }
+
 .shell__brand-mark img {
   width: 100%;
   height: 100%;
@@ -105,69 +87,68 @@ $item-retardo: 250ms;
 .shell__brand-text {
   display: flex;
   flex-direction: column;
-  line-height: 1.2;
+  min-width: 0;
+  line-height: var(--lh-snug);
 }
 
 .shell__brand-title {
-  font-weight: 600;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
   color: var(--sidebar-fg-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .shell__brand-sub {
   font-size: var(--fs-xs);
-  color: var(--sidebar-fg);
+  color: var(--sidebar-label);
 }
 
 .shell__nav {
   flex: 1;
-  padding: var(--space-5) var(--space-3);
+  padding: var(--space-4) var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
   overflow-y: auto;
+  scrollbar-color: var(--sidebar-active-bg) transparent;
 }
 
-@mixin relevar($dur, $fade) {
-  transition: opacity $fade $salida, transform $dur $salida;
-  transition-delay: calc(#{$item-retardo} + var(--i, 0) * #{$item-paso});
+.shell__nav-grupo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--space-5);
 }
 
 .shell__nav-label {
   padding: 0 var(--space-3);
   margin-bottom: var(--space-2);
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--sidebar-fg);
-  opacity: 0;
-  transform: translateY(10px);
-  transition: opacity $cierre-dur $entrada, transform $cierre-dur $entrada;
-}
-
-.shell--open .shell__nav-label {
-  opacity: 1;
-  transform: none;
-  @include relevar(420ms, 320ms);
+  letter-spacing: var(--tracking-caps);
+  color: var(--sidebar-label);
 }
 
 .shell__nav-item {
+  position: relative;
   display: block;
-  overflow: hidden;
   border-radius: var(--radius-sm);
   color: var(--sidebar-fg);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
+  text-decoration: none;
   transition: background var(--transition-fast), color var(--transition-fast);
 
   &:hover {
-    background: var(--surface-2);
+    background: var(--sidebar-hover-bg);
     color: var(--sidebar-fg-strong);
+    text-decoration: none;
   }
 
   &:focus-visible {
-    box-shadow: none;
-    outline: 2px solid var(--brand);
+    outline: 2px solid var(--focus);
     outline-offset: -2px;
   }
 }
@@ -177,10 +158,8 @@ $item-retardo: 250ms;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-3);
-  opacity: 0;
-  transform: translateY(140%);
-  transition: opacity 200ms $entrada, transform $cierre-dur $entrada;
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
 
   > span {
     min-width: 0;
@@ -190,31 +169,43 @@ $item-retardo: 250ms;
   }
 }
 
-.shell--open .shell__nav-itemInner {
+/* Entrada en cascada solo en el panel modal (móvil), muy breve. */
+.shell:not(.shell--fija) .shell__nav-itemInner {
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 120ms var(--ease-in), transform 120ms var(--ease-in);
+}
+
+.shell--open:not(.shell--fija) .shell__nav-itemInner {
   opacity: 1;
   transform: none;
-  @include relevar(520ms, 320ms);
+  transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out);
+  transition-delay: calc(80ms + var(--i, 0) * 24ms);
 }
 
 .shell__nav-item--active {
   background: var(--sidebar-active-bg);
   color: var(--sidebar-active-fg);
-  font-weight: 600;
-  box-shadow: inset 3px 0 var(--brand);
+  font-weight: var(--fw-semibold);
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: -12px;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--sidebar-indicator);
+  }
+
+  ui-icon { color: var(--sidebar-indicator); }
 }
 
 .shell__sidebar-foot {
   padding: var(--space-3);
   border-top: 1px solid var(--sidebar-border);
-  opacity: 0;
-  transform: translateY(10px);
-  transition: opacity $cierre-dur $entrada, transform $cierre-dur $entrada;
-}
-
-.shell--open .shell__sidebar-foot {
-  opacity: 1;
-  transform: none;
-  @include relevar(420ms, 320ms);
+  flex: none;
 }
 
 .shell__panel-btn {
@@ -222,47 +213,54 @@ $item-retardo: 250ms;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  padding: var(--space-3);
+  min-height: var(--control-h);
+  padding: 0 var(--space-3);
   border: 1px solid var(--sidebar-border);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--sidebar-fg);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: var(--fw-medium);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast),
-    border-color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
 
   &:hover {
-    background: var(--surface-2);
+    background: var(--sidebar-hover-bg);
     color: var(--sidebar-fg-strong);
-    border-color: var(--border-strong);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
   }
 }
 
 .shell__overlay {
   position: fixed;
   inset: 0;
-  z-index: calc(var(--z-sticky) - 5);
+  z-index: calc(var(--z-drawer) - 1);
   background: var(--overlay);
   opacity: 0;
   pointer-events: none;
-  transition: opacity $cierre-dur $entrada;
+  transition: opacity $cierre var(--ease-in);
 }
 
 .shell--open .shell__overlay {
   opacity: 1;
   pointer-events: auto;
-  transition: opacity 300ms $salida;
-  transition-delay: 100ms;
+  transition: opacity $apertura var(--ease-out);
 }
 
+/* ===================== Cuerpo ===================== */
 .shell__body {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 100dvh;
-  background: transparent;
+}
+
+.shell--fija .shell__body {
+  margin-left: var(--sidebar-w);
 }
 
 .shell__topbar {
@@ -271,20 +269,16 @@ $item-retardo: 250ms;
   z-index: var(--z-sticky);
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   height: var(--topbar-h);
-  padding: 0 var(--space-6);
-  background: var(--surface);
+  padding: 0 var(--gutter);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(8px);
   border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-xs);
-
-  @include bp.down(md) {
-    padding: 0 var(--space-4);
-  }
 }
 
 .shell__menu-btn {
-  display: inline-flex;
+  margin-left: calc(var(--space-2) * -1);
 }
 
 .shell__menu-icon {
@@ -297,7 +291,7 @@ $item-retardo: 250ms;
 .shell__menu-icon > * {
   position: absolute;
   inset: 0;
-  transition: transform 460ms $salida, opacity 240ms $entrada;
+  transition: transform 240ms var(--ease-out), opacity 160ms var(--ease-in);
 }
 
 .shell__menu-icon-close {
@@ -312,90 +306,71 @@ $item-retardo: 250ms;
 
 .shell--open .shell__menu-icon-close {
   opacity: 1;
-  transform: rotate(0deg);
+  transform: none;
 }
 
+/* Migas: Panel / Módulo actual. */
 .shell__topbar-title {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   font-size: var(--fs-md);
   color: var(--text-3);
+  white-space: nowrap;
+}
+
+.shell__crumb {
+  color: var(--text-3);
+  font-weight: var(--fw-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover { color: var(--text); }
+
+  @include bp.down(sm) {
+    display: none;
+  }
+}
+
+.shell__crumb-sep {
+  color: var(--border-strong);
+
+  @include bp.down(sm) {
+    display: none;
+  }
 }
 
 .shell__crumb-current {
   color: var(--text);
-  font-weight: 600;
-}
-
-.shell__crumb-sep {
-  opacity: 0.5;
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .shell__topbar-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-}
-
-.shell__user {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border);
-
-  @include bp.down(md) {
-    display: none;
-  }
-}
-
-.shell__user-info {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.25;
-  min-width: 0;
-  max-width: 180px;
-}
-
-.shell__user-name {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell__user-mail {
-  font-size: var(--fs-xs);
-  color: var(--text-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  gap: var(--space-2);
+  flex: none;
 }
 
 .shell__content {
   flex: 1;
   width: 100%;
+  max-width: var(--content-max);
   min-width: 0;
-  padding: clamp(var(--space-5), 3vw, var(--space-8));
-}
+  margin: 0 auto;
+  padding: var(--space-6) var(--gutter) var(--space-12);
 
-.shell__panel-btn {
-  &:focus-visible {
-    outline: 2px solid var(--brand);
-    outline-offset: 2px;
-  }
+  &:focus { outline: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shell__veil,
   .shell__sidebar,
   .shell__overlay,
-  .shell__nav-label,
   .shell__nav-itemInner,
-  .shell__sidebar-foot,
   .shell__menu-icon > * {
     transition-delay: 0ms !important;
   }

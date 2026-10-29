@@ -7,6 +7,8 @@ export interface Rol {
   actualizadoEn: string | null;
   creadoPor: number | null;
   actualizadoPor: number | null;
+  /** true si la entidad está protegida (base del sistema o la propia cuenta): la UI deshabilita las acciones. */
+  protegido?: boolean;
 }
 
 export interface RolCrearRequest {

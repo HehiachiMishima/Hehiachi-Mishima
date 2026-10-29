@@ -5,7 +5,9 @@ import org.slf4j.Logger;
 
 /**
  * Helper de trazabilidad: envuelve una operacion de service, registra su
- * duracion (DEBUG, o WARN si supera el umbral de lentitud) y propaga el error.
+ * duracion (DEBUG, o WARN si supera el umbral de lentitud) y propaga el error
+ * (INFO para errores de negocio esperados, WARN para el resto). El nombre de la
+ * operacion debe ser constante: nunca concatenar datos de entrada (log forging).
  * En produccion evita una linea INFO por operacion: el acceso ya lo traza
  * RegistroPeticiones.
  */
@@ -26,9 +28,18 @@ public final class Trazas {
             }
             return resultado;
         } catch (RuntimeException ex) {
-            log.warn("{} -> ERROR ({} ms): {}", operacion, milisegundos(inicio), ex.getMessage());
+            if (esDeNegocio(ex)) {
+                // 4xx esperado (validacion, permiso, conflicto): sin mensaje para no volcar datos de entrada.
+                log.info("{} -> {} ({} ms)", operacion, ex.getClass().getSimpleName(), milisegundos(inicio));
+            } else {
+                log.warn("{} -> ERROR ({} ms): {}", operacion, milisegundos(inicio), ex.toString());
+            }
             throw ex;
         }
+    }
+
+    private static boolean esDeNegocio(RuntimeException ex) {
+        return ex.getClass().getPackageName().equals("oracle.common.exception");
     }
 
     private static long milisegundos(long inicio) {

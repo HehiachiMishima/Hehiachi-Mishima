@@ -1,69 +1,31 @@
 {
     "properties": [
-        {
-            "name": "app.jwt.issuer",
-            "type": "java.lang.String",
-            "description": "A description for 'app.jwt.issuer'"
-        },
-        {
-            "name": "app.jwt.secret",
-            "type": "java.lang.String",
-            "description": "A description for 'app.jwt.secret'"
-        },
-        {
-            "name": "app.jwt.ttl-ms",
-            "type": "java.lang.Long",
-            "description": "A description for 'app.jwt.ttl-ms'"
-        },
-        {
-            "name": "app.seed.usuario",
-            "type": "java.lang.String",
-            "description": "A description for 'app.seed.usuario'"
-        },
-        {
-            "name": "app.seed.contrasena",
-            "type": "java.lang.String",
-            "description": "A description for 'app.seed.contrasena'"
-        },
-        {
-            "name": "app.seed.nombre",
-            "type": "java.lang.String",
-            "description": "A description for 'app.seed.nombre'"
-        },
-        {
-            "name": "app.seed.apellido",
-            "type": "java.lang.String",
-            "description": "A description for 'app.seed.apellido'"
-        },
-        {
-            "name": "app.seed.email",
-            "type": "java.lang.String",
-            "description": "A description for 'app.seed.email'"
-        },
-        {
-            "name": "app.seed.telefono",
-            "type": "java.lang.String",
-            "description": "A description for 'app.seed.telefono'"
-        },
-        {
-            "name": "app.seed.rol",
-            "type": "java.lang.String",
-            "description": "A description for 'app.seed.rol'"
-        },
-        {
-            "name": "app.seed.activo",
-            "type": "java.lang.Boolean",
-            "description": "A description for 'app.seed.activo'"
-        },
-        {
-            "name": "app.cors.allowed-origins",
-            "type": "java.util.List<java.lang.String>",
-            "description": "Origenes CORS permitidos (frontend Angular), separados por comas."
-        },
-        {
-            "name": "app.cors.max-age",
-            "type": "java.lang.Long",
-            "description": "Segundos de cache del preflight CORS."
-        }
+        { "name": "app.jwt.issuer", "type": "java.lang.String", "description": "Emisor (iss) de los JWT." },
+        { "name": "app.jwt.secret", "type": "java.lang.String", "description": "Secreto HS256 (min. 32 bytes)." },
+        { "name": "app.jwt.ttl-ms", "type": "java.lang.Long", "description": "Vigencia del token en milisegundos." },
+        { "name": "app.seed.usuario", "type": "java.lang.String", "description": "Login del usuario semilla (queda protegido en la app)." },
+        { "name": "app.seed.contrasena", "type": "java.lang.String", "description": "Contrasena del usuario semilla." },
+        { "name": "app.seed.nombre", "type": "java.lang.String", "description": "Nombre del usuario semilla." },
+        { "name": "app.seed.apellido", "type": "java.lang.String", "description": "Apellido del usuario semilla." },
+        { "name": "app.seed.email", "type": "java.lang.String", "description": "Email del usuario semilla." },
+        { "name": "app.seed.telefono", "type": "java.lang.String", "description": "Telefono del usuario semilla." },
+        { "name": "app.seed.rol", "type": "java.lang.String", "description": "Rol inicial del usuario semilla." },
+        { "name": "app.seed.activo", "type": "java.lang.Boolean", "description": "Estado inicial del usuario semilla." },
+        { "name": "app.cors.allowed-origins", "type": "java.util.List<java.lang.String>", "description": "Origenes CORS permitidos (frontend Angular), separados por comas." },
+        { "name": "app.cors.max-age", "type": "java.lang.Long", "description": "Segundos de cache del preflight CORS." },
+        { "name": "app.seguridad.bcrypt-coste", "type": "java.lang.Integer", "description": "Coste de BCrypt (4-31)." },
+        { "name": "app.seguridad.bloqueo.umbral", "type": "java.lang.Integer", "description": "Fallos consecutivos que activan el bloqueo de la cuenta." },
+        { "name": "app.seguridad.bloqueo.max-minutos", "type": "java.lang.Integer", "description": "Tope en minutos del bloqueo exponencial." },
+        { "name": "app.seguridad.usuarios-protegidos", "type": "java.util.Set<java.lang.String>", "description": "Usuarios protegidos adicionales a @hehiachi y al usuario semilla." },
+        { "name": "app.auditoria.capacidad-cola", "type": "java.lang.Integer", "description": "Eventos de auditoria en espera antes de descartar." },
+        { "name": "app.auditoria.tamano-lote", "type": "java.lang.Integer", "description": "Eventos por INSERT batch de la bitacora." },
+        { "name": "app.security.permission-cache.enabled", "type": "java.lang.Boolean", "description": "Cache de autoridades por usuario." },
+        { "name": "app.security.permission-cache.ttl-ms", "type": "java.lang.Long", "description": "TTL de la cache de autoridades." },
+        { "name": "app.security.permission-cache.max-size", "type": "java.lang.Long", "description": "Entradas maximas de la cache de autoridades." },
+        { "name": "app.stats-cache.enabled", "type": "java.lang.Boolean", "description": "Cache del dashboard." },
+        { "name": "app.stats-cache.ttl-ms", "type": "java.lang.Long", "description": "TTL de la cache del dashboard." },
+        { "name": "app.stats-cache.max-size", "type": "java.lang.Long", "description": "Entradas maximas de la cache del dashboard." },
+        { "name": "app.analitica.paralelismo", "type": "java.lang.Integer", "description": "Consultas analiticas simultaneas (por debajo del pool)." },
+        { "name": "app.analitica.timeout-ms", "type": "java.lang.Long", "description": "Tiempo maximo de una agregacion del dashboard." }
     ]
 }

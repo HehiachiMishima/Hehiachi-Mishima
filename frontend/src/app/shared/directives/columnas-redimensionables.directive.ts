@@ -2,12 +2,15 @@ import { AfterViewInit, Directive, ElementRef, OnDestroy, inject } from '@angula
 
 /**
  * Convierte una tabla en columnas de ancho fijo (el contenido se trunca con …)
- * y añade un asa en cada cabecera para redimensionar arrastrando.
+ * y añade un asa en cada cabecera para redimensionar arrastrando, con el
+ * teclado (flechas) o con doble clic (ajustar al contenido).
  * Al arrastrar una columna se ajusta la vecina para mantener el ancho total.
  *
  * Los anchos se calculan después de pintarse las filas (los botones condicionados
  * con *hasPermiso se renderizan en un efecto, posterior a ngAfterViewInit).
  */
+const ANCHO_MINIMO = 72;
+
 @Directive({ selector: 'table[appColumnasRedimensionables]' })
 export class ColumnasRedimensionables implements AfterViewInit, OnDestroy {
   private readonly tabla = inject<ElementRef<HTMLTableElement>>(ElementRef);
@@ -69,8 +72,29 @@ export class ColumnasRedimensionables implements AfterViewInit, OnDestroy {
 
       const asa = document.createElement('span');
       asa.className = 'col-resize';
-      asa.setAttribute('aria-hidden', 'true');
+      asa.tabIndex = 0;
+      asa.setAttribute('role', 'separator');
+      asa.setAttribute('aria-orientation', 'vertical');
+      asa.setAttribute('aria-label', `Ancho de la columna ${celda.textContent?.trim() ?? ''}`);
+      asa.title = 'Arrastra o usa las flechas para cambiar el ancho; doble clic para ajustarlo al contenido';
       celda.appendChild(asa);
+
+      const actualizarAria = (): void => {
+        asa.setAttribute('aria-valuemin', String(ANCHO_MINIMO));
+        asa.setAttribute('aria-valuemax', String(anchos[indice] + anchos[vecino] - ANCHO_MINIMO));
+        asa.setAttribute('aria-valuenow', String(anchos[indice]));
+      };
+      actualizarAria();
+
+      const fijar = (nuevo: number): void => {
+        const par = anchos[indice] + anchos[vecino];
+        const valor = Math.min(Math.max(nuevo, ANCHO_MINIMO), par - ANCHO_MINIMO);
+        anchos[indice] = valor;
+        anchos[vecino] = par - valor;
+        aplicar(indice);
+        aplicar(vecino);
+        actualizarAria();
+      };
 
       const alBajar = (evento: PointerEvent): void => {
         evento.preventDefault();
@@ -78,20 +102,9 @@ export class ColumnasRedimensionables implements AfterViewInit, OnDestroy {
 
         const xInicial = evento.clientX;
         const inicio = anchos[indice];
-        const vecinoInicio = anchos[vecino];
-        const par = inicio + vecinoInicio;
-        const min = 72;
-        const max = par - min;
-
         document.body.classList.add('col-resize--activo');
 
-        const alMover = (mov: PointerEvent): void => {
-          const nuevo = Math.min(Math.max(inicio + (mov.clientX - xInicial), min), max);
-          anchos[indice] = nuevo;
-          anchos[vecino] = par - nuevo;
-          aplicar(indice);
-          aplicar(vecino);
-        };
+        const alMover = (mov: PointerEvent): void => fijar(inicio + (mov.clientX - xInicial));
 
         const alSoltar = (): void => {
           window.removeEventListener('pointermove', alMover);
@@ -103,8 +116,38 @@ export class ColumnasRedimensionables implements AfterViewInit, OnDestroy {
         window.addEventListener('pointerup', alSoltar);
       };
 
+      // Teclado (WCAG 2.1.1): flechas ±16 px (Mayús ±48), Inicio/Fin a los extremos.
+      const alTeclear = (evento: KeyboardEvent): void => {
+        const paso = evento.shiftKey ? 48 : 16;
+        const acciones: Record<string, () => void> = {
+          ArrowLeft: () => fijar(anchos[indice] - paso),
+          ArrowRight: () => fijar(anchos[indice] + paso),
+          Home: () => fijar(ANCHO_MINIMO),
+          End: () => fijar(Number.MAX_SAFE_INTEGER),
+        };
+        const accion = acciones[evento.key];
+        if (accion) {
+          evento.preventDefault();
+          accion();
+        }
+      };
+
+      // Alternativa sin arrastre (WCAG 2.5.7): doble clic ajusta la columna a su contenido.
+      const alDobleClic = (): void => {
+        const necesario = Math.max(
+          ...Array.from(tabla.rows).map((fila) => (fila.cells[indice] as HTMLElement | undefined)?.scrollWidth ?? 0),
+        );
+        fijar(necesario + 2);
+      };
+
       asa.addEventListener('pointerdown', alBajar);
-      this.limpiezas.push(() => asa.removeEventListener('pointerdown', alBajar));
+      asa.addEventListener('keydown', alTeclear);
+      asa.addEventListener('dblclick', alDobleClic);
+      this.limpiezas.push(() => {
+        asa.removeEventListener('pointerdown', alBajar);
+        asa.removeEventListener('keydown', alTeclear);
+        asa.removeEventListener('dblclick', alDobleClic);
+      });
     });
 
     // Red de seguridad: si la última columna (acciones) quedó recortada,

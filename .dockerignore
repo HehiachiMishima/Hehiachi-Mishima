@@ -1,4 +1,7 @@
-# Secretos: nunca copiar .env al contexto de build.
+# Lista blanca implicita: el build solo necesita frontend/, backend/{pom.xml,src}
+# y deploy/. Todo lo demas queda fuera del contexto.
+
+# Secretos: nunca al contexto de build.
 **/.env
 **/.env.*
 !**/.env.example
@@ -8,23 +11,38 @@
 **/dist
 **/.angular
 **/target
+**/coverage
 
-# Control de versiones y metadatos de IDE.
+# Control de versiones, CI y metadatos de IDE / agentes.
 .git
+.github
 .gitignore
 **/.idea
 **/*.iml
 **/.vscode
+.claude
+.agents
+.interface-design
+skills-lock.json
 
 # Documentacion.
 **/*.md
+docs
 
 # Scripts SQL y certificados: se aplican fuera de la imagen.
 backend/*.sql
+backend/migrations
 backend/certs
 **/*.pem
 
+# Wrapper de Maven (la imagen usa la de maven oficial).
+backend/.mvn
+backend/mvnw
+backend/mvnw.cmd
+
 # Herramientas locales.
-.claude
 **/.DS_Store
 docker-compose.yml
+render.yaml
+Dockerfile
+.dockerignore

@@ -5,6 +5,7 @@ import oracle.admin.model.Rol;
 import oracle.admin.model.Usuario;
 import oracle.admin.model.UsuarioRol;
 import oracle.admin.model.UsuarioRol.UsuarioRolId;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -23,6 +24,6 @@ public interface UsuarioRolRepository extends JpaRepository<UsuarioRol, UsuarioR
     @Query("SELECT ur.rol FROM UsuarioRol ur WHERE ur.usuario.id = :usuarioId")
     List<Rol> rolesDeUsuario(@Param("usuarioId") Long usuarioId);
 
-    @Query("SELECT ur.usuario FROM UsuarioRol ur WHERE ur.rol.id = :rolId")
-    List<Usuario> usuariosDeRol(@Param("rolId") Long rolId);
+    @Query("SELECT ur.usuario FROM UsuarioRol ur WHERE ur.rol.id = :rolId ORDER BY ur.usuario.id")
+    List<Usuario> usuariosDeRol(@Param("rolId") Long rolId, Pageable pagina);
 }

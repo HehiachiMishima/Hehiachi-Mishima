@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
@@ -47,11 +48,16 @@ public class UsuarioController {
         return usuarioService.buscar(filtro);
     }
 
-    /** Roles y permisos efectivos de todos los usuarios para el listado (evita N+1 peticiones). */
+    /**
+     * Roles y permisos efectivos por usuario para el listado (evita N+1 peticiones).
+     * ids (opcional, max. 500, p. ej. ?ids=1,2,3): solo esos usuarios; recomendado
+     * pasar los de la pagina visible.
+     */
     @GetMapping("/resumen")
     @PreAuthorize("hasAuthority('VER_USUARIOS') and hasAuthority('VER_ROLES') and hasAuthority('VER_PERMISOS')")
-    public Mono<ApiResponse<List<UsuarioResumenResponse>>> resumen() {
-        return usuarioService.resumen();
+    public Mono<ApiResponse<List<UsuarioResumenResponse>>> resumen(
+            @RequestParam(name = "ids", required = false) List<Long> ids) {
+        return usuarioService.resumen(ids);
     }
 
     @GetMapping("/{id}")

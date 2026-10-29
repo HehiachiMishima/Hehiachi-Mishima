@@ -2,21 +2,26 @@ import { Routes } from '@angular/router';
 import { PERMISOS } from './core/config/permisos';
 import { authGuard } from './core/guards/auth.guard';
 import { guestGuard } from './core/guards/guest.guard';
+import { launcherGuard } from './core/guards/launcher.guard';
 import { permisoGuard } from './core/guards/permiso.guard';
 
 export const routes: Routes = [
   {
     path: 'login',
+    title: 'Iniciar sesión',
     canActivate: [guestGuard],
     loadComponent: () => import('./features/auth/login/login').then((m) => m.Login),
   },
   {
     path: '',
-    canActivate: [authGuard],
+    pathMatch: 'full',
+    title: 'Paneles',
+    canActivate: [authGuard, launcherGuard],
     loadComponent: () => import('./features/launcher/launcher').then((m) => m.Launcher),
   },
   {
     path: 'sin-acceso',
+    title: 'Acceso denegado',
     canActivate: [authGuard],
     loadComponent: () => import('./features/sin-acceso/sin-acceso').then((m) => m.SinAcceso),
   },

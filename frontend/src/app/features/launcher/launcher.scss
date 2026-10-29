@@ -1,12 +1,6 @@
-@use 'breakpoints' as bp;
-
 .launcher {
   min-height: 100dvh;
   background: var(--bg);
-}
-
-&:active {
-  transform: none;
 }
 
 .launcher__topbar {
@@ -27,16 +21,16 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
 }
 
 .launcher__brand-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-sm);
   background: #ffffff;
   padding: 2px;
@@ -52,34 +46,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-}
-
-.launcher__user {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border);
-
-  @include bp.down(md) {
-    display: none;
-  }
-}
-
-.launcher__user-info {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.25;
-}
-
-.launcher__user-name {
-  font-size: var(--fs-sm);
-  font-weight: 600;
-}
-
-.launcher__user-mail {
-  font-size: var(--fs-xs);
-  color: var(--text-3);
 }
 
 .launcher__main {
@@ -117,8 +83,8 @@
 
 .launcher__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: var(--space-3);
 }
 
 .panel-card {
@@ -128,7 +94,7 @@
   flex-direction: column;
   gap: var(--space-3);
   text-align: left;
-  padding: var(--space-6);
+  padding: var(--space-5);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   background: var(--surface);
@@ -144,12 +110,7 @@
   &:hover {
     border-color: color-mix(in srgb, var(--brand) 42%, var(--border));
     background: var(--surface);
-    box-shadow: var(--shadow-sm);
-    transform: translateY(-2px);
-  }
-
-  &:active {
-    transform: translateY(0) scale(0.99);
+    box-shadow: var(--shadow-md);
   }
 }
 
@@ -188,9 +149,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
-  border-radius: var(--radius);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
   color: var(--brand-strong);
   background: var(--brand-soft);
 }
@@ -209,14 +170,14 @@
 }
 
 .panel-card__name {
-  font-size: var(--fs-lg);
-  font-weight: 600;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-semibold);
 }
 
 .panel-card__desc {
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--text-2);
-  line-height: 1.5;
+  line-height: var(--lh-normal);
   flex: 1;
 }
 

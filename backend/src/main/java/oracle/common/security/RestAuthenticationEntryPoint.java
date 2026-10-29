@@ -25,7 +25,9 @@ public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
             AuthenticationException authException) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        ApiError error = ApiError.de(401, "No autorizado", "Autenticacion requerida o token invalido.", request.getRequestURI());
+        response.setCharacterEncoding("UTF-8");
+        ApiError error = ApiError.de(401, "No autorizado",
+                "Tu sesión no es válida o expiró. Inicia sesión de nuevo.", request.getRequestURI());
         objectMapper.writeValue(response.getOutputStream(), error);
     }
 }

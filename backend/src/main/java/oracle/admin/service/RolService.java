@@ -1,28 +1,33 @@
 package oracle.admin.service;
 
+import java.util.List;
+import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
+import oracle.admin.model.Rol;
+import oracle.admin.repository.RolRepository;
+import oracle.admin.request.CambiarEstadoRequest;
+import oracle.admin.request.RolActualizarRequest;
+import oracle.admin.request.RolCrearRequest;
+import oracle.admin.request.RolFiltroRequest;
+import oracle.admin.response.RolResponse;
+import oracle.auditoria.AccionAuditoria;
+import oracle.auditoria.ContextoAuditoria;
+import oracle.auditoria.Detalle;
+import oracle.auditoria.EntidadAuditoria;
+import oracle.auditoria.RegistroAuditoria;
+import oracle.common.config.Transacciones;
+import oracle.common.exception.ConflictoException;
+import oracle.common.exception.OperacionNoPermitidaException;
+import oracle.common.exception.RecursoNoEncontradoException;
+import oracle.common.response.ApiResponse;
 import oracle.common.security.AutorizacionCache;
 import oracle.common.support.ActorActual;
 import oracle.common.support.Auditoria;
 import oracle.common.support.Filtros;
 import oracle.common.support.Listas;
 import oracle.common.support.Trazas;
-
-import java.util.List;
-import oracle.common.exception.ConflictoException;
-import oracle.common.exception.OperacionNoPermitidaException;
-import oracle.common.exception.RecursoNoEncontradoException;
-import oracle.admin.model.Rol;
-import oracle.admin.repository.RolPermisoRepository;
-import oracle.admin.repository.RolRepository;
-import oracle.admin.request.CambiarEstadoRequest;
-import oracle.admin.request.RolActualizarRequest;
-import oracle.admin.request.RolCrearRequest;
-import oracle.admin.request.RolFiltroRequest;
-import oracle.common.response.ApiResponse;
-import oracle.admin.response.PermisoResponse;
-import oracle.admin.response.RolResponse;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -31,19 +36,27 @@ import reactor.core.scheduler.Schedulers;
 @Service
 public class RolService {
 
+    private static final Sort ORDEN = Sort.by("nombre");
+
     private final AutorizacionCache autorizacionCache;
     private final RolRepository rolRepository;
-    private final RolPermisoRepository rolPermisoRepository;
+    private final Transacciones transacciones;
+    private final GuardiaPrivilegios guardia;
+    private final RegistroAuditoria auditoria;
 
-    public RolService(RolRepository rolRepository, RolPermisoRepository rolPermisoRepository, AutorizacionCache autorizacionCache) {
+    public RolService(RolRepository rolRepository,
+            AutorizacionCache autorizacionCache, Transacciones transacciones, GuardiaPrivilegios guardia,
+            RegistroAuditoria auditoria) {
         this.autorizacionCache = autorizacionCache;
         this.rolRepository = rolRepository;
-        this.rolPermisoRepository = rolPermisoRepository;
+        this.transacciones = transacciones;
+        this.guardia = guardia;
+        this.auditoria = auditoria;
     }
 
     public Mono<ApiResponse<List<RolResponse>>> listar() {
         return Mono.fromCallable(() -> Trazas.medir(log, "RolService.listar", () -> {
-                        List<RolResponse> lista = rolRepository.findAll(Listas.limitado()).stream()
+                        List<RolResponse> lista = rolRepository.findAll(Listas.limitado(ORDEN)).stream()
                                 .map(RolResponse::of).toList();
                         Listas.avisarSiCorto(log, lista.size(), "RolService.listar");
                         return lista;
@@ -57,97 +70,119 @@ public class RolService {
                         rolRepository.buscarConFiltros(
                                         Filtros.normalizar(filtro.nombre()),
                                         Filtros.normalizar(filtro.descripcion()),
-                                        filtro.activo())
+                                        filtro.activo(),
+                                        Listas.limitado(ORDEN))
                                 .stream().map(RolResponse::of).toList()))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(lista -> ApiResponse.ok("Roles encontrados.", lista));
     }
 
     public Mono<ApiResponse<RolResponse>> obtenerPorId(Long id) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.obtenerPorId id=" + id, () ->
+        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.obtenerPorId", () ->
                         ApiResponse.ok("Rol encontrado.", RolResponse.of(obtenerRol(id)))))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<ApiResponse<RolResponse>> crear(RolCrearRequest peticion) {
         Long actor = ActorActual.id();
-        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.crear nombre=" + peticion.nombre(), () -> {
-            if (rolRepository.existsByNombre(peticion.nombre())) {
-                throw new ConflictoException("Ya existe un rol con el nombre '" + peticion.nombre() + "'.");
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.crear", () -> transacciones.ejecutar(() -> {
+            String nombre = peticion.nombre().trim();
+            if (rolRepository.existsByNombre(nombre)) {
+                throw new ConflictoException("Ya existe un rol con el nombre '" + nombre + "'.");
             }
 
             Rol rol = new Rol();
-            rol.setNombre(peticion.nombre().trim());
-            rol.setDescripcion(peticion.descripcion());
+            rol.setNombre(nombre);
+            rol.setDescripcion(Filtros.normalizar(peticion.descripcion()));
             rol.setActivo(peticion.activo() == null ? Boolean.TRUE : peticion.activo());
             Auditoria.alCrear(rol, actor);
             rolRepository.save(rol);
-            autorizacionCache.invalidarTodo();
 
+            auditoria.exito(ctx, AccionAuditoria.ROL_CREADO, EntidadAuditoria.ROL, rol.getId(),
+                    Detalle.alta(Instantaneas.rol(rol)));
             return ApiResponse.ok("Rol creado.", RolResponse.of(rol));
-        })).subscribeOn(Schedulers.boundedElastic());
+        }))).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<ApiResponse<RolResponse>> actualizar(Long id, RolActualizarRequest peticion) {
         Long actor = ActorActual.id();
-        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.actualizar id=" + id, () -> {
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.actualizar", () -> transacciones.ejecutar(() -> {
             Rol rol = obtenerRol(id);
             verificarNoAdministrador(rol);
+            guardia.exigirRolAjeno(actor, id);
+            Map<String, Object> antes = Instantaneas.rol(rol);
 
-            if (peticion.nombre() != null && !peticion.nombre().trim().equals(rol.getNombre())) {
-                if (rolRepository.existsByNombreAndIdNot(peticion.nombre().trim(), id)) {
-                    throw new ConflictoException("Ya existe otro rol con el nombre '" + peticion.nombre() + "'.");
+            String nombre = Filtros.normalizar(peticion.nombre());
+            if (nombre != null && !nombre.equals(rol.getNombre())) {
+                if (rolRepository.existsByNombreAndIdNot(nombre, id)) {
+                    throw new ConflictoException("Ya existe otro rol con el nombre '" + nombre + "'.");
                 }
-                rol.setNombre(peticion.nombre().trim());
+                rol.setNombre(nombre);
             }
             if (peticion.descripcion() != null) {
-                rol.setDescripcion(peticion.descripcion());
+                rol.setDescripcion(Filtros.normalizar(peticion.descripcion()));
             }
-            if (peticion.activo() != null) {
+            boolean cambiaActivo = peticion.activo() != null && !peticion.activo().equals(rol.getActivo());
+            if (cambiaActivo) {
+                if (peticion.activo()) {
+                    guardia.exigirPoseerPermisosDeRol(actor, id);
+                }
                 rol.setActivo(peticion.activo());
             }
 
             Auditoria.alActualizar(rol, actor);
             rolRepository.save(rol);
-            autorizacionCache.invalidarTodo();
+            if (cambiaActivo) {
+                autorizacionCache.invalidarTodo();
+            }
+            auditoria.exito(ctx, AccionAuditoria.ROL_ACTUALIZADO, EntidadAuditoria.ROL, id,
+                    Detalle.cambio(antes, Instantaneas.rol(rol)));
             return ApiResponse.ok("Rol actualizado.", RolResponse.of(rol));
-        })).subscribeOn(Schedulers.boundedElastic());
+        }))).subscribeOn(Schedulers.boundedElastic());
     }
 
     public Mono<ApiResponse<Void>> eliminar(Long id) {
-        return Mono.<Void>fromRunnable(() -> Trazas.medir(log, "RolService.eliminar id=" + id, () -> {
+        Long actor = ActorActual.id();
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        return Mono.<Void>fromRunnable(() -> Trazas.medir(log, "RolService.eliminar", () -> transacciones.ejecutar(() -> {
                     Rol rol = obtenerRol(id);
                     verificarNoAdministrador(rol);
+                    guardia.exigirRolAjeno(actor, id);
+                    Map<String, Object> antes = Instantaneas.rol(rol);
                     rolRepository.delete(rol);
                     autorizacionCache.invalidarTodo();
+                    auditoria.exito(ctx, AccionAuditoria.ROL_ELIMINADO, EntidadAuditoria.ROL, id, Detalle.baja(antes));
                     return null;
-                }))
+                })))
                 .subscribeOn(Schedulers.boundedElastic())
                 .then(Mono.fromSupplier(() -> ApiResponse.<Void>ok("Rol eliminado.", null)));
     }
 
     public Mono<ApiResponse<RolResponse>> cambiarActivo(Long id, CambiarEstadoRequest peticion) {
         Long actor = ActorActual.id();
-        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.cambiarActivo id=" + id, () -> {
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.cambiarActivo", () -> transacciones.ejecutar(() -> {
             Rol rol = obtenerRol(id);
             verificarNoAdministrador(rol);
+            guardia.exigirRolAjeno(actor, id);
+            if (peticion.activo()) {
+                // Reactivar devuelve sus permisos a todos sus usuarios: no se concede lo que no se tiene.
+                guardia.exigirPoseerPermisosDeRol(actor, id);
+            }
+            Boolean anterior = rol.getActivo();
             rol.setActivo(peticion.activo());
             Auditoria.alActualizar(rol, actor);
             rolRepository.save(rol);
             autorizacionCache.invalidarTodo();
 
+            auditoria.exito(ctx, AccionAuditoria.ROL_ESTADO_CAMBIADO, EntidadAuditoria.ROL, id,
+                    Detalle.con(Detalle.cambio(Instantaneas.activo(anterior), Instantaneas.activo(peticion.activo())),
+                            "motivo", peticion.motivo()));
             String mensaje = peticion.activo() ? "Rol activado." : "Rol desactivado.";
             return ApiResponse.ok(mensaje, RolResponse.of(rol));
-        })).subscribeOn(Schedulers.boundedElastic());
-    }
-
-    public Mono<ApiResponse<List<PermisoResponse>>> permisosDeRol(Long rolId) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "RolService.permisosDeRol rolId=" + rolId, () -> {
-                    obtenerRol(rolId);
-                    return rolPermisoRepository.permisosDeRol(rolId).stream().map(PermisoResponse::of).toList();
-                }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Permisos del rol.", lista));
+        }))).subscribeOn(Schedulers.boundedElastic());
     }
 
     private Rol obtenerRol(Long id) {
@@ -158,7 +193,7 @@ public class RolService {
     private void verificarNoAdministrador(Rol rol) {
         if (Protecciones.esRolAdministrador(rol.getNombre())) {
             throw new OperacionNoPermitidaException(
-                    "No se puede modificar ni eliminar el rol ADMINISTRADOR. Solo se le pueden agregar permisos.");
+                    "El rol ADMINISTRADOR no se puede modificar ni eliminar. Solo se le pueden agregar permisos.");
         }
     }
 }

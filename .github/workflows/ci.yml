@@ -1,0 +1,110 @@
+# ============================================================
+# CI: compila y prueba backend y frontend, y construye la imagen
+# Docker de Render (sin publicarla) con un smoke test del contenedor.
+# ============================================================
+name: CI
+
+on:
+  push:
+    branches: [main, hehiachi_mishima]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (mvn verify)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Las pruebas levantan su propio MySQL 8.4 con Testcontainers (Docker del runner).
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: mvn verify
+        working-directory: backend
+        run: ./mvnw -B -ntp verify
+
+      - name: Reportes de pruebas
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: backend/target/surefire-reports
+          retention-days: 7
+
+  frontend:
+    name: Frontend (ng build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+      - run: npx ng build --configuration production
+        env:
+          NG_CLI_ANALYTICS: "false"
+
+  docker:
+    name: Imagen Docker (build + smoke test, sin push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: acceso-base:ci
+          build-args: VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Sin BD: nginx debe servir el SPA con las cabeceras de seguridad y
+      # /api/* debe responder 503 JSON mientras el backend no esta arriba.
+      - name: Smoke test del contenedor (sin BD)
+        run: |
+          docker run -d --name smoke -p 10000:10000 --read-only \
+            --tmpfs /run/app:uid=10001,gid=10001,mode=0700 --tmpfs /tmp:uid=10001,gid=10001 \
+            -e DB_HOST=127.0.0.1 -e DB_PORT=1 -e DB_NAME=x -e DB_USER=x -e DB_PASSWORD=x \
+            -e JWT_SECRET="$(openssl rand -hex 32)" acceso-base:ci
+          for i in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:10000/ && break; sleep 1; done
+          curl -fsS -D headers.txt -o index.html http://127.0.0.1:10000/ruta/del/spa
+          grep -qi '<app-root>' index.html
+          grep -qi '^content-security-policy:' headers.txt
+          grep -qi '^x-request-id:' headers.txt
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:10000/actuator/prometheus)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X TRACE http://127.0.0.1:10000/)" = 405
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:10000/api/health)
+          echo "/api/health sin BD => $code"; [ "$code" = 503 ] || [ "$code" = 204 ]
+
+      - name: Logs del contenedor
+        if: always()
+        run: docker logs smoke 2>&1 | tail -n 200 || true

@@ -4,7 +4,7 @@ import jakarta.validation.constraints.Size;
 
 /** Actualizacion parcial de permiso: campos null = no se tocan. */
 public record PermisoActualizarRequest(
-        @Size(max = 50) String nombre,
-        @Size(max = 200) String descripcion,
+        @Size(max = 50, message = "El nombre no puede superar 50 caracteres.") String nombre,
+        @Size(max = 200, message = "La descripción no puede superar 200 caracteres.") String descripcion,
         Boolean activo) {
 }

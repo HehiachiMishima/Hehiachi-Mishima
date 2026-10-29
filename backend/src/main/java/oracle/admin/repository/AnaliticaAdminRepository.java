@@ -50,31 +50,49 @@ public class AnaliticaAdminRepository {
                 """, CONTEO);
     }
 
-    /** Permisos con mas usuarios que los tienen efectivamente (deny-wins aplicado). */
+    /**
+     * Usuario u tiene efectivamente el permiso p (deny-wins, respeta activo de
+     * rol y permiso; mismo resultado que v_permisos_finales). Con EXISTS por
+     * par el optimizador usa los PK de usuarios_roles / roles_permisos /
+     * usuarios_permisos en lugar de materializar la vista completa.
+     */
+    private static final String TIENE_PERMISO = """
+            ( EXISTS (SELECT 1 FROM roles_permisos rp
+                      JOIN usuarios_roles ur ON ur.rol_id = rp.rol_id AND ur.usuario_id = u.id
+                      JOIN roles r ON r.id = rp.rol_id AND r.activo = TRUE
+                      WHERE rp.permiso_id = p.id)
+              OR EXISTS (SELECT 1 FROM usuarios_permisos g
+                         WHERE g.usuario_id = u.id AND g.permiso_id = p.id AND g.otorgado = TRUE) )
+            AND NOT EXISTS (SELECT 1 FROM usuarios_permisos d
+                            WHERE d.usuario_id = u.id AND d.permiso_id = p.id AND d.otorgado = FALSE)
+            """;
+
+    /** Permisos con mas usuarios que los tienen efectivamente (deny-wins aplicado). Va detras de la cache. */
     public List<Conteo> permisosMasOtorgados() {
         return jdbc.query("""
                 SELECT p.nombre AS etiqueta, COUNT(*) AS valor
-                FROM v_permisos_finales v
-                JOIN permisos p ON p.id = v.permiso_id
-                WHERE v.permitido = TRUE
+                FROM permisos p
+                JOIN usuarios u
+                WHERE p.activo = TRUE
+                  AND %s
                 GROUP BY p.id, p.nombre
                 ORDER BY valor DESC, etiqueta ASC
                 LIMIT %d
-                """.formatted(TOP_PERMISOS), CONTEO);
+                """.formatted(TIENE_PERMISO, TOP_PERMISOS), CONTEO);
     }
 
-    /** Usuarios ACTIVOS con acceso efectivo a cada panel. */
+    /** Usuarios ACTIVOS con acceso efectivo a cada panel (permisos PANEL_*). */
     public List<Conteo> coberturaPaneles() {
         return jdbc.query("""
                 SELECT p.nombre AS etiqueta, COUNT(*) AS valor
-                FROM v_permisos_finales v
-                JOIN permisos p ON p.id = v.permiso_id
-                JOIN usuarios u ON u.id = v.usuario_id AND u.activo = TRUE
-                WHERE v.permitido = TRUE
-                  AND p.nombre IN ('PANEL_ADMIN', 'PANEL_BITACORA', 'PANEL_INBOUND')
+                FROM permisos p
+                JOIN usuarios u ON u.activo = TRUE
+                WHERE p.activo = TRUE
+                  AND p.nombre LIKE 'PANEL!_%%' ESCAPE '!'
+                  AND %s
                 GROUP BY p.nombre
                 ORDER BY p.nombre
-                """, CONTEO);
+                """.formatted(TIENE_PERMISO), CONTEO);
     }
 
     /** Altas de usuarios por mes (ultimos 12): valor = altas, secundario = altas aun activas. */

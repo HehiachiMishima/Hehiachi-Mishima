@@ -1,42 +1,42 @@
 <div class="login">
-  <section class="login__brand">
-    <div class="login__brand-inner">
-      <h1 class="login__brand-title">Hehiachi Mishima</h1>
-      <p class="login__brand-text">
-        Plataforma de control de accesos. Administra identidades, roles y permisos desde un solo lugar.
-      </p>
-      <ul class="login__features">
-        <li><ui-icon name="check" [size]="16" /> Control de acceso basado en permisos</li>
-        <li><ui-icon name="check" [size]="16" /> Gestión de usuarios y roles</li>
-        <li><ui-icon name="check" [size]="16" /> Interfaz responsiva y accesible</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="login__panel">
+  <main id="contenido" class="login__panel" tabindex="-1">
     <div class="login__card">
       <header class="login__header">
-        <h2>Iniciar sesión</h2>
+        <p class="login__product" aria-hidden="true">
+          <img src="logoImg.png" alt="" width="24" height="24" /> Hehiachi Mishima
+        </p>
+        <h1>Iniciar sesión</h1>
         <p>Ingresa tus credenciales para continuar.</p>
       </header>
 
       @if (error()) {
-      <div class="login__alert" role="alert">
-        <ui-icon name="alertTriangle" [size]="18" />
-        <span>{{ error() }}</span>
-      </div>
+        <div class="login__alert" id="login-error" role="alert">
+          <ui-icon name="alertTriangle" [size]="18" />
+          <span>{{ error() }}</span>
+        </div>
       }
 
       <form class="login__form" [formGroup]="formulario" (ngSubmit)="enviar()" novalidate>
         <div class="ui-field">
-          <label class="ui-label" for="usuario">Usuario</label>
+          <label class="ui-label" for="usuario">Usuario o correo electrónico</label>
           <div class="login__control">
             <ui-icon name="user" [size]="18" class="login__control-icon" />
-            <input id="usuario" type="text" class="ui-input" [class.ui-input--invalid]="campoInvalido('usuario')"
-              formControlName="usuario" autocomplete="username" placeholder="tu.usuario" autofocus />
+            <input
+              id="usuario"
+              type="text"
+              class="ui-input"
+              [class.ui-input--invalid]="campoInvalido('usuario')"
+              formControlName="usuario"
+              autocomplete="username"
+              placeholder="tu.usuario"
+              autofocus
+              aria-required="true"
+              [attr.aria-invalid]="campoInvalido('usuario') || null"
+              [attr.aria-describedby]="campoInvalido('usuario') ? 'usuario-error' : null"
+            />
           </div>
           @if (campoInvalido('usuario')) {
-          <span class="ui-error">Ingresa tu usuario.</span>
+            <span class="ui-error" id="usuario-error">Ingresa tu usuario.</span>
           }
         </div>
 
@@ -44,32 +44,86 @@
           <label class="ui-label" for="contrasena">Contraseña</label>
           <div class="login__control">
             <ui-icon name="permisos" [size]="18" class="login__control-icon" />
-            <input id="contrasena" [type]="verContrasena() ? 'text' : 'password'" class="ui-input"
-              [class.ui-input--invalid]="campoInvalido('contrasena')" formControlName="contrasena"
-              autocomplete="current-password" placeholder="••••••••" />
-            <button type="button" class="login__toggle" (click)="toggleContrasena()"
-              [attr.aria-label]="verContrasena() ? 'Ocultar contraseña' : 'Mostrar contraseña'">
-              <ui-icon [name]="verContrasena() ? 'xCircle' : 'search'" [size]="18" />
+            <input
+              id="contrasena"
+              [type]="verContrasena() ? 'text' : 'password'"
+              class="ui-input"
+              [class.ui-input--invalid]="campoInvalido('contrasena')"
+              formControlName="contrasena"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              aria-required="true"
+              [attr.aria-invalid]="campoInvalido('contrasena') || null"
+              [attr.aria-describedby]="campoInvalido('contrasena') ? 'contrasena-error' : null"
+            />
+            <button
+              type="button"
+              class="login__toggle"
+              (click)="toggleContrasena()"
+              aria-label="Mostrar contraseña"
+              [attr.aria-pressed]="verContrasena()"
+            >
+              <ui-icon [name]="verContrasena() ? 'eyeOff' : 'eye'" [size]="18" />
             </button>
           </div>
           @if (campoInvalido('contrasena')) {
-          <span class="ui-error">Ingresa tu contraseña.</span>
+            <span class="ui-error" id="contrasena-error">Ingresa tu contraseña.</span>
           }
         </div>
 
-        <button type="submit" class="ui-btn ui-btn--primary ui-btn--lg ui-btn--block" [disabled]="cargando()">
+        <button
+          type="submit"
+          class="ui-btn ui-btn--primary ui-btn--lg ui-btn--block"
+          [attr.aria-disabled]="cargando() || null"
+          [attr.aria-describedby]="error() ? 'login-error' : null"
+        >
           @if (cargando()) {
-          <span class="ui-spinner"
-            style="width:18px;height:18px;border-color:rgba(255,255,255,.4);border-top-color:#fff"></span>
-          Verificando…
+            <span class="ui-spinner ui-spinner--sm login__spinner" aria-hidden="true"></span>
+            Verificando…
           } @else {
-          Ingresar
-          <ui-icon name="login" [size]="18" />
+            Ingresar
+            <ui-icon name="login" [size]="18" />
           }
         </button>
       </form>
     </div>
-  </section>
+  </main>
 
-  <ui-light-pillar aria-hidden="true" />
+  <section class="login__brand" aria-label="Presentación">
+    <ui-light-pillar
+      aria-hidden="true"
+      [paused]="animacionPausada()"
+      topColor="#3d5ce6"
+      bottomColor="#8fa6ff"
+      [intensity]="0.75"
+      [rotationSpeed]="0.18"
+      [clickPulse]="false"
+      [interactive]="false"
+      [noiseIntensity]="0.3"
+      [pillarRotation]="18"
+      quality="medium"
+    />
+    <div class="login__brand-inner">
+      <span class="login__brand-mark"><img src="logoImg.png" alt="" width="28" height="28" /></span>
+      <p class="login__eyebrow">Control de accesos</p>
+      <p class="login__brand-title">Hehiachi Mishima</p>
+      <p class="login__brand-text">
+        Plataforma de control de accesos. Administra identidades, roles y permisos desde un solo lugar.
+      </p>
+      <ul class="login__features">
+        <li><ui-icon name="check" [size]="16" /> Control de acceso basado en permisos</li>
+        <li><ui-icon name="check" [size]="16" /> Gestión de usuarios y roles</li>
+        <li><ui-icon name="check" [size]="16" /> Trazabilidad completa de cada cambio</li>
+      </ul>
+    </div>
+    <button
+      type="button"
+      class="login__motion"
+      [attr.aria-pressed]="animacionPausada()"
+      (click)="alternarAnimacion()"
+    >
+      <ui-icon [name]="animacionPausada() ? 'play' : 'pause'" [size]="14" />
+      {{ animacionPausada() ? 'Reanudar animación' : 'Pausar animación' }}
+    </button>
+  </section>
 </div>

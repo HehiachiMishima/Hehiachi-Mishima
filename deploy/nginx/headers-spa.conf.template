@@ -1,0 +1,14 @@
+# Cabeceras de las respuestas del SPA (estaticos servidos por nginx).
+#
+# CSP compatible con Angular 22:
+#  - script-src: solo 'self' + el hash del <script> inline que inyecta el
+#    inlining de CSS critico (beasties) en index.html. Los hashes se calculan
+#    en el build (deploy/csp-hashes.mjs) y entran por ${CSP_SCRIPT_HASHES}.
+#  - style-src 'unsafe-inline': Angular inserta los estilos de componentes
+#    como <style> en tiempo de ejecucion y el CSS critico va inline en
+#    index.html. Eliminarlo exige ngCspNonce + nonce por peticion.
+#  - WebGL (light-pillar) no necesita directivas extra; no hay workers
+#    (worker-src 'none'). img-src admite data:/blob: para canvas/descargas.
+include /run/app/nginx/headers-common.conf;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' ${CSP_SCRIPT_HASHES}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'none'; manifest-src 'self'; media-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'$csp_upgrade" always;
+add_header X-Request-Id $req_id always;

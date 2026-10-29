@@ -66,8 +66,8 @@ public class SecurityConfig {
 
     /**
      * CORS para el frontend Angular. Los origenes permitidos se configuran en
-     * app.cors.allowed-origins (lista separada por comas). Con credenciales
-     * activadas NO se permite el comodin "*": hay que listar los origenes.
+     * app.cors.allowed-origins (lista separada por comas). Se expone X-Request-Id
+     * (soporte) y Content-Disposition (nombre del CSV exportado).
      */
     @Bean
     CorsConfigurationSource fuenteCors(
@@ -77,9 +77,11 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(origenes);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
-        config.setExposedHeaders(List.of("Authorization"));
-        config.setAllowCredentials(true);
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With",
+                "X-Request-Id"));
+        // El token viaja en la cabecera Authorization: no hacen falta cookies.
+        config.setExposedHeaders(List.of("X-Request-Id", "Content-Disposition"));
+        config.setAllowCredentials(false);
         config.setMaxAge(maxAge);
 
         UrlBasedCorsConfigurationSource fuente = new UrlBasedCorsConfigurationSource();
