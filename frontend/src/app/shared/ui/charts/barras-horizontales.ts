@@ -46,16 +46,17 @@ export interface BarraHorizontal {
     }
     .hbars__label { min-width: 0; color: var(--text); font-weight: var(--fw-medium); overflow-wrap: anywhere; line-height: var(--lh-snug); }
     .hbars__sub { display: block; font-family: var(--font-mono); font-weight: var(--fw-regular); font-size: var(--fs-2xs); color: var(--text-3); }
-    .hbars__track { height: 8px; border-radius: var(--radius-xs); background: var(--chart-track); overflow: hidden; }
+    .hbars__track { height: 10px; border-radius: var(--radius-pill); background: var(--chart-track); overflow: hidden; box-shadow: inset 0 1px 2px rgba(15, 21, 48, 0.08); }
     .hbars__fill {
       display: block;
       height: 100%;
-      border-radius: var(--radius-xs);
-      background: var(--chart-1);
+      border-radius: var(--radius-pill);
+      background: var(--chart-grad-h);
+      box-shadow: 0 0 12px -2px rgba(124, 58, 237, 0.55);
       transform-origin: left;
       animation: hbars-grow 600ms var(--ease-out) both;
     }
-    .hbars__item--off .hbars__fill { background: var(--chart-muted); }
+    .hbars__item--off .hbars__fill { background: var(--chart-muted); box-shadow: none; }
     .hbars__item--off .hbars__label { color: var(--text-3); }
     .hbars__value { text-align: right; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; color: var(--text); }
     .hbars__item--off .hbars__value { color: var(--text-3); }

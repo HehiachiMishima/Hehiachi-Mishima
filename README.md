@@ -40,7 +40,7 @@ Plantilla base para construir sistemas internos con **gestión de identidades, r
 | Verificación | Resultado |
 |---|---|
 | `cd backend && ./mvnw -B verify` | **264 tests: 263 pasan, 0 fallan, 1 omitido** (la prueba de carga, que es opt-in). Usa MySQL 8.4 real vía Testcontainers |
-| `cd frontend && npx ng build` | OK, sin avisos de budget. Bundle inicial de ~338 kB |
+| `cd frontend && npx ng build` | OK, sin avisos de budget. Bundle inicial de ~360 kB |
 | `docker build .` | OK |
 | Prueba de humo del contenedor con MySQL 8.4 temporal | `/api/health` → 204 a los ~18 s; login correcto; eventos `LOGIN_EXITOSO` y `LOGIN_FALLIDO` registrados; export CSV de auditoría; deep links del SPA servidos por nginx; `/actuator/env` → 404; memoria ~318 MiB de 512 MiB |
 | Contraste de color (script WCAG sobre los tokens finales) | 62 pares OK, 0 fallos, en tema claro y oscuro |
@@ -107,11 +107,26 @@ Plantilla base para construir sistemas internos con **gestión de identidades, r
 - Confirmaciones con impacto («N usuarios dejarán de recibir P permisos»), «Deshacer» al quitar un permiso de un rol y motivo opcional que llega a la bitácora.
 - Menú de cuenta con «Cambiar contraseña». El reset de la contraseña de otro usuario es una acción propia, separada del formulario de edición.
 - Filtros de Usuarios en la URL, paginador con rango y tamaño de página, y un único aviso por error, mostrado en el campo que falló.
-- Sistema de diseño unificado en `src/styles/_tokens.scss`:
-  - neutros pizarra y un acento índigo;
-  - escala tipográfica de 14 px de base y `tabular-nums` en los datos;
-  - barra lateral fija a partir de 1024 px;
-  - sin scroll horizontal de página entre 360 y 1920 px.
+- **Arquitectura login → paneles → módulos.** Cada panel (hoy: *Administración*, en `/admin`) agrupa sus módulos bajo `/<panel>/<módulo>`, con su navegación por secciones y su tono de marca. Todo sale del registro `src/app/paneles/registro.ts`: rutas, guards (de panel y de módulo), selector de paneles (`/paneles`), conmutador de panel en la barra lateral, miga de pan, títulos, paleta Ctrl/⌘K y la salida de «Acceso denegado». Tras el login siempre se llega al portal de paneles (`/paneles`), aunque solo haya uno; desde ahí se entra al panel y a sus módulos, y dentro del panel la marca de la barra lateral permite volver o cambiar de panel. El shell (`layout/PanelShell`) es único y genérico: recibe su panel por la ruta y lo comparte con sus módulos mediante `PANEL_ACTUAL`. Shell y módulos se cargan de forma diferida (bundle inicial ~360 kB).
+- **Rediseño ejecutivo «Aurora de cristal»** (dirección de `ui-ux-pro-max`: glassmorphism sobre fondo vivo, base oscura y colores de estado):
+  - fondo aurora fijo (radiales índigo, fucsia, cian y violeta) y superficies de cristal esmerilado (`--glass-*`), con respaldo opaco si el navegador no soporta `backdrop-filter` y sin efectos en `forced-colors`;
+  - portal `/paneles` como centro de mando: saludo, cifras y una tarjeta grande por panel con su identidad en degradado y accesos directos a cada módulo; con varios paneles, rejilla bento;
+  - barra lateral de cristal nocturno con la placa del panel (tono, nombre, conmutador) y «Todos los paneles»; cada módulo lleva cabecera con su icono y el panel al que pertenece;
+  - cada panel tiene su `tono` (`indigo`, `violeta`, `esmeralda`, `ambar`, `cian`, `rosa`) en `_tokens.scss` bajo `[data-tono]`;
+  - Resumen con hero en degradado y KPIs destacados en degradado completo (los de riesgo en ámbar, rosa o rojo cuando tienen valor);
+  - Inter y Plus Jakarta Sans autoalojadas (OFL, compatibles con la CSP) y JetBrains Mono para códigos, horas e IP;
+  - contraste AA en claro y oscuro medido contra el punto más claro/oscuro de la aurora: 0 fallos (peor texto 4,71:1);
+  - la decisión de diseño está en `frontend/design-system/control-de-accesos/MASTER.md`.
+- **Responsive verificado** a 360, 390, 768, 1024, 1280, 1440 y 1920 px, sin scroll horizontal:
+
+  | Ancho | Barra lateral | Tablas | Modales / detalle |
+  |---|---|---|---|
+  | < 768 px | Cajón modal (safe areas) | Una tarjeta por fila; filtros plegables | Hoja inferior / pantalla completa |
+  | 768–1023 px | Cajón modal | Columnas prioritarias | Centrados / lateral |
+  | 1024–1279 px | Fija, expandida o compacta (solo iconos) | Columnas prioritarias | Centrados / lateral |
+  | ≥ 1280 px | Fija, expandida o compacta | Tabla completa, cabecera fija, columnas redimensionables | Centrados / lateral |
+
+  Con puntero táctil (`pointer: coarse`), todos los controles miden al menos 44 px. La barra superior lleva migas, buscador de módulos (Ctrl/⌘K), tema y cuenta.
 
 **Accesibilidad**
 - Se corrigieron los hallazgos críticos y serios de la auditoría WCAG 2.2 AA:
@@ -348,9 +363,16 @@ Volumen estimado: entre 5 y 20 eventos por usuario activo y día, es decir, de 5
         ├── environments/      # apiUrl: '/api' (prod) · 'http://localhost:2003/api' (desarrollo)
         ├── styles/            # _tokens.scss (sistema de diseño), _base.scss, _components.scss
         └── app/
-            ├── core/          # config (paneles, permisos, auditoria, protecciones), guards, interceptors, services, models
-            ├── features/      # auth/login, launcher, cuenta, sin-acceso, panels/admin/pages/{dashboard,auditoria,usuarios,roles,permisos}
+            ├── core/          # config (permisos, auditoria, protecciones, configuracion), guards, interceptors, services, models
+            ├── paneles/       # registro.ts (PANELES), panel.model.ts, panel-actual.ts
+            │   └── administracion/
+            │       ├── administracion.panel.ts   # grupos y módulos del panel
+            │       └── modulos/                   # resumen/, auditoria/, usuarios/, roles/, permisos/
+            ├── layout/        # PanelShell (shell genérico de panel), portal/ (selector de paneles), paleta-modulos (Ctrl/⌘K), sin-acceso
+            ├── features/      # fuera de los paneles: auth/login, cuenta (menú, cambiar contraseña, aviso de sesión)
             └── shared/        # ui (modal, toast, paginador, historial, charts…), forms, pipes, directives
+    ├── public/fonts/          # JetBrains Mono autoalojada (OFL)
+    └── design-system/         # MASTER.md: dirección visual y decisiones
 ```
 
 ---
@@ -640,7 +662,7 @@ Las respuestas de usuario, rol y permiso incluyen `protegido: boolean`. En usuar
 - botón «Pausar animación» en el login;
 - aviso antes de que expire la sesión.
 
-**Verificado:** el contraste de los tokens finales (62 pares OK, 0 fallos), y que no hay scroll horizontal de página a 360, 375, 1280 y 1920 px, en tema claro y oscuro. La comprobación se hizo con un mock del API.
+**Verificado:** el contraste de los tokens finales (92 pares OK, 0 fallos) y que no hay scroll horizontal de página a 360, 390, 768, 1024, 1280, 1440 y 1920 px, en tema claro y oscuro. La comprobación se hizo con un mock del API.
 
 **No probado:**
 - lectores de pantalla reales (VoiceOver o NVDA);
@@ -648,7 +670,8 @@ Las respuestas de usuario, rol y permiso incluyen `protegido: boolean`. En usuar
 - zoom al 400 % y reflow a 320 px;
 - modo `forced-colors` real;
 - animaciones con el panel visible;
-- el launcher con varios paneles;
+- la semántica de tabla en el modo tarjeta (< 768 px) con lectores de pantalla; Safari antiguo podría necesitar roles ARIA explícitos;
+- Safari, Firefox y dispositivos reales con notch;
 - la página «Sin acceso».
 
 **No se puede afirmar conformidad WCAG** hasta completar esa re-auditoría. Siguiente paso recomendado: `@axe-core/playwright` en el CI y una sesión manual con VoiceOver + Safari y NVDA + Firefox.
@@ -717,16 +740,21 @@ Revisa también `@hehiachi` (`Protecciones.USUARIO_RAIZ` y `protection.admin.sql
    - Añade las acciones a `AccionAuditoria` (y a `EntidadAuditoria` si hay una entidad nueva).
    - Registra con `RegistroAuditoria.exito(...)` o `registrar(...)`, usando un `ContextoAuditoria` capturado en el hilo de la petición y los helpers de `Detalle` (`{antes, despues}` o `{motivo}`). Nunca guardes secretos en `detalle`.
    - Añade las etiquetas legibles en `frontend/src/app/core/config/auditoria.ts`.
-3. **Frontend:**
-   - Crea la página en `features/panels/admin/pages/<modulo>/`.
-   - Registra la ruta en `features/panels/admin/admin.routes.ts` con `permisoGuard(PERMISOS.X)` y un `title`.
-   - Añade la entrada en `PANEL_ADMIN.modulos` de `core/config/paneles.ts`, con su `grupo` (`supervision` o `gestion`).
-   - Usa los componentes de `shared/ui` (modal, confirmación, paginador, empty-state, historial) y los tokens de `_tokens.scss`. No uses colores sueltos.
+3. **Frontend** (los pasos detallados están en la cabecera de `src/app/paneles/registro.ts`):
+   - Crea la carpeta `src/app/paneles/<panel>/modulos/<id>/` con su página standalone y sus subcomponentes.
+   - Añade una entrada a `modulos` en `<panel>.panel.ts` con `id` (único en toda la app), `nombre`, `descripcion`, `icono`, `ruta`, `permiso`, `grupo` y `cargar` (o `hijos` si tiene subrutas).
+   - Para conocer el panel desde un módulo, inyecta `PANEL_ACTUAL`; para enlazar a un módulo de cualquier panel, usa `urlModuloPorId('<id>')`.
+   - Con esa entrada se generan solos la ruta, el `permisoGuard`, el título, el menú, la miga de pan y la entrada del buscador Ctrl/⌘K.
+   - Usa los componentes de `shared/ui` (modal, confirmación, paginador, empty-state, historial) y los tokens semánticos de `_tokens.scss`. No uses colores sueltos.
+   - Las tablas deben seguir el patrón responsive de los módulos existentes: tarjeta por fila por debajo de 768 px y columnas prioritarias hasta 1279 px.
 4. **Pruebas:** añade un test de integración en `backend/src/test/java/oracle/api/` que herede de `ApiPrueba`. Crea datos con nombres únicos y no limpies entre tests.
 
-### Añadir un panel nuevo (otra área del sistema)
+### Añadir un panel
 
-1. Crea el permiso `PANEL_<X>`. `coberturaPaneles` del dashboard cuenta automáticamente todos los `PANEL_*` existentes.
-2. Define un `PanelDef` y añádelo a `PANELES` en `core/config/paneles.ts`.
-3. Añade una ruta `'<x>'` en `app.routes.ts` con `permisoGuard(PERMISOS.PANEL_<X>)` y `loadChildren` hacia un `<x>.routes.ts` propio, que puede reutilizar el shell de administración como modelo.
-4. El launcher muestra los paneles accesibles. Si el usuario tiene solo uno, `launcherGuard` lo lleva directo a ese panel.
+1. Crea `src/app/paneles/<panel>/<panel>.panel.ts` exportando un `PanelDef`: `id`, `nombre`, `descripcion`, `icono`, `tono` (`indigo`, `violeta`, `esmeralda`, `ambar`, `cian` o `rosa`), `ruta` única, `grupos`, `modulos` y, opcionalmente, `permiso`.
+2. Añádelo a `PANELES` en `src/app/paneles/registro.ts`.
+3. Se generan solos: la ruta `/<ruta>` con su guard, la tarjeta del portal `/paneles`, la entrada en el conmutador de la barra lateral y en la paleta Ctrl/⌘K.
+
+Sin `permiso`, a un panel entra quien tenga acceso a alguno de sus módulos. Para un grupo de navegación nuevo dentro de un panel, añádelo a sus `grupos`.
+
+El permiso `PANEL_ADMIN` sigue existiendo en la BD; el panel de Administración no lo declara como `permiso`, así que hoy no se exige para entrar. Si quieres exigirlo, añádelo a `PERMISOS` y ponlo en `PANEL_ADMINISTRACION.permiso`.

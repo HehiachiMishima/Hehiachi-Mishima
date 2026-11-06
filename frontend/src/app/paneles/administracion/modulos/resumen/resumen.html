@@ -1,0 +1,197 @@
+<header class="page-head hero">
+  <div class="hero__texto">
+    <p class="hero__fecha">{{ fechaHoy() }}</p>
+    <h1 class="page-head__title hero__titulo" tabindex="-1">{{ saludo() }}{{ usuario() ? ', ' + usuario()!.nombre : '' }}</h1>
+    <p class="page-head__sub hero__sub">Estado del control de accesos y lo que requiere tu atención.</p>
+  </div>
+  <div class="page-head__meta hero__meta">
+    @if (hace()) {
+      <span role="status">Actualizado {{ hace() }}</span>
+    }
+    <button type="button" class="ui-btn ui-btn--sm hero__btn" (click)="cargar()" [attr.aria-disabled]="cargando() || null">
+      <ui-icon name="refresh" [size]="16" /> Actualizar
+    </button>
+  </div>
+</header>
+
+<section class="metrics" aria-labelledby="titulo-indicadores" [attr.aria-busy]="cargando() || null">
+  <h2 class="section-title metrics__title" id="titulo-indicadores">Identidades y accesos</h2>
+  <div class="metrics__hoja">
+  @if (cargando() && !datos()) {
+    @for (fila of [1, 2, 3, 4, 5]; track fila) {
+      <article class="metric">
+        <span class="metric__skeleton ui-skeleton"></span>
+        <span class="u-sr-only">Cargando indicador</span>
+      </article>
+    }
+  } @else if (error() && !datos()) {
+    <article class="metric metric--danger">
+      <div class="metric__top">
+        <span class="metric__icon" aria-hidden="true"><ui-icon name="alerta" [size]="16" /></span>
+        <h3 class="metric__label">Indicadores</h3>
+      </div>
+      <div class="metric__error" role="alert">
+        No disponible: no se pudieron cargar los indicadores.
+        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()">
+          <ui-icon name="refresh" [size]="16" /> Reintentar
+        </button>
+      </div>
+    </article>
+  } @else {
+    @for (kpi of kpis(); track kpi.id) {
+      <article class="metric" [class]="'metric--' + kpi.tono" [attr.data-kpi]="kpi.id">
+        <div class="metric__top">
+          <span class="metric__icon" aria-hidden="true"><ui-icon [name]="kpi.icono" [size]="16" /></span>
+          <h3 class="metric__label">{{ kpi.etiqueta }}</h3>
+        </div>
+        <span class="metric__value">{{ kpi.valor }}</span>
+        <span class="metric__detail">{{ kpi.detalle }}</span>
+        @if (kpi.enlace; as enlace) {
+          <a class="metric__link" [routerLink]="enlace.ruta" [queryParams]="enlace.params">{{ enlace.texto }}</a>
+        }
+      </article>
+    }
+  }
+  </div>
+</section>
+
+<div class="resumen__fila">
+@if (datos(); as d) {
+  <section class="atencion" aria-labelledby="titulo-atencion">
+    <h2 class="section-title" id="titulo-atencion">Requiere atención</h2>
+    <ul class="atencion__lista">
+      @if (d.kpis.usuariosSinRol > 0) {
+        <li class="atencion__item">
+          <ui-icon name="alertTriangle" [size]="16" />
+          <span><strong>{{ d.kpis.usuariosSinRol }}</strong> {{ d.kpis.usuariosSinRol === 1 ? 'cuenta sin rol' : 'cuentas sin rol' }}.</span>
+          <a [routerLink]="rutaUsuarios" [queryParams]="{ sinRol: 1 }">Revisar</a>
+        </li>
+      }
+      @if (d.kpis.overridesDeny > 0) {
+        <li class="atencion__item atencion__item--info">
+          <ui-icon name="lock" [size]="16" />
+          <span><strong>{{ d.kpis.overridesDeny }}</strong> {{ d.kpis.overridesDeny === 1 ? 'denegación individual activa' : 'denegaciones individuales activas' }}.</span>
+          <a [routerLink]="rutaUsuarios">Ver usuarios</a>
+        </li>
+      }
+      @if (d.kpis.overridesGrant > 0) {
+        <li class="atencion__item">
+          <ui-icon name="key" [size]="16" />
+          <span><strong>{{ d.kpis.overridesGrant }}</strong> {{ d.kpis.overridesGrant === 1 ? 'concesión individual' : 'concesiones individuales' }} fuera de los roles.</span>
+          <a [routerLink]="rutaUsuarios">Ver usuarios</a>
+        </li>
+      }
+      @if (eventosSeguridad(); as eventos) {
+        @for (evento of eventos; track evento.id) {
+          <li class="atencion__item atencion__item--danger">
+            <ui-icon [name]="evento.resultado === 'DENEGADO' ? 'lock' : 'alertTriangle'" [size]="16" />
+            <span>
+              <strong>{{ etiquetaAccion(evento.accion) }}</strong> · {{ actor(evento) }} · {{ objetivo(evento) }} ·
+              <time [attr.datetime]="evento.ocurridoEn" [title]="evento.ocurridoEn | fechaHora: 'completa' : true">{{ evento.ocurridoEn | fechaHora: 'relativa' : true }}</time>
+            </span>
+            <a [routerLink]="rutaAuditoria" [queryParams]="{ evento: evento.id }">Ver detalle</a>
+          </li>
+        }
+      }
+      @if (d.kpis.usuariosSinRol === 0 && d.kpis.overridesDeny === 0 && d.kpis.overridesGrant === 0 && !eventosSeguridad()?.length) {
+        <li class="atencion__item atencion__item--ok"><ui-icon name="check" [size]="16" /> <span>Nada pendiente por ahora.</span></li>
+      }
+    </ul>
+  </section>
+}
+
+  @if (kpisAuditoria().length) {
+  <section class="metrics metrics--seguridad" aria-labelledby="titulo-seguridad">
+    <h2 class="section-title metrics__title" id="titulo-seguridad">Seguridad</h2>
+    <div class="metrics__hoja">
+    @for (kpi of kpisAuditoria(); track kpi.id) {
+      <article class="metric" [class.metric--danger]="!!kpi.valor" [class.metric--brand]="!kpi.valor">
+        <div class="metric__top">
+          <span class="metric__icon" aria-hidden="true"><ui-icon [name]="kpi.icono" [size]="16" /></span>
+          <h3 class="metric__label">{{ kpi.etiqueta }}</h3>
+        </div>
+        @if (kpi.valor === null) {
+          <span class="metric__skeleton ui-skeleton"><span class="u-sr-only">Cargando</span></span>
+        } @else {
+          <span class="metric__value">{{ valorAuditoria(kpi) }}</span>
+        }
+        <a class="metric__link" [routerLink]="rutaAuditoria" [queryParams]="enlaceAuditoria(kpi)">Ver en Auditoría</a>
+      </article>
+    }
+    </div>
+  </section>
+  }
+</div>
+
+@if (datos()) {
+  <section class="charts" aria-labelledby="titulo-graficos">
+    <h2 class="section-title" id="titulo-graficos">Distribución del acceso</h2>
+    <div class="charts__grid">
+      <article class="chart-card">
+        <header class="chart-card__head">
+          <div>
+            <h3 class="chart-card__title">¿Cómo se distribuye el acceso?</h3>
+            <p class="chart-card__sub">Usuarios por rol. En gris, roles sin usuarios (candidatos a limpieza).</p>
+          </div>
+        </header>
+        <div class="chart-card__body">
+          @if (usuariosPorRol().length) {
+            <ui-barras-h [datos]="usuariosPorRol()" titulo="Usuarios por rol" />
+          } @else {
+            <p class="chart-card__sub">Aún no hay roles.</p>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <header class="chart-card__head">
+          <div>
+            <h3 class="chart-card__title">¿Qué permisos están más extendidos?</h3>
+            <p class="chart-card__sub">Usuarios con cada permiso, ya aplicadas las denegaciones.</p>
+          </div>
+        </header>
+        <div class="chart-card__body">
+          @if (permisosExtendidos().length) {
+            <ui-barras-h [datos]="permisosExtendidos()" titulo="Permisos más otorgados" />
+          } @else {
+            <p class="chart-card__sub">Aún no hay permisos otorgados.</p>
+          }
+        </div>
+      </article>
+
+      <article class="chart-card">
+        <header class="chart-card__head">
+          <div>
+            <h3 class="chart-card__title">Crecimiento de cuentas</h3>
+            <p class="chart-card__sub">Altas por mes (12 meses); el detalle indica cuántas siguen activas.</p>
+          </div>
+        </header>
+        <div class="chart-card__body">
+          @if (altas().length) {
+            <ui-bars [datos]="altas()" [altura]="220" titulo="Altas de cuentas por mes" />
+          } @else {
+            <p class="chart-card__sub">Sin altas en el periodo.</p>
+          }
+        </div>
+      </article>
+    </div>
+  </section>
+}
+
+@if (modulos().length) {
+  <nav class="quick" aria-labelledby="titulo-accesos">
+    <h2 class="section-title" id="titulo-accesos">Accesos rápidos</h2>
+    <div class="quick__grid">
+      @for (modulo of modulos(); track modulo.id) {
+        <a class="quick__card" [routerLink]="urlModulo(modulo)">
+          <span class="quick__icon" aria-hidden="true"><ui-icon [name]="modulo.icono" [size]="20" /></span>
+          <span class="quick__text">
+            <span class="quick__name">{{ modulo.nombre }}</span>
+            <span class="quick__desc">{{ modulo.descripcion }}</span>
+          </span>
+          <ui-icon name="chevronRight" [size]="18" class="quick__arrow" />
+        </a>
+      }
+    </div>
+  </nav>
+}

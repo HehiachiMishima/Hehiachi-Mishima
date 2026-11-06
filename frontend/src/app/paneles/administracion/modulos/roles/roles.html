@@ -1,0 +1,294 @@
+<header class="page-head">
+  <span class="page-head__icon" aria-hidden="true"><ui-icon name="roles" [size]="24" /></span>
+  <div class="page-head__main">
+    <span class="page-head__eyebrow">Panel {{ panel.nombre }}</span>
+    <h1 class="page-head__title" tabindex="-1">Roles</h1>
+    <p class="page-head__sub">Roles y los permisos que conceden a sus usuarios.</p>
+  </div>
+  <button *hasPermiso="permisos.CREAR_ROLES" type="button" class="ui-btn ui-btn--primary" (click)="abrirCrear()">
+    <ui-icon name="plus" [size]="18" />
+    Nuevo rol
+  </button>
+</header>
+
+<div class="toolbar" role="search">
+  <div class="ui-search toolbar__grow">
+    <ui-icon name="search" [size]="18" />
+    <input
+      type="search"
+      class="ui-input"
+      aria-label="Buscar roles"
+      placeholder="Buscar por nombre o descripción…"
+      [value]="textoBusqueda()"
+      (input)="buscar($any($event.target).value)"
+    />
+  </div>
+  <button type="button" class="ui-btn ui-btn--secondary toolbar__toggle" aria-controls="rol-filtros"
+    [attr.aria-expanded]="filtrosAbiertos()" (click)="filtrosAbiertos.update((v) => !v)">
+    <ui-icon name="filter" [size]="16" /> Filtros
+    @if (estado()) {
+      <span class="toolbar__cuenta">1<span class="u-sr-only"> activo</span></span>
+    }
+  </button>
+  <div id="rol-filtros" class="toolbar__filtros" [class.toolbar__filtros--abierto]="filtrosAbiertos()">
+  <label class="u-sr-only" for="rol-estado-filtro">Estado</label>
+  <select id="rol-estado-filtro" class="ui-select" [value]="estado()" (change)="filtrarEstado($any($event.target).value)">
+    <option value="">Todos los estados</option>
+    <option value="activos">Activos</option>
+    <option value="inactivos">Inactivos</option>
+  </select>
+  </div>
+  <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()" [attr.aria-disabled]="cargando() || null">
+    <ui-icon name="refresh" [size]="16" />
+    Actualizar
+  </button>
+</div>
+
+<div class="table-card" [attr.aria-busy]="cargando() || null">
+  @if (cargando() && roles().length === 0) {
+    <div class="skeleton-filas">
+      <span class="u-sr-only">Cargando roles…</span>
+      @for (fila of [1, 2, 3, 4, 5]; track fila) { <span class="ui-skeleton"></span> }
+    </div>
+  } @else if (error()) {
+    <ui-empty icono="alerta" titulo="No se pudieron cargar los roles" [mensaje]="error()!">
+      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()">
+        <ui-icon name="refresh" [size]="16" /> Reintentar
+      </button>
+    </ui-empty>
+  } @else if (filtrados().length === 0) {
+    <ui-empty
+      icono="roles"
+      [titulo]="hayFiltros() ? 'Sin resultados' : 'Aún no hay roles'"
+      [mensaje]="hayFiltros() ? 'Ningún rol coincide con los filtros.' : 'Crea el primer rol para agrupar permisos.'"
+    >
+      @if (hayFiltros()) {
+        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="limpiarFiltros()">Limpiar filtros</button>
+      } @else {
+        <button *hasPermiso="permisos.CREAR_ROLES" type="button" class="ui-btn ui-btn--primary ui-btn--sm" (click)="abrirCrear()">
+          <ui-icon name="plus" [size]="16" /> Nuevo rol
+        </button>
+      }
+    </ui-empty>
+  } @else {
+    <div class="ui-table-wrap">
+      <table class="ui-table ui-table--compacta ui-table--tarjetas" appColumnasRedimensionables aria-label="Roles">
+        <thead>
+          <tr>
+            <th scope="col" class="col-w-principal">Rol</th>
+            <th scope="col" class="col-w-estado">Estado</th>
+            @if (usuariosPorRol()) {
+              <th scope="col" class="col-w-num num">Usuarios</th>
+            }
+            <th scope="col" class="col-w-fecha col-p3">Último cambio</th>
+            <th scope="col" class="col-actions">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (rol of paginados(); track rol.id) {
+            <tr>
+              <td class="celda-principal">
+                <span class="ui-stack">
+                  <span class="ui-table__primary">{{ rol.nombre }}</span>
+                  <span class="u-muted" [title]="rol.descripcion || ''">{{ rol.descripcion || 'Sin descripción' }}</span>
+                </span>
+              </td>
+              <td class="celda-estado">
+                <span class="tag-list">
+                  @if (rol.activo) {
+                    <span class="ui-badge ui-badge--success"><span class="ui-dot" aria-hidden="true"></span> Activo</span>
+                  } @else {
+                    <span class="ui-badge ui-badge--neutral"><span class="ui-dot" aria-hidden="true"></span> Inactivo</span>
+                  }
+                  @if (protegido(rol)) {
+                    <span class="ui-badge ui-badge--neutral" [title]="motivoProteccion"><ui-icon name="lock" [size]="12" /> Protegido</span>
+                  }
+                </span>
+              </td>
+              @if (usuariosPorRol()) {
+                <td class="num" data-label="Usuarios">
+                  @if (usuariosDe(rol) === 0) {
+                    <span class="u-muted">Sin usuarios</span>
+                  } @else {
+                    {{ usuariosDe(rol) }}
+                  }
+                </td>
+              }
+              <td class="col-p3" data-label="Último cambio">
+                <span class="ui-stack">
+                  <span [title]="(rol.actualizadoEn ?? rol.creadoEn) | fechaHora">{{ (rol.actualizadoEn ?? rol.creadoEn) | fechaHora: 'relativa' }}</span>
+                  <span class="u-muted">por {{ (rol.actualizadoPor ?? rol.creadoPor) | actorLabel }}</span>
+                </span>
+              </td>
+              <td class="celda-acciones">
+                <div class="row-actions">
+                  <button *hasPermiso="permisos.VER_AUDITORIA" type="button" class="ui-icon-btn" title="Historial"
+                    [attr.aria-label]="'Historial del rol ' + rol.nombre" (click)="historialDe.set(rol)">
+                    <ui-icon name="history" [size]="18" />
+                  </button>
+                  <button *hasPermiso="permisos.ASIGNAR_PERMISOS" type="button" class="ui-icon-btn" title="Permisos del rol"
+                    [attr.aria-label]="'Permisos del rol ' + rol.nombre" (click)="abrirPermisos(rol)">
+                    <ui-icon name="key" [size]="18" />
+                  </button>
+                  <button *hasPermiso="permisos.MODIFICAR_ROLES" type="button" class="ui-icon-btn"
+                    [title]="protegido(rol) ? motivoProteccion : 'Editar'"
+                    [attr.aria-label]="'Editar el rol ' + rol.nombre"
+                    [attr.aria-disabled]="protegido(rol) || null" (click)="abrirEditar(rol)">
+                    <ui-icon name="edit" [size]="18" />
+                  </button>
+                  <button *hasPermiso="permisos.MODIFICAR_ROLES" type="button" class="ui-icon-btn"
+                    [class.ui-icon-btn--danger]="rol.activo && !protegido(rol)"
+                    [title]="protegido(rol) ? motivoProteccion : rol.activo ? 'Desactivar' : 'Activar'"
+                    [attr.aria-label]="(rol.activo ? 'Desactivar el rol ' : 'Activar el rol ') + rol.nombre"
+                    [attr.aria-disabled]="protegido(rol) || null" (click)="alternarActivo(rol)">
+                    <ui-icon name="power" [size]="18" />
+                  </button>
+                  <button *hasPermiso="permisos.ELIMINAR_ROLES" type="button" class="ui-icon-btn"
+                    [class.ui-icon-btn--danger]="!protegido(rol)"
+                    [title]="protegido(rol) ? motivoProteccion : 'Eliminar'"
+                    [attr.aria-label]="'Eliminar el rol ' + rol.nombre"
+                    [attr.aria-disabled]="protegido(rol) || null" (click)="confirmarEliminar(rol)">
+                    <ui-icon name="trash" [size]="18" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <ui-paginador
+      [pagina]="paginaActual()"
+      [total]="filtrados().length"
+      [porPagina]="tamano()"
+      (paginaCambia)="irAPagina($event)"
+      (porPaginaCambia)="cambiarTamano($event)"
+    />
+  }
+</div>
+
+<ui-modal [abierto]="formAbierto()" [titulo]="editando() ? 'Editar rol' : 'Nuevo rol'" (cerrar)="cerrarForm()">
+  <form id="form-rol" class="grid-form" [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <p class="ui-hint grid-form__nota">Los campos con <span aria-hidden="true">*</span> son obligatorios.</p>
+    <div class="ui-field ui-field--full">
+      <label class="ui-label" for="rol-nombre">Nombre <span class="ui-required" aria-hidden="true">*</span></label>
+      <input id="rol-nombre" class="ui-input" [class.ui-input--invalid]="campoInvalido('nombre')" formControlName="nombre"
+        placeholder="AUDITOR" autocomplete="off" aria-required="true"
+        [attr.aria-invalid]="campoInvalido('nombre') || null"
+        [attr.aria-describedby]="campoInvalido('nombre') ? 'rol-nombre-error' : null" />
+      @if (campoInvalido('nombre')) {
+        <span class="ui-error" id="rol-nombre-error">{{ errorServidor('nombre') ?? 'El nombre es obligatorio (máximo 100 caracteres).' }}</span>
+      }
+    </div>
+    <div class="ui-field ui-field--full">
+      <label class="ui-label" for="rol-descripcion">Descripción</label>
+      <textarea id="rol-descripcion" class="ui-textarea" formControlName="descripcion" placeholder="Para qué sirve este rol"
+        [attr.aria-invalid]="campoInvalido('descripcion') || null"
+        [attr.aria-describedby]="campoInvalido('descripcion') ? 'rol-descripcion-error' : null"></textarea>
+      @if (campoInvalido('descripcion')) {
+        <span class="ui-error" id="rol-descripcion-error">{{ errorServidor('descripcion') ?? 'Máximo 255 caracteres.' }}</span>
+      }
+    </div>
+    <label class="check">
+      <input type="checkbox" formControlName="activo" />
+      <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="14" /></span>
+      <span>Rol activo</span>
+    </label>
+  </form>
+
+  <div modal-footer class="modal-foot">
+    <button type="button" class="ui-btn ui-btn--ghost" (click)="cerrarForm()">Cancelar</button>
+    <button type="submit" form="form-rol" class="ui-btn ui-btn--primary" [attr.aria-disabled]="guardando() || null">
+      @if (guardando()) { <span class="ui-spinner ui-spinner--sm" aria-hidden="true"></span> }
+      {{ editando() ? 'Guardar cambios' : 'Crear rol' }}
+    </button>
+  </div>
+</ui-modal>
+
+<ui-confirmacion
+  [abierto]="!!aEliminar()"
+  titulo="Eliminar rol"
+  [pregunta]="'¿Eliminar el rol ' + (aEliminar()?.nombre ?? '') + '?'"
+  descripcion="Sus usuarios perderán los permisos que reciben de este rol. Esta acción no se puede deshacer."
+  etiqueta="Eliminar rol"
+  icono="trash"
+  [procesando]="eliminando()"
+  (confirmar)="eliminar()"
+  (cancelar)="aEliminar.set(null)"
+/>
+
+<ui-confirmacion
+  [abierto]="!!aDesactivar()"
+  titulo="Desactivar rol"
+  [pregunta]="'¿Desactivar el rol ' + (aDesactivar()?.nombre ?? '') + '?'"
+  [descripcion]="textoImpacto()"
+  etiqueta="Desactivar rol"
+  icono="power"
+  [procesando]="cambiandoEstado()"
+  [conMotivo]="true"
+  (confirmar)="confirmarDesactivar($event)"
+  (cancelar)="aDesactivar.set(null)"
+/>
+
+<ui-modal [abierto]="permisosAbierto()" ancho="lg" titulo="Permisos del rol" [subtitulo]="rolPermisos()?.nombre ?? ''"
+  (cerrar)="permisosAbierto.set(false)">
+  <p class="modal-hint" role="note">
+    Los cambios se aplican al instante
+    @if (usuariosDelRol() !== null) {
+      a <strong>{{ usuariosDelRol() }} {{ usuariosDelRol() === 1 ? 'usuario' : 'usuarios' }}</strong> con este rol.
+    } @else {
+      a todos los usuarios con este rol.
+    }
+    @if (rolPermisos() && protegido(rolPermisos()!)) {
+      Este rol está protegido: solo se le pueden agregar permisos.
+    }
+  </p>
+  @if (cargandoPermisos()) {
+    <div class="loading" role="status"><span class="ui-spinner" aria-hidden="true"></span> Cargando permisos…</div>
+  } @else if (catalogoPermisos().length === 0) {
+    <ui-empty icono="permisos" titulo="Sin permisos" mensaje="No hay permisos en el catálogo." />
+  } @else {
+    <ul class="role-list">
+      @for (permiso of catalogoPermisos(); track permiso.id) {
+        <li class="role-item">
+          <span class="role-item__icon" aria-hidden="true"><ui-icon name="key" [size]="18" /></span>
+          <span class="role-item__text">
+            <span class="role-item__name">
+              {{ permiso.descripcion || permiso.nombre }}
+              @if (!permiso.activo) {
+                <span class="ui-badge ui-badge--neutral">Inactivo</span>
+              }
+            </span>
+            <span class="role-item__desc" [id]="'rp-desc-' + permiso.id"><span class="credencial">{{ permiso.nombre }}</span></span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            class="switch"
+            [class.switch--on]="estaAsignado(permiso.id)"
+            [attr.aria-checked]="estaAsignado(permiso.id)"
+            [attr.aria-label]="'Conceder ' + (permiso.descripcion || permiso.nombre)"
+            [attr.aria-describedby]="'rp-desc-' + permiso.id"
+            [attr.aria-busy]="cambiandoPermiso() === permiso.id || null"
+            [attr.aria-disabled]="cambiandoPermiso() === permiso.id || bloqueadoQuitar(permiso.id) || null"
+            [title]="bloqueadoQuitar(permiso.id) ? 'No se pueden quitar permisos a este rol protegido.' : ''"
+            (click)="alternarPermiso(permiso)"
+          >
+            <span class="switch__thumb" aria-hidden="true"></span>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+  <div modal-footer class="modal-foot">
+    <button type="button" class="ui-btn ui-btn--primary" (click)="permisosAbierto.set(false)">Cerrar</button>
+  </div>
+</ui-modal>
+
+<ui-modal [abierto]="!!historialDe()" [lateral]="true" titulo="Historial del rol" [subtitulo]="historialDe()?.nombre ?? ''"
+  (cerrar)="historialDe.set(null)">
+  @if (historialDe(); as rol) {
+    <ui-historial [relacionadoCon]="'ROL:' + rol.id" />
+  }
+</ui-modal>

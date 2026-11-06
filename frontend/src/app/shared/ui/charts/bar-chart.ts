@@ -72,7 +72,7 @@ export interface BarraDato {
       animation: bar-grow 700ms var(--ease-out) both;
     }
 
-    .bars__col:hover .bars__fill { filter: brightness(1.12); }
+    .bars__col:hover .bars__fill { filter: brightness(1.12) saturate(1.1); }
 
     .bars__label {
       font-size: var(--fs-xs);

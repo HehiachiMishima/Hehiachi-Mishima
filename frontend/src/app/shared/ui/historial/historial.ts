@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
-import { CONFIG } from '../../../core/config/configuracion';
 import { RESULTADOS_AUDITORIA, actorDeEvento, etiquetaAccion, objetivoDeEvento } from '../../../core/config/auditoria';
+import { urlModuloPorId } from '../../../paneles/registro';
 import { mensajeDeError } from '../../../core/errors/error.util';
 import { AuditoriaEvento, FiltroAuditoria } from '../../../core/models';
 import { AuditoriaApi } from '../../../core/services/auditoria.api';
@@ -86,7 +86,7 @@ export class Historial {
   readonly actorId = input<number | null>(null);
   readonly limite = input(20);
 
-  readonly rutaAuditoria = CONFIG.rutas.auditoria;
+  readonly rutaAuditoria = urlModuloPorId('auditoria');
   readonly modo = signal<'sobre' | 'actor'>('sobre');
   readonly cargando = signal(false);
   readonly error = signal<string | null>(null);

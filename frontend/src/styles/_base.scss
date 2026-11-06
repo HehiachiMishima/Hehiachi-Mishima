@@ -1,7 +1,53 @@
 /**
- * Base — consola ejecutiva. Lienzo neutro, tipografía del sistema con cifras
- * tabulares en datos y un único acento de marca.
+ * Base — aurora de cristal. Lienzo con aurora fija a pantalla completa, Inter para
+ * la interfaz, Plus Jakarta Sans para títulos y cifras, y la mono autoalojada
+ * para credenciales. Todas las fuentes se sirven desde /fonts (CSP font-src 'self').
  */
+$latin: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+  U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+$latin-ext: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+  U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+
+@each $familia, $archivo in ('Inter Variable': 'inter', 'Plus Jakarta Sans Variable': 'plus-jakarta-sans') {
+  @font-face {
+    font-family: $familia;
+    src: url('/fonts/#{$archivo}-latin-wght-normal.woff2') format('woff2-variations');
+    font-weight: 200 800;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: $latin;
+  }
+
+  @font-face {
+    font-family: $familia;
+    src: url('/fonts/#{$archivo}-latin-ext-wght-normal.woff2') format('woff2-variations');
+    font-weight: 200 800;
+    font-style: normal;
+    font-display: swap;
+    unicode-range: $latin-ext;
+  }
+}
+
+@font-face {
+  font-family: 'Credencial Mono';
+  src: url('/fonts/jetbrains-mono-latin-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Credencial Mono';
+  src: url('/fonts/jetbrains-mono-latin-ext-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 *,
 *::before,
 *::after {
@@ -21,10 +67,32 @@ body {
   letter-spacing: -0.003em;
   color: var(--text);
   background: var(--bg);
+  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   overflow-wrap: break-word;
+}
+
+/* Aurora fija a pantalla completa detrás de todo el cristal, con una rejilla
+   técnica enmascarada. Decorativa: no recibe eventos. */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+body::before { background: var(--aurora), var(--bg); }
+
+body::after {
+  background-image: linear-gradient(var(--aurora-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--aurora-grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 0%, transparent 75%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 0%, transparent 75%);
 }
 
 h1,
@@ -35,7 +103,7 @@ h5,
 h6 {
   margin: 0;
   font-family: var(--font-display);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   line-height: var(--lh-tight);
   letter-spacing: var(--tracking-tight);
   color: var(--text);
@@ -43,7 +111,7 @@ h6 {
   text-wrap: balance;
 }
 
-h1 { letter-spacing: -0.018em; }
+h1 { letter-spacing: var(--tracking-display); }
 
 p {
   margin: 0;
@@ -133,7 +201,7 @@ svg {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--brand) 22%, transparent);
+  background: color-mix(in srgb, var(--indigo-500) 28%, transparent);
 }
 
 html {

@@ -1,0 +1,479 @@
+<header class="page-head">
+  <span class="page-head__icon" aria-hidden="true"><ui-icon name="usuarios" [size]="24" /></span>
+  <div class="page-head__main">
+    <span class="page-head__eyebrow">Panel {{ panel.nombre }}</span>
+    <h1 class="page-head__title" tabindex="-1">Usuarios</h1>
+    <p class="page-head__sub">Cuentas, estado y accesos. Selecciona un usuario para ver su detalle.</p>
+  </div>
+  <button *hasPermiso="permisos.CREAR_USUARIOS" type="button" class="ui-btn ui-btn--primary" (click)="abrirCrear()">
+    <ui-icon name="plus" [size]="18" />
+    Nuevo usuario
+  </button>
+</header>
+
+<div class="toolbar" role="search">
+  <div class="ui-search toolbar__grow">
+    <ui-icon name="search" [size]="18" />
+    <input
+      type="search"
+      class="ui-input"
+      aria-label="Buscar usuarios"
+      placeholder="Buscar por usuario, nombre o correo electrónico…"
+      [value]="textoBusqueda()"
+      (input)="buscar($any($event.target).value)"
+    />
+  </div>
+  <button type="button" class="ui-btn ui-btn--secondary toolbar__toggle" aria-controls="usr-filtros"
+    [attr.aria-expanded]="filtrosAbiertos()" (click)="filtrosAbiertos.update((v) => !v)">
+    <ui-icon name="filter" [size]="16" /> Filtros
+    @if ((estado() ? 1 : 0) + (rol() ? 1 : 0) + (sinRol() ? 1 : 0); as n) {
+      <span class="toolbar__cuenta">{{ n }}<span class="u-sr-only"> activos</span></span>
+    }
+  </button>
+  <div id="usr-filtros" class="toolbar__filtros" [class.toolbar__filtros--abierto]="filtrosAbiertos()">
+  <label class="u-sr-only" for="usr-filtro-estado">Estado</label>
+  <select id="usr-filtro-estado" class="ui-select" [value]="estado()" (change)="filtrar({ estado: $any($event.target).value })">
+    <option value="">Todos los estados</option>
+    <option value="activos">Activos</option>
+    <option value="inactivos">Inactivos</option>
+  </select>
+  @if (puedeResumen()) {
+    <label class="u-sr-only" for="usr-filtro-rol">Rol</label>
+    <select id="usr-filtro-rol" class="ui-select" [value]="rol()" (change)="filtrar({ rol: $any($event.target).value })">
+      <option value="">Todos los roles</option>
+      @for (nombre of rolesDisponibles(); track nombre) {
+        <option [value]="nombre" [selected]="nombre === rol()">{{ nombre }}</option>
+      }
+    </select>
+    <button type="button" class="ui-chip" [attr.aria-pressed]="sinRol()" (click)="filtrar({ sinRol: !sinRol() })">
+      Sin rol
+    </button>
+  }
+  </div>
+  <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()" [attr.aria-disabled]="cargando() || null">
+    <ui-icon name="refresh" [size]="16" />
+    Actualizar
+  </button>
+</div>
+
+@if (hayFiltros() && !cargando()) {
+  <p class="filtros__resumen" role="status">
+    {{ filtrados().length }} {{ filtrados().length === 1 ? 'usuario coincide' : 'usuarios coinciden' }} con los filtros.
+    <button type="button" class="ui-link-btn" (click)="limpiarFiltros()">Limpiar filtros</button>
+  </p>
+}
+
+<div class="table-card" [attr.aria-busy]="cargando() || null">
+  @if (cargando() && usuarios().length === 0) {
+    <div class="skeleton-filas">
+      <span class="u-sr-only">Cargando usuarios…</span>
+      @for (fila of [1, 2, 3, 4, 5]; track fila) { <span class="ui-skeleton"></span> }
+    </div>
+  } @else if (error()) {
+    <ui-empty icono="alerta" titulo="No se pudieron cargar los usuarios" [mensaje]="error()!">
+      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()">
+        <ui-icon name="refresh" [size]="16" /> Reintentar
+      </button>
+    </ui-empty>
+  } @else if (filtrados().length === 0) {
+    <ui-empty
+      icono="usuarios"
+      [titulo]="hayFiltros() ? 'Sin resultados' : 'Aún no hay usuarios'"
+      [mensaje]="hayFiltros() ? 'Ningún usuario coincide con los filtros.' : 'Crea el primer usuario para empezar.'"
+    >
+      @if (hayFiltros()) {
+        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="limpiarFiltros()">Limpiar filtros</button>
+      } @else {
+        <button *hasPermiso="permisos.CREAR_USUARIOS" type="button" class="ui-btn ui-btn--primary ui-btn--sm" (click)="abrirCrear()">
+          <ui-icon name="plus" [size]="16" /> Nuevo usuario
+        </button>
+      }
+    </ui-empty>
+  } @else {
+    <div class="ui-table-wrap">
+      <table class="ui-table ui-table--compacta ui-table--tarjetas" appColumnasRedimensionables aria-label="Usuarios">
+        <thead>
+          <tr>
+            <th scope="col" class="col-w-principal">Usuario</th>
+            <th scope="col" class="col-w-estado">Estado</th>
+            @if (puedeResumen()) {
+              <th scope="col" class="col-w-etiquetas">Roles</th>
+              <th scope="col" class="col-w-num num col-p3">Permisos</th>
+            }
+            <th scope="col" class="col-w-fecha col-p3">Último cambio</th>
+            <th scope="col" class="col-actions">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (usuario of paginados(); track usuario.id) {
+            <tr [class.fila-activa]="usuario.id === detalle()?.id">
+              <td class="celda-principal">
+                <div class="ui-person">
+                  <span class="ui-avatar" aria-hidden="true">{{ iniciales(usuario) }}</span>
+                  <span class="ui-stack">
+                    <button type="button" class="ui-link-btn ui-table__primary" (click)="abrirDetalle(usuario)"
+                      [attr.aria-label]="'Ver detalle de ' + usuario.nombre + ' ' + usuario.apellido">
+                      {{ usuario.nombre }} {{ usuario.apellido }}
+                    </button>
+                    <span class="u-muted">{{ formatearLogin(usuario.usuario) }} · <span [title]="usuario.email">{{ usuario.email }}</span></span>
+                  </span>
+                </div>
+              </td>
+              <td class="celda-estado">
+                <span class="tag-list">
+                  @if (usuario.activo) {
+                    <span class="ui-badge ui-badge--success"><span class="ui-dot" aria-hidden="true"></span> Activo</span>
+                  } @else {
+                    <span class="ui-badge ui-badge--neutral"><span class="ui-dot" aria-hidden="true"></span> Inactivo</span>
+                  }
+                  @switch (proteccion(usuario)) {
+                    @case ('sistema') {
+                      <span class="ui-badge ui-badge--neutral" [title]="bloqueoAccesos(usuario)"><ui-icon name="lock" [size]="12" /> Protegido</span>
+                    }
+                    @case ('propio') {
+                      <span class="ui-badge ui-badge--info">Tú</span>
+                    }
+                  }
+                </span>
+              </td>
+              @if (puedeResumen()) {
+                <td data-label="Roles">
+                  @if (resumenDe(usuario.id); as fila) {
+                    @if (fila.roles.length) {
+                      <span class="tag-list" [title]="fila.roles.join(', ')">
+                        @for (nombre of fila.roles.slice(0, 2); track nombre) {
+                          <span class="ui-badge ui-badge--brand">{{ nombre }}</span>
+                        }
+                        @if (fila.roles.length > 2) {
+                          <span class="ui-badge ui-badge--neutral">+{{ fila.roles.length - 2 }}<span class="u-sr-only"> roles más: {{ fila.roles.slice(2).join(', ') }}</span></span>
+                        }
+                      </span>
+                    } @else {
+                      <span class="ui-badge ui-badge--warning">Sin rol</span>
+                    }
+                  } @else if (cargandoResumen()) {
+                    <span class="ui-skeleton celda-skeleton"><span class="u-sr-only">Cargando</span></span>
+                  } @else {
+                    <span class="u-muted" title="No se pudo obtener el resumen de accesos">No disponible</span>
+                  }
+                </td>
+                <td class="num col-p3" data-label="Permisos">
+                  @if (resumenDe(usuario.id); as fila) {
+                    <button type="button" class="ui-link-btn" (click)="abrirPermisos(usuario)"
+                      [attr.aria-label]="fila.permisos.length + ' permisos efectivos de ' + formatearLogin(usuario.usuario) + '. Ver detalle'">
+                      {{ fila.permisos.length }}
+                    </button>
+                  } @else if (cargandoResumen()) {
+                    <span class="ui-skeleton celda-skeleton"><span class="u-sr-only">Cargando</span></span>
+                  } @else {
+                    <span class="u-muted">No disponible</span>
+                  }
+                </td>
+              }
+              <td class="col-p3" data-label="Último cambio">
+                <span [title]="(usuario.actualizadoEn ?? usuario.creadoEn) | fechaHora">
+                  {{ (usuario.actualizadoEn ?? usuario.creadoEn) | fechaHora: 'relativa' }}
+                </span>
+              </td>
+              <td class="celda-acciones">
+                <div class="row-actions">
+                  <button *hasPermiso="permisos.ASIGNAR_ROLES" type="button" class="ui-icon-btn"
+                    [title]="bloqueoAccesos(usuario) ?? 'Roles'"
+                    [attr.aria-label]="'Roles de ' + formatearLogin(usuario.usuario)"
+                    [attr.aria-disabled]="!!bloqueoAccesos(usuario) || null" (click)="abrirRoles(usuario)">
+                    <ui-icon name="shieldCheck" [size]="18" />
+                  </button>
+                  <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" class="ui-icon-btn"
+                    [title]="bloqueoEdicion(usuario) ?? 'Editar'"
+                    [attr.aria-label]="'Editar a ' + formatearLogin(usuario.usuario)"
+                    [attr.aria-disabled]="!!bloqueoEdicion(usuario) || null" (click)="abrirEditar(usuario)">
+                    <ui-icon name="edit" [size]="18" />
+                  </button>
+                  <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" class="ui-icon-btn"
+                    [class.ui-icon-btn--danger]="usuario.activo && !bloqueoAccesos(usuario)"
+                    [title]="bloqueoAccesos(usuario) ?? (usuario.activo ? 'Desactivar' : 'Activar')"
+                    [attr.aria-label]="(usuario.activo ? 'Desactivar a ' : 'Activar a ') + formatearLogin(usuario.usuario)"
+                    [attr.aria-disabled]="!!bloqueoAccesos(usuario) || null" (click)="alternarActivo(usuario)">
+                    <ui-icon [name]="usuario.activo ? 'userX' : 'userCheck'" [size]="18" />
+                  </button>
+                  <button type="button" class="ui-icon-btn" title="Detalle"
+                    [attr.aria-label]="'Más acciones y detalle de ' + formatearLogin(usuario.usuario)" (click)="abrirDetalle(usuario)">
+                    <ui-icon name="more" [size]="18" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <ui-paginador
+      [pagina]="paginaActual()"
+      [total]="filtrados().length"
+      [porPagina]="tamano()"
+      (paginaCambia)="irAPagina($event)"
+      (porPaginaCambia)="cambiarTamano($event)"
+    />
+  }
+</div>
+
+<!-- Panel de detalle -->
+<ui-modal
+  [abierto]="!!detalle()"
+  [lateral]="true"
+  [titulo]="detalle() ? detalle()!.nombre + ' ' + detalle()!.apellido : ''"
+  [subtitulo]="detalle() ? formatearLogin(detalle()!.usuario) + ' · ' + detalle()!.email : ''"
+  (cerrar)="cerrarDetalle()"
+>
+  @if (detalle(); as u) {
+    <div class="ui-tabs" role="tablist" aria-label="Secciones del usuario">
+      <button type="button" role="tab" class="ui-tab" id="tab-resumen" aria-controls="panel-resumen"
+        [attr.aria-selected]="pestana() === 'resumen'" (click)="pestana.set('resumen')">Resumen</button>
+      <button type="button" role="tab" class="ui-tab" id="tab-accesos" aria-controls="panel-accesos"
+        [attr.aria-selected]="pestana() === 'accesos'" (click)="pestana.set('accesos')">Accesos</button>
+      <button *hasPermiso="permisos.VER_AUDITORIA" type="button" role="tab" class="ui-tab" id="tab-historial"
+        aria-controls="panel-historial" [attr.aria-selected]="pestana() === 'historial'" (click)="pestana.set('historial')">Historial</button>
+    </div>
+
+    @switch (pestana()) {
+      @case ('resumen') {
+        <section id="panel-resumen" role="tabpanel" aria-labelledby="tab-resumen">
+          <dl class="ui-dl">
+            <dt>Usuario</dt><dd>{{ formatearLogin(u.usuario) }}</dd>
+            <dt>Correo electrónico</dt><dd>{{ u.email }}</dd>
+            <dt>Teléfono</dt><dd>{{ u.telefono || 'Sin teléfono' }}</dd>
+            <dt>Estado</dt><dd>{{ u.activo ? 'Activo' : 'Inactivo' }}</dd>
+            <dt>Creado</dt><dd>{{ u.creadoEn | fechaHora }} por {{ u.creadoPor | actorLabel }}</dd>
+            <dt>Último cambio</dt>
+            <dd>{{ u.actualizadoEn ? (u.actualizadoEn | fechaHora) + ' por ' + (u.actualizadoPor | actorLabel) : 'Sin cambios' }}</dd>
+          </dl>
+          @if (bloqueoAccesos(u); as motivo) {
+            <p class="modal-hint detalle__aviso"><ui-icon name="lock" [size]="14" /> {{ motivo }}</p>
+          }
+        </section>
+      }
+      @case ('accesos') {
+        <section id="panel-accesos" role="tabpanel" aria-labelledby="tab-accesos" class="detalle__accesos">
+          @if (resumenDe(u.id); as fila) {
+            <h3 class="detalle__titulo">Roles</h3>
+            @if (fila.roles.length) {
+              <span class="tag-list">
+                @for (nombre of fila.roles; track nombre) { <span class="ui-badge ui-badge--brand">{{ nombre }}</span> }
+              </span>
+            } @else {
+              <p class="ui-hint">Sin rol: este usuario no recibe permisos por rol.</p>
+            }
+            <h3 class="detalle__titulo">Permisos efectivos ({{ fila.permisos.length }})</h3>
+            @if (fila.permisos.length) {
+              <ul class="detalle__lista">
+                @for (nombre of fila.permisos; track nombre) { <li><span class="credencial">{{ nombre }}</span></li> }
+              </ul>
+            } @else {
+              <p class="ui-hint">No tiene ningún permiso efectivo.</p>
+            }
+          } @else {
+            <p class="ui-hint">El resumen de accesos no está disponible con tus permisos.</p>
+          }
+          <div class="detalle__acciones">
+            <button *hasPermiso="permisos.ASIGNAR_ROLES" type="button" class="ui-btn ui-btn--secondary ui-btn--sm"
+              [attr.aria-disabled]="!!bloqueoAccesos(u) || null" [title]="bloqueoAccesos(u) ?? ''" (click)="abrirRoles(u)">
+              <ui-icon name="shieldCheck" [size]="16" /> Gestionar roles
+            </button>
+            <button *hasPermiso="permisos.VER_PERMISOS" type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="abrirPermisos(u)">
+              <ui-icon name="key" [size]="16" /> Ver por qué tiene cada permiso
+            </button>
+          </div>
+        </section>
+      }
+      @case ('historial') {
+        <section id="panel-historial" role="tabpanel" aria-labelledby="tab-historial">
+          <ui-historial [relacionadoCon]="'USUARIO:' + u.id" [actorId]="u.id" />
+        </section>
+      }
+    }
+  }
+
+  <div modal-footer class="modal-foot detalle__pie">
+    @if (detalle(); as u) {
+      <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" class="ui-btn ui-btn--secondary ui-btn--sm"
+        [attr.aria-disabled]="!!bloqueoEdicion(u) || null" [title]="bloqueoEdicion(u) ?? ''" (click)="abrirEditar(u)">
+        <ui-icon name="edit" [size]="16" /> Editar
+      </button>
+      <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" class="ui-btn ui-btn--secondary ui-btn--sm"
+        [attr.aria-disabled]="!!bloqueoAccesos(u) || null" [title]="bloqueoAccesos(u) ?? ''" (click)="abrirRestablecer(u)">
+        <ui-icon name="key" [size]="16" /> Restablecer contraseña
+      </button>
+      <button *hasPermiso="permisos.ELIMINAR_USUARIOS" type="button" class="ui-btn ui-btn--danger ui-btn--sm"
+        [attr.aria-disabled]="!!bloqueoAccesos(u) || null" [title]="bloqueoAccesos(u) ?? ''" (click)="confirmarEliminar(u)">
+        <ui-icon name="trash" [size]="16" /> Eliminar
+      </button>
+    }
+  </div>
+</ui-modal>
+
+<!-- Alta / edición -->
+<ui-modal
+  [abierto]="formAbierto()"
+  ancho="lg"
+  [titulo]="editando() ? 'Editar usuario' : 'Nuevo usuario'"
+  [subtitulo]="editando() ? 'La contraseña se restablece desde el detalle del usuario.' : ''"
+  (cerrar)="cerrarForm()"
+>
+  <form id="form-usuario" class="grid-form" [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
+    <p class="ui-hint grid-form__nota">Los campos con <span aria-hidden="true">*</span> son obligatorios.</p>
+
+    <div class="ui-field">
+      <label class="ui-label" for="usr-usuario">Usuario <span class="ui-required" aria-hidden="true">*</span></label>
+      <input id="usr-usuario" class="ui-input" [class.ui-input--invalid]="campoInvalido('usuario')" formControlName="usuario"
+        placeholder="jperez" autocomplete="off" aria-required="true"
+        [attr.aria-invalid]="campoInvalido('usuario') || null"
+        [attr.aria-describedby]="campoInvalido('usuario') ? 'usr-usuario-error' : null" />
+      @if (campoInvalido('usuario')) {
+        <span class="ui-error" id="usr-usuario-error">{{ errorServidor('usuario') ?? 'El usuario es obligatorio (máximo 50 caracteres).' }}</span>
+      }
+    </div>
+
+    <div class="ui-field">
+      <label class="ui-label" for="usr-email">Correo electrónico <span class="ui-required" aria-hidden="true">*</span></label>
+      <input id="usr-email" type="email" class="ui-input" [class.ui-input--invalid]="campoInvalido('email')" formControlName="email"
+        placeholder="correo@dominio.com" autocomplete="email" aria-required="true"
+        [attr.aria-invalid]="campoInvalido('email') || null"
+        [attr.aria-describedby]="campoInvalido('email') ? 'usr-email-error' : null" />
+      @if (campoInvalido('email')) {
+        <span class="ui-error" id="usr-email-error">{{ errorServidor('email') ?? 'Ingresa un correo electrónico válido.' }}</span>
+      }
+    </div>
+
+    <div class="ui-field">
+      <label class="ui-label" for="usr-nombre">Nombre <span class="ui-required" aria-hidden="true">*</span></label>
+      <input id="usr-nombre" class="ui-input" [class.ui-input--invalid]="campoInvalido('nombre')" formControlName="nombre"
+        autocomplete="given-name" aria-required="true"
+        [attr.aria-invalid]="campoInvalido('nombre') || null"
+        [attr.aria-describedby]="campoInvalido('nombre') ? 'usr-nombre-error' : null" />
+      @if (campoInvalido('nombre')) {
+        <span class="ui-error" id="usr-nombre-error">{{ errorServidor('nombre') ?? 'El nombre es obligatorio.' }}</span>
+      }
+    </div>
+
+    <div class="ui-field">
+      <label class="ui-label" for="usr-apellido">Apellido <span class="ui-required" aria-hidden="true">*</span></label>
+      <input id="usr-apellido" class="ui-input" [class.ui-input--invalid]="campoInvalido('apellido')" formControlName="apellido"
+        autocomplete="family-name" aria-required="true"
+        [attr.aria-invalid]="campoInvalido('apellido') || null"
+        [attr.aria-describedby]="campoInvalido('apellido') ? 'usr-apellido-error' : null" />
+      @if (campoInvalido('apellido')) {
+        <span class="ui-error" id="usr-apellido-error">{{ errorServidor('apellido') ?? 'El apellido es obligatorio.' }}</span>
+      }
+    </div>
+
+    <div class="ui-field">
+      <label class="ui-label" for="usr-telefono">Teléfono</label>
+      <input id="usr-telefono" type="tel" class="ui-input" formControlName="telefono" placeholder="Opcional" autocomplete="tel"
+        [attr.aria-invalid]="campoInvalido('telefono') || null"
+        [attr.aria-describedby]="campoInvalido('telefono') ? 'usr-telefono-error' : null" />
+      @if (campoInvalido('telefono')) {
+        <span class="ui-error" id="usr-telefono-error">{{ errorServidor('telefono') ?? 'Máximo 20 caracteres.' }}</span>
+      }
+    </div>
+
+    @if (!editando()) {
+      <div class="ui-field ui-field--full">
+        <label class="ui-label" for="usr-contrasena">Contraseña <span class="ui-required" aria-hidden="true">*</span></label>
+        <input id="usr-contrasena" class="ui-input" [type]="verContrasena() ? 'text' : 'password'"
+          [class.ui-input--invalid]="campoInvalido('contrasena')" formControlName="contrasena"
+          autocomplete="new-password" aria-required="true"
+          [attr.aria-invalid]="campoInvalido('contrasena') || null"
+          [attr.aria-describedby]="campoInvalido('contrasena') ? 'usr-reglas usr-contrasena-error' : 'usr-reglas'" />
+        <ui-requisitos-contrasena id="usr-reglas" [valor]="valorContrasena()" />
+        @if (campoInvalido('contrasena')) {
+          <span class="ui-error" id="usr-contrasena-error">{{ errorServidor('contrasena') ?? 'La contraseña no cumple los requisitos.' }}</span>
+        }
+      </div>
+      <div class="ui-field">
+        <label class="ui-label" for="usr-confirmacion">Confirmar contraseña <span class="ui-required" aria-hidden="true">*</span></label>
+        <input id="usr-confirmacion" class="ui-input" [type]="verContrasena() ? 'text' : 'password'"
+          [class.ui-input--invalid]="campoInvalido('confirmacion')" formControlName="confirmacion"
+          autocomplete="new-password" aria-required="true"
+          [attr.aria-invalid]="campoInvalido('confirmacion') || null"
+          [attr.aria-describedby]="campoInvalido('confirmacion') ? 'usr-confirmacion-error' : null" />
+        @if (campoInvalido('confirmacion')) {
+          <span class="ui-error" id="usr-confirmacion-error">Las contraseñas no coinciden.</span>
+        }
+      </div>
+      <div class="ui-field">
+        <span class="ui-label" aria-hidden="true">&nbsp;</span>
+        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" [attr.aria-pressed]="verContrasena()" (click)="verContrasena.update((v) => !v)">
+          <ui-icon [name]="verContrasena() ? 'eyeOff' : 'eye'" [size]="16" /> Mostrar contraseñas
+        </button>
+      </div>
+
+      @if (puedeAsignarRoles()) {
+        <fieldset class="ui-field ui-field--full roles-iniciales">
+          <legend class="ui-label">Roles iniciales</legend>
+          <p class="ui-hint">Sin roles, la cuenta no tendrá acceso. Puedes asignarlos ahora o más tarde.</p>
+          @if (catalogoRoles().length === 0) {
+            <p class="ui-hint">No hay roles activos disponibles.</p>
+          } @else {
+            <div class="roles-iniciales__lista">
+              @for (rol of catalogoRoles(); track rol.id) {
+                <label class="check">
+                  <input type="checkbox" [checked]="rolesIniciales().has(rol.id)" (change)="alternarRolInicial(rol.id)" />
+                  <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="14" /></span>
+                  <span>{{ rol.nombre }}</span>
+                </label>
+              }
+            </div>
+          }
+        </fieldset>
+      }
+    }
+
+    <label class="check">
+      <input type="checkbox" formControlName="activo" />
+      <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="14" /></span>
+      <span>Cuenta activa (puede iniciar sesión)</span>
+    </label>
+  </form>
+
+  <div modal-footer class="modal-foot">
+    <button type="button" class="ui-btn ui-btn--ghost" (click)="cerrarForm()">Cancelar</button>
+    <button type="submit" form="form-usuario" class="ui-btn ui-btn--primary" [attr.aria-disabled]="guardando() || null">
+      @if (guardando()) { <span class="ui-spinner ui-spinner--sm" aria-hidden="true"></span> }
+      {{ editando() ? 'Guardar cambios' : 'Crear usuario' }}
+    </button>
+  </div>
+</ui-modal>
+
+<ui-confirmacion
+  [abierto]="!!aDesactivar()"
+  titulo="Desactivar usuario"
+  [pregunta]="'¿Desactivar a ' + (aDesactivar()?.nombre ?? '') + ' ' + (aDesactivar()?.apellido ?? '') + ' (' + formatearLogin(aDesactivar()?.usuario) + ')?'"
+  descripcion="No podrá iniciar sesión y sus sesiones abiertas dejarán de funcionar. Sus roles y permisos se conservan y podrás reactivarlo. Quedará registrado en la auditoría."
+  etiqueta="Desactivar usuario"
+  icono="userX"
+  [procesando]="cambiandoEstado()"
+  [conMotivo]="true"
+  (confirmar)="confirmarDesactivar($event)"
+  (cancelar)="aDesactivar.set(null)"
+/>
+
+<ui-confirmacion
+  [abierto]="!!aEliminar()"
+  titulo="Eliminar usuario"
+  [pregunta]="'¿Eliminar a ' + (aEliminar()?.nombre ?? '') + ' ' + (aEliminar()?.apellido ?? '') + '?'"
+  [descripcion]="formatearLogin(aEliminar()?.usuario) + ' perderá todos sus accesos. Esta acción no se puede deshacer; si solo quieres impedir el acceso, desactívalo.'"
+  etiqueta="Eliminar usuario"
+  icono="trash"
+  [procesando]="eliminando()"
+  (confirmar)="eliminar()"
+  (cancelar)="aEliminar.set(null)"
+/>
+
+<app-roles-usuario [usuario]="rolesDe()" (cerrar)="alCerrarAccesos($event)" />
+<app-permisos-usuario
+  [usuario]="permisosDe()"
+  [bloqueo]="permisosDe() ? bloqueoOverrides(permisosDe()!) : null"
+  (cerrar)="alCerrarAccesos($event)"
+/>
+<app-restablecer-contrasena [usuario]="restablecerDe()" (cerrar)="restablecerDe.set(null)" />

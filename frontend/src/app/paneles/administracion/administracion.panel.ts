@@ -1,0 +1,68 @@
+import { PERMISOS } from '../../core/config/permisos';
+import { PanelDef } from '../panel.model';
+
+/** Panel de Administración: gobierno de identidades, accesos y auditoría. */
+export const PANEL_ADMINISTRACION: PanelDef = {
+  id: 'administracion',
+  nombre: 'Administración',
+  descripcion: 'Usuarios, roles, permisos y bitácora de auditoría.',
+  icono: 'shield',
+  tono: 'indigo',
+  ruta: 'admin',
+  grupos: [
+    { id: 'supervision', nombre: 'Supervisión' },
+    { id: 'gestion', nombre: 'Gestión' },
+  ],
+  modulos: [
+    {
+      id: 'resumen',
+      nombre: 'Resumen',
+      descripcion: 'Indicadores clave y riesgos del control de accesos.',
+      icono: 'dashboard',
+      ruta: 'resumen',
+      permiso: PERMISOS.DASHBOARD_ADMIN,
+      grupo: 'supervision',
+      cargar: () => import('./modulos/resumen/resumen').then((m) => m.Resumen),
+    },
+    {
+      id: 'auditoria',
+      nombre: 'Auditoría',
+      descripcion: 'Bitácora inmutable de accesos y cambios.',
+      icono: 'history',
+      ruta: 'auditoria',
+      permiso: PERMISOS.VER_AUDITORIA,
+      grupo: 'supervision',
+      cargar: () => import('./modulos/auditoria/auditoria').then((m) => m.Auditoria),
+    },
+    {
+      id: 'usuarios',
+      nombre: 'Usuarios',
+      descripcion: 'Altas, edición, estado y asignación de roles.',
+      icono: 'usuarios',
+      ruta: 'usuarios',
+      permiso: PERMISOS.VER_USUARIOS,
+      grupo: 'gestion',
+      cargar: () => import('./modulos/usuarios/usuarios').then((m) => m.Usuarios),
+    },
+    {
+      id: 'roles',
+      nombre: 'Roles',
+      descripcion: 'Roles y los permisos que conceden.',
+      icono: 'roles',
+      ruta: 'roles',
+      permiso: PERMISOS.VER_ROLES,
+      grupo: 'gestion',
+      cargar: () => import('./modulos/roles/roles').then((m) => m.Roles),
+    },
+    {
+      id: 'permisos',
+      nombre: 'Permisos',
+      descripcion: 'Catálogo de permisos del sistema.',
+      icono: 'permisos',
+      ruta: 'permisos',
+      permiso: PERMISOS.VER_PERMISOS,
+      grupo: 'gestion',
+      cargar: () => import('./modulos/permisos/permisos').then((m) => m.Permisos),
+    },
+  ],
+};

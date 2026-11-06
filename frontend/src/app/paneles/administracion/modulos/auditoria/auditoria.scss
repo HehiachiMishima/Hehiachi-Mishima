@@ -1,0 +1,159 @@
+@use 'breakpoints' as bp;
+
+.auditoria__sello {
+  margin-top: var(--space-2);
+}
+
+.auditoria__busqueda {
+  flex: 2 1 220px;
+  min-width: min(100%, 220px);
+}
+
+/* Resultado: ancho natural (los tres chips en una línea); si no cabe, baja de fila. */
+.filtros .auditoria__resultados {
+  flex: 0 0 max-content;
+  max-width: 100%;
+}
+
+.auditoria__resultados {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.auditoria__vistas {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+.auditoria__dia th {
+  position: sticky;
+  top: var(--table-head-h);
+  z-index: 1;
+  height: 32px;
+  padding: 0 var(--table-cell-px-compact);
+  text-align: left;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.auditoria__dia:hover {
+  background: transparent !important;
+}
+
+/* Hora e IP: monoespaciadas y alineadas. */
+.auditoria__tabla td.u-mono {
+  font-size: var(--fs-xs);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.auditoria__detalle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.auditoria__todos {
+  margin-bottom: var(--space-2);
+  font-size: var(--fs-sm);
+}
+
+.auditoria__cambio td {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.auditoria__tecnico summary {
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  color: var(--text-2);
+}
+
+.auditoria__tecnico pre {
+  max-height: 280px;
+  overflow: auto;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  white-space: pre-wrap;
+}
+
+.auditoria__subtitulo {
+  margin-bottom: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--text-3);
+}
+
+.auditoria__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* La acción es el dato principal de la fila: tinta de texto, enlace al pasar. */
+.auditoria__tabla .ui-link-btn[data-fila-evento] {
+  color: var(--text);
+
+  &:hover { color: var(--color-link-blue); }
+}
+
+.auditoria__tabla .ui-link-btn:not([data-fila-evento]) {
+  font-weight: var(--fw-medium);
+}
+
+/* Lacre: los eventos denegados o fallidos llevan el filete de peligro. */
+.auditoria__tabla tbody tr:has(.celda-estado .ui-badge--danger) td:first-child {
+  box-shadow: inset 3px 0 var(--danger);
+}
+
+/* ===================== Móvil: bitácora en tarjetas ===================== */
+@include bp.down(md) {
+  .auditoria__tabla {
+    tbody tr.auditoria__dia {
+      display: block;
+      padding: 0;
+      background: none;
+      border: 0;
+      box-shadow: none;
+    }
+
+    .auditoria__dia th {
+      display: block;
+      position: sticky;
+      top: calc(var(--topbar-h) + var(--safe-top));
+      height: auto;
+      padding: var(--space-2) var(--space-1);
+      background: var(--bg);
+      border: 0;
+      font-size: var(--fs-2xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-caps);
+      color: var(--text-3);
+    }
+
+    .auditoria__hora { grid-column: 1; grid-row: 1; align-self: center; }
+    .auditoria__accion { grid-column: 1 / -1; font-size: var(--fs-base); }
+
+    tbody tr:has(.celda-estado .ui-badge--danger) {
+      border-left: 3px solid var(--danger);
+
+      td:first-child { box-shadow: none; }
+    }
+  }
+}

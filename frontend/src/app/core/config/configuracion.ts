@@ -14,7 +14,6 @@ export const CONFIG = {
     login: '/login',
     inicio: '/',
     sinAcceso: '/sin-acceso',
-    auditoria: '/admin/auditoria',
   },
   notificaciones: {
     /** Duración de los avisos no críticos; se pausa al pasar el puntero o el foco. Los errores no se cierran solos. */

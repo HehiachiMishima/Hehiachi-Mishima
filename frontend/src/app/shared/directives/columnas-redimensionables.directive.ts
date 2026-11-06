@@ -8,8 +8,13 @@ import { AfterViewInit, Directive, ElementRef, OnDestroy, inject } from '@angula
  *
  * Los anchos se calculan después de pintarse las filas (los botones condicionados
  * con *hasPermiso se renderizan en un efecto, posterior a ngAfterViewInit).
+ *
+ * Solo en escritorio amplio (≥1280 px): por debajo la tabla oculta columnas de
+ * baja prioridad y en móvil cada fila es una tarjeta, así que medir allí fijaría
+ * anchos erróneos. Si la ventana crece hasta ese ancho, se mide entonces.
  */
 const ANCHO_MINIMO = 72;
+const ESCRITORIO = '(min-width: 1280px)';
 
 @Directive({ selector: 'table[appColumnasRedimensionables]' })
 export class ColumnasRedimensionables implements AfterViewInit, OnDestroy {
@@ -20,6 +25,22 @@ export class ColumnasRedimensionables implements AfterViewInit, OnDestroy {
   private marcoAcciones: number | null = null;
 
   ngAfterViewInit(): void {
+    const consulta = window.matchMedia(ESCRITORIO);
+    if (consulta.matches) {
+      this.programar();
+      return;
+    }
+    const alCambiar = (evento: MediaQueryListEvent): void => {
+      if (evento.matches) {
+        consulta.removeEventListener('change', alCambiar);
+        this.programar();
+      }
+    };
+    consulta.addEventListener('change', alCambiar);
+    this.limpiezas.push(() => consulta.removeEventListener('change', alCambiar));
+  }
+
+  private programar(): void {
     this.temporizador = window.setTimeout(() => {
       this.temporizador = null;
       this.marco = requestAnimationFrame(() => {

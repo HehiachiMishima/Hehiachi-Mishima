@@ -68,7 +68,7 @@ export const RESULTADOS_AUDITORIA: Record<string, { etiqueta: string; icono: str
   DENEGADO: { etiqueta: 'Denegado', icono: 'lock', tono: 'danger' },
 };
 
-/** Acciones que modifican privilegios (para indicadores del dashboard). */
+/** Acciones que modifican privilegios (para indicadores del Resumen). */
 export const ACCIONES_PRIVILEGIO = ['ROL_ASIGNADO', 'OVERRIDE_ESTABLECIDO', 'PERMISO_ASIGNADO_ROL'];
 
 /** Máximo de filas que el backend exporta a CSV (y tope del total que informa). */
