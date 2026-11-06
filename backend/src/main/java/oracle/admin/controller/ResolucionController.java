@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -26,22 +25,22 @@ public class ResolucionController {
     }
 
     @GetMapping("/efectivos")
-    public Mono<ApiResponse<List<PermisoEfectivoResponse>>> efectivos(@PathVariable Long usuarioId) {
+    public ApiResponse<List<PermisoEfectivoResponse>> efectivos(@PathVariable Long usuarioId) {
         return resolucionPermisosService.efectivos(usuarioId);
     }
 
     @GetMapping("/finales")
-    public Mono<ApiResponse<List<PermisoFinalResponse>>> finales(@PathVariable Long usuarioId) {
+    public ApiResponse<List<PermisoFinalResponse>> finales(@PathVariable Long usuarioId) {
         return resolucionPermisosService.finales(usuarioId);
     }
 
     @GetMapping("/permitidos")
-    public Mono<ApiResponse<List<PermisoFinalResponse>>> permitidos(@PathVariable Long usuarioId) {
+    public ApiResponse<List<PermisoFinalResponse>> permitidos(@PathVariable Long usuarioId) {
         return resolucionPermisosService.permitidos(usuarioId);
     }
 
     @GetMapping("/{permisoId}/tiene")
-    public Mono<ApiResponse<Boolean>> tiene(@PathVariable Long usuarioId, @PathVariable Long permisoId) {
+    public ApiResponse<Boolean> tiene(@PathVariable Long usuarioId, @PathVariable Long permisoId) {
         return resolucionPermisosService.tienePermiso(usuarioId, permisoId);
     }
 }

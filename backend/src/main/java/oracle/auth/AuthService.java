@@ -30,8 +30,6 @@ import oracle.common.support.Trazas;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /**
  * Autenticacion: valida credenciales, aplica el bloqueo por cuenta, respeta el
@@ -96,15 +94,12 @@ public class AuthService {
      * Login. El cupo del limitador ya se reservo en el controlador; aqui, si
      * es correcto, se limpia el cubo IP+usuario y se devuelve el intento al cubo IP.
      */
-    public Mono<ApiResponse<AuthResponse>> login(LoginRequest peticion, String claveUsuario, String claveIp) {
+    public ApiResponse<AuthResponse> login(LoginRequest peticion, String claveUsuario, String claveIp) {
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "AuthService.login", () -> autenticar(peticion, ctx)))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(respuesta -> {
-                    rateLimiter.limpiar(claveUsuario);
-                    rateLimiter.liberar(claveIp);
-                    return ApiResponse.ok("Inicio de sesión correcto.", respuesta);
-                });
+        var respuesta = Trazas.medir(log, "AuthService.login", () -> autenticar(peticion, ctx));
+        rateLimiter.limpiar(claveUsuario);
+        rateLimiter.liberar(claveIp);
+        return ApiResponse.ok("Inicio de sesión correcto.", respuesta);
     }
 
     /**
@@ -112,20 +107,17 @@ public class AuthService {
      * que el filtro JWT, asi que no agrega consultas en el caso comun y refleja
      * al instante los cambios de rol/permiso (que invalidan esa cache).
      */
-    public Mono<ApiResponse<SesionResponse>> sesionActual(Long usuarioId) {
-        return Mono.fromCallable(() -> {
-                    Usuario usuario = usuarioRepository.findById(usuarioId)
-                            .orElseThrow(() -> new NoAutorizadoException("Tu sesión ya no es válida."));
-                    if (!Boolean.TRUE.equals(usuario.getActivo())) {
-                        throw new NoAutorizadoException("Tu cuenta está desactivada.");
-                    }
-                    List<String> permisos = autorizacionCache.cargar(usuarioId).autoridades().stream()
-                            .map(a -> a.getAuthority())
-                            .toList();
-                    return ApiResponse.ok("Sesión vigente.",
-                            new SesionResponse(UsuarioResponse.of(usuario, true), permisos));
-                })
-                .subscribeOn(Schedulers.boundedElastic());
+    public ApiResponse<SesionResponse> sesionActual(Long usuarioId) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> new NoAutorizadoException("Tu sesión ya no es válida."));
+        if (!Boolean.TRUE.equals(usuario.getActivo())) {
+            throw new NoAutorizadoException("Tu cuenta está desactivada.");
+        }
+        List<String> permisos = autorizacionCache.cargar(usuarioId).autoridades().stream()
+                .map(a -> a.getAuthority())
+                .toList();
+        return ApiResponse.ok("Sesión vigente.",
+                new SesionResponse(UsuarioResponse.of(usuario, true), permisos));
     }
 
     /**
@@ -133,37 +125,36 @@ public class AuthService {
      * credenciales (revoca TODOS los tokens anteriores, incluidos los robados) y
      * devuelve un token nuevo para que esta sesion continue.
      */
-    public Mono<ApiResponse<AuthResponse>> cambiarContrasena(Long usuarioId, CambiarContrasenaRequest peticion) {
+    public ApiResponse<AuthResponse> cambiarContrasena(Long usuarioId, CambiarContrasenaRequest peticion) {
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "AuthService.cambiarContrasena", () -> transacciones.ejecutar(() -> {
-                            Usuario usuario = usuarioRepository.findById(usuarioId)
-                                    .orElseThrow(() -> new NoAutorizadoException("Tu sesión ya no es válida."));
-                            if (!Boolean.TRUE.equals(usuario.getActivo())) {
-                                throw new NoAutorizadoException("Tu cuenta está desactivada.");
-                            }
-                            if (Protecciones.esUsuarioRaiz(usuario.getUsuario())) {
-                                throw new OperacionNoPermitidaException("La contraseña de " + Protecciones.USUARIO_RAIZ
-                                        + " está protegida en la base de datos y no se puede cambiar desde la aplicación.");
-                            }
-                            if (!passwordEncoder.matches(peticion.contrasenaActual(), usuario.getContrasena())) {
-                                auditoria.registrar(ctx, AccionAuditoria.CONTRASENA_CAMBIADA, EntidadAuditoria.USUARIO,
-                                        usuarioId, ResultadoAuditoria.FALLO, Detalle.motivo("contrasena_actual_incorrecta"));
-                                throw new NoAutorizadoException("Tu contraseña actual no es correcta.");
-                            }
-                            if (passwordEncoder.matches(peticion.contrasenaNueva(), usuario.getContrasena())) {
-                                throw new OperacionNoPermitidaException(
-                                        "La contraseña nueva debe ser distinta de la actual.");
-                            }
-                            usuario.setContrasena(passwordEncoder.encode(peticion.contrasenaNueva()));
-                            usuario.revocarCredenciales();
-                            Auditoria.alActualizar(usuario, usuarioId);
-                            usuarioRepository.save(usuario);
-                            autorizacionCache.invalidar(usuarioId);
-                            auditoria.exito(ctx, AccionAuditoria.CONTRASENA_CAMBIADA, EntidadAuditoria.USUARIO,
-                                    usuarioId, Detalle.de("origen", "propia"));
-                            return ApiResponse.ok("Contraseña actualizada.", emitir(usuario));
-                        })))
-                .subscribeOn(Schedulers.boundedElastic());
+        return Trazas.medir(log, "AuthService.cambiarContrasena", () -> transacciones.ejecutar(() -> {
+            Usuario usuario = usuarioRepository.findById(usuarioId)
+                    .orElseThrow(() -> new NoAutorizadoException("Tu sesión ya no es válida."));
+            if (!Boolean.TRUE.equals(usuario.getActivo())) {
+                throw new NoAutorizadoException("Tu cuenta está desactivada.");
+            }
+            if (Protecciones.esUsuarioRaiz(usuario.getUsuario())) {
+                throw new OperacionNoPermitidaException("La contraseña de " + Protecciones.USUARIO_RAIZ
+                        + " está protegida en la base de datos y no se puede cambiar desde la aplicación.");
+            }
+            if (!passwordEncoder.matches(peticion.contrasenaActual(), usuario.getContrasena())) {
+                auditoria.registrar(ctx, AccionAuditoria.CONTRASENA_CAMBIADA, EntidadAuditoria.USUARIO,
+                        usuarioId, ResultadoAuditoria.FALLO, Detalle.motivo("contrasena_actual_incorrecta"));
+                throw new NoAutorizadoException("Tu contraseña actual no es correcta.");
+            }
+            if (passwordEncoder.matches(peticion.contrasenaNueva(), usuario.getContrasena())) {
+                throw new OperacionNoPermitidaException(
+                        "La contraseña nueva debe ser distinta de la actual.");
+            }
+            usuario.setContrasena(passwordEncoder.encode(peticion.contrasenaNueva()));
+            usuario.revocarCredenciales();
+            Auditoria.alActualizar(usuario, usuarioId);
+            usuarioRepository.save(usuario);
+            autorizacionCache.invalidar(usuarioId);
+            auditoria.exito(ctx, AccionAuditoria.CONTRASENA_CAMBIADA, EntidadAuditoria.USUARIO,
+                    usuarioId, Detalle.de("origen", "propia"));
+            return ApiResponse.ok("Contraseña actualizada.", emitir(usuario));
+        }));
     }
 
     private AuthResponse autenticar(LoginRequest peticion, ContextoAuditoria ctx) {

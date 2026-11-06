@@ -104,7 +104,7 @@ class CargaTest extends ApiPrueba {
                 i -> get("/api/resolucion/usuarios/" + u.id() + "/efectivos", u.token())));
 
         StringBuilder informe = new StringBuilder("Prueba de carga: " + N + " peticiones simultaneas por escenario; "
-                + "BCRYPT_COSTE=" + System.getProperty("pruebas.bcrypt-coste", "4") + "; MySQL 8.4 en Testcontainers; "
+                + "BCRYPT_COSTE=" + System.getProperty("pruebas.bcrypt-coste", "4") + "; PostgreSQL 17 en Testcontainers; "
                 + Runtime.getRuntime().availableProcessors() + " CPU\n");
         r.forEach(x -> informe.append(x.linea()).append('\n'));
         System.out.println("\n===== CARGA =====\n" + informe + "=================\n");

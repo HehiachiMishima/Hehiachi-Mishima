@@ -6,8 +6,8 @@ import oracle.soporte.ApiPrueba;
 import org.junit.jupiter.api.Test;
 
 /**
- * El contexto completo arranca contra el MySQL efimero (Testcontainers) con
- * schema.sql + protection.admin.sql, y el usuario semilla queda creado.
+ * El contexto completo arranca contra el PostgreSQL efimero (Testcontainers);
+ * Flyway aplica las migraciones y el usuario semilla queda creado.
  */
 class BackendApplicationTests extends ApiPrueba {
 

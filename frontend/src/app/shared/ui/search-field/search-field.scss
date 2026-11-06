@@ -1,0 +1,25 @@
+@use 'design' as d;
+
+:host {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 24rem;
+}
+
+ui-icon {
+  position: absolute;
+  top: 50%;
+  left: d.space('3');
+  transform: translateY(-50%);
+  color: d.color('text-faint');
+  pointer-events: none;
+}
+
+input {
+  padding-left: 2.25rem;   // deja sitio a la lupa
+}
+
+.visually-hidden {
+  @include d.visually-hidden;
+}

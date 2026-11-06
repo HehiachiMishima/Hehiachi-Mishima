@@ -8,14 +8,12 @@
 #   docker compose up --build            # http://localhost:10000
 #   curl -i http://localhost:10000/api/health
 #
-# Perfil opcional "db-local" (desactivado por defecto): MySQL 8.4 en
-# contenedor con backend/schema.sql aplicado al crear el volumen, y una
-# segunda instancia de la app conectada a el en el puerto 10001:
+# Perfil opcional "db-local" (desactivado por defecto): PostgreSQL 17 en
+# contenedor y una segunda instancia de la app conectada a el en el puerto
+# 10001. Flyway crea el esquema "app" en el primer arranque:
 #
-#   docker compose --profile db-local up --build mysql app-db-local
-#   # luego (una sola vez): protection.admin.sql y, si aplica, migraciones
-#   docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" hehiachi_mishima < /sql/protection.admin.sql'
-#   docker compose exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" hehiachi_mishima < /migrations/V2__auditoria.sql'
+#   docker compose --profile db-local up --build postgres app-db-local
+#   docker compose exec postgres psql -U app hehiachi_mishima   # consola SQL
 # ============================================================
 
 x-app: &app
@@ -50,24 +48,22 @@ services:
       - "10000:10000"
 
   # ---------------- Perfil opcional: BD local ----------------
-  mysql:
-    image: mysql:8.4
+  postgres:
+    image: postgres:17-alpine
     profiles: ["db-local"]
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-local}
+      POSTGRES_DB: hehiachi_mishima
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app-local}
       TZ: UTC
-    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    # pg_stat_statements para auditar consultas (skill jus-stack / pg_health.sql).
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "pg_stat_statements.track=all"]
     ports:
-      - "127.0.0.1:3307:3306"
+      - "127.0.0.1:5433:5432"
     volumes:
-      - mysql-data:/var/lib/mysql
-      # schema.sql crea la BD hehiachi_mishima, tablas, vistas, triggers y seed.
-      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      # Scripts que se aplican a mano (ver cabecera).
-      - ./backend/protection.admin.sql:/sql/protection.admin.sql:ro
-      - ./backend/migrations:/migrations:ro
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      test: ["CMD-SHELL", "pg_isready -U app -d hehiachi_mishima"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -76,21 +72,22 @@ services:
     <<: *app
     profiles: ["db-local"]
     depends_on:
-      mysql:
+      postgres:
         condition: service_healthy
     environment:
       PORT: "10000"
       BACKEND_PORT: "2003"
       SPRING_PROFILES_ACTIVE: prod
-      DB_HOST: mysql
-      DB_PORT: "3306"
+      DB_CONEXION: ""
+      DB_HOST: postgres
+      DB_PORT: "5432"
       DB_NAME: hehiachi_mishima
-      DB_USER: root
-      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-local}
-      DB_PARAMS: useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USER: app
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-app-local}
+      DB_SSLMODE: disable
       CORS_ALLOWED_ORIGINS: http://localhost:10001
     ports:
       - "10001:10000"
 
 volumes:
-  mysql-data:
+  postgres-data:

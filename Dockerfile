@@ -7,7 +7,7 @@
 #   - supervisord es el PID 1: arranca ambos procesos, reenvia SIGTERM y
 #     los detiene en orden (nginx drena -> Spring graceful shutdown).
 #   - Todo corre como usuario NO root (uid 10001).
-#   - La base de datos es EXTERNA (Aiven/MySQL): no se incluye aqui.
+#   - La base de datos es EXTERNA (PostgreSQL; Flyway migra el esquema al arrancar).
 #   - backend/.env NUNCA entra en la imagen (.dockerignore); la config llega
 #     por variables de entorno (Render, docker run --env-file, compose).
 #

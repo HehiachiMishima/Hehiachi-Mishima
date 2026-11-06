@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Mono;
 
 /** Bitacora de auditoria: consulta, detalle, catalogo y exportacion CSV. */
 @RestController
@@ -32,13 +31,13 @@ public class AuditoriaController {
     }
 
     @GetMapping
-    public Mono<ApiResponse<PaginaResponse<AuditoriaEventoResponse>>> listar(
+    public ApiResponse<PaginaResponse<AuditoriaEventoResponse>> listar(
             @ModelAttribute AuditoriaFiltroRequest filtro) {
         return service.listar(filtro);
     }
 
     @GetMapping("/catalogo")
-    public Mono<ApiResponse<CatalogoAuditoriaResponse>> catalogo() {
+    public ApiResponse<CatalogoAuditoriaResponse> catalogo() {
         return service.catalogo();
     }
 
@@ -60,7 +59,7 @@ public class AuditoriaController {
     }
 
     @GetMapping("/{id}")
-    public Mono<ApiResponse<AuditoriaEventoResponse>> obtener(@PathVariable Long id) {
+    public ApiResponse<AuditoriaEventoResponse> obtener(@PathVariable Long id) {
         return service.obtener(id);
     }
 }

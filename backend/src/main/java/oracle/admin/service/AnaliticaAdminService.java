@@ -1,6 +1,7 @@
 package oracle.admin.service;
 
 import java.util.List;
+import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import oracle.admin.repository.AnaliticaAdminRepository;
 import oracle.admin.response.AnaliticaAdminResponse;
@@ -9,8 +10,6 @@ import oracle.common.response.ApiResponse;
 import oracle.common.support.EjecutorAnalitica;
 import oracle.common.support.Trazas;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /** Dashboard ejecutivo de Administracion: 5 agregaciones en paralelo, cacheadas (TTL). */
 @Slf4j
@@ -30,22 +29,19 @@ public class AnaliticaAdminService {
         this.cacheRespuestas = cacheRespuestas;
     }
 
-    public Mono<ApiResponse<AnaliticaAdminResponse>> analitica() {
-        return Mono.fromCallable(() -> Trazas.medir(log, "AnaliticaAdminService.analitica", () ->
-                        cacheRespuestas.obtener(CLAVE, () -> ejecutor.esperar(calcular()))))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(datos -> ApiResponse.ok("Analítica calculada.", datos));
+    public ApiResponse<AnaliticaAdminResponse> analitica() {
+        AnaliticaAdminResponse datos = Trazas.medir(log, "AnaliticaAdminService.analitica", () ->
+                cacheRespuestas.obtener(CLAVE, this::calcular));
+        return ApiResponse.ok("Analítica calculada.", datos);
     }
 
-    private Mono<AnaliticaAdminResponse> calcular() {
-        return Mono.zip(
-                r -> new AnaliticaAdminResponse((AnaliticaAdminResponse.Kpis) r[0],
-                        lista(r[1]), lista(r[2]), lista(r[3]), lista(r[4])),
-                ejecutor.consulta(repo::kpis),
-                ejecutor.consulta(repo::usuariosPorRol),
-                ejecutor.consulta(repo::permisosMasOtorgados),
-                ejecutor.consulta(repo::coberturaPaneles),
-                ejecutor.consulta(repo::altasPorMes));
+    private AnaliticaAdminResponse calcular() {
+        List<Supplier<?>> consultas = List.of(
+                repo::kpis, repo::usuariosPorRol, repo::permisosMasOtorgados, repo::coberturaPaneles,
+                repo::altasPorMes);
+        List<Object> r = ejecutor.todas(consultas);
+        return new AnaliticaAdminResponse((AnaliticaAdminResponse.Kpis) r.get(0),
+                lista(r.get(1)), lista(r.get(2)), lista(r.get(3)), lista(r.get(4)));
     }
 
     @SuppressWarnings("unchecked")

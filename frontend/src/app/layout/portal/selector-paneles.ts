@@ -2,85 +2,198 @@ import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Auth } from '../../core/services/auth';
 import { modulosAccesibles, panelesAccesibles, urlModulo, urlPanel } from '../../paneles/registro';
+import { Button } from '../../shared/ui/button/button';
 import { Icon } from '../../shared/ui/icon/icon';
+import { PageHeader } from '../../shared/ui/page-header/page-header';
 
 /**
- * Centro de mando: saludo ejecutivo y una tarjeta de cristal por panel
- * accesible, con sus módulos como mosaico de accesos directos. Con un solo
- * panel la tarjeta es protagonista ("featured"); con varios, rejilla bento.
+ * Selector de paneles: una tarjeta plana por panel accesible, con sus módulos como
+ * accesos directos. Solo se ve lo que los permisos del usuario habilitan.
  */
 @Component({
   selector: 'app-selector-paneles',
-  imports: [RouterLink, Icon],
+  imports: [RouterLink, Icon, Button, PageHeader],
   template: `
-    <section class="mando" [attr.data-paneles]="paneles().length > 2 ? 'varios' : paneles().length">
-      <header class="mando__hero">
-        <div class="mando__hero-texto">
-          <p class="mando__eyebrow">
-            <span class="mando__plataforma">Hehiachi Mishima</span>
-            <span class="mando__sep" aria-hidden="true"></span>
-            <span class="mando__fecha">{{ fechaHoy }}</span>
-          </p>
-          <h1 class="mando__titulo" tabindex="-1">{{ saludo }}{{ nombre() ? ', ' + nombre() : '' }}</h1>
-          <p class="mando__texto">
-            Tu centro de mando. Entra a un panel o salta directo a uno de sus módulos; solo ves lo que tus permisos
-            habilitan.
-          </p>
-        </div>
-        <dl class="mando__stats">
-          <div class="mando__stat">
-            <dt>{{ paneles().length === 1 ? 'Panel' : 'Paneles' }}</dt>
-            <dd>{{ paneles().length }}</dd>
-          </div>
-          <div class="mando__stat">
-            <dt>Módulos</dt>
-            <dd>{{ totalModulos() }}</dd>
-          </div>
-        </dl>
-      </header>
+    <app-page-header [eyebrow]="'Portal · ' + fechaHoy" [heading]="saludo + (nombre() ? ', ' + nombre() : '')">
+      <ng-container pageMeta>
+        <span>Entra a un panel o salta directo a uno de sus módulos.</span>
+        <span>
+          {{ paneles().length }} {{ paneles().length === 1 ? 'panel' : 'paneles' }} ·
+          {{ totalModulos() }} {{ totalModulos() === 1 ? 'módulo' : 'módulos' }}
+        </span>
+      </ng-container>
+    </app-page-header>
 
-      <h2 class="mando__seccion">{{ paneles().length === 1 ? 'Tu panel' : 'Tus paneles' }}</h2>
-      <ul class="mando__paneles">
-        @for (item of paneles(); track item.panel.id; let primero = $first) {
-          <li class="mando__celda" [class.mando__celda--destacada]="primero">
-            <article class="panel-card" [attr.data-tono]="item.panel.tono" [attr.aria-labelledby]="'panel-' + item.panel.id">
-              <div class="panel-card__identidad">
-                <span class="panel-card__mark" aria-hidden="true"><ui-icon [name]="item.panel.icono" [size]="30" /></span>
-                <span class="panel-card__eyebrow">Panel</span>
-                <h3 class="panel-card__nombre" [id]="'panel-' + item.panel.id">{{ item.panel.nombre }}</h3>
-                <p class="panel-card__desc">{{ item.panel.descripcion }}</p>
-                <p class="panel-card__cuenta">
-                  <ui-icon name="layers" [size]="14" />
-                  {{ item.modulos.length }} {{ item.modulos.length === 1 ? 'módulo disponible' : 'módulos disponibles' }}
+    <section class="seccion" aria-labelledby="titulo-paneles">
+      <h2 id="titulo-paneles">{{ paneles().length === 1 ? 'Tu panel' : 'Tus paneles' }}</h2>
+      <ul class="paneles">
+        @for (item of paneles(); track item.panel.id) {
+          <li>
+            <article class="panel-card" [attr.aria-labelledby]="'panel-' + item.panel.id">
+              <header class="panel-card__cabecera">
+                <span class="panel-card__mark" aria-hidden="true"><ui-icon [name]="item.panel.icono" [size]="20" /></span>
+                <div class="panel-card__titulos">
+                  <span class="panel-card__eyebrow">Panel</span>
+                  <h3 [id]="'panel-' + item.panel.id">{{ item.panel.nombre }}</h3>
+                </div>
+              </header>
+              <p class="panel-card__desc">{{ item.panel.descripcion }}</p>
+
+              <div>
+                <p class="panel-card__lista-titulo" [id]="'mods-' + item.panel.id">
+                  Módulos <span class="contador">{{ item.modulos.length }}</span>
                 </p>
-                <a class="panel-card__cta" [routerLink]="urlPanel(item.panel)">
-                  Entrar al panel <ui-icon name="chevronRight" [size]="18" />
-                </a>
-              </div>
-              <div class="panel-card__modulos">
-                <p class="panel-card__modulos-titulo" [id]="'mods-' + item.panel.id">Accesos directos</p>
-                <ul class="panel-card__mosaico" [attr.aria-labelledby]="'mods-' + item.panel.id">
+                <ul class="modulos" [attr.aria-labelledby]="'mods-' + item.panel.id">
                   @for (modulo of item.modulos; track modulo.id) {
                     <li>
-                      <a class="modulo-tile" [routerLink]="urlModulo(item.panel, modulo)">
-                        <span class="modulo-tile__icon" aria-hidden="true"><ui-icon [name]="modulo.icono" [size]="20" /></span>
-                        <span class="modulo-tile__texto">
-                          <span class="modulo-tile__nombre">{{ modulo.nombre }}</span>
-                          <span class="modulo-tile__desc">{{ modulo.descripcion }}</span>
-                        </span>
-                        <ui-icon class="modulo-tile__ir" name="chevronRight" [size]="16" />
+                      <a [routerLink]="urlModulo(item.panel, modulo)">
+                        <ui-icon [name]="modulo.icono" [size]="16" />
+                        <span class="modulos__nombre">{{ modulo.nombre }}</span>
+                        <ui-icon class="modulos__ir" name="chevronRight" [size]="16" />
                       </a>
                     </li>
                   }
                 </ul>
               </div>
+
+              <a appButton variant="secondary" size="sm" class="panel-card__cta" [routerLink]="urlPanel(item.panel)">
+                Entrar al panel <ui-icon name="chevronRight" [size]="16" />
+              </a>
             </article>
           </li>
         }
       </ul>
     </section>
   `,
-  styleUrl: './selector-paneles.scss',
+  styles: `
+    @use 'design' as d;
+
+    :host {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .seccion {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: d.space('6');
+      padding-top: d.space('8');
+    }
+
+    .paneles {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+      gap: d.space('6');
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .panel-card {
+      @include d.entity-card(true);
+      align-content: start;
+      height: 100%;
+      padding: d.space('6');
+    }
+
+    .panel-card__cabecera {
+      display: flex;
+      align-items: center;
+      gap: d.space('3');
+    }
+
+    .panel-card__mark {
+      display: inline-grid;
+      flex-shrink: 0;
+      place-items: center;
+      width: d.layout('control-height');
+      height: d.layout('control-height');
+      border: 1px solid d.color('border');
+      color: d.color('text-strong');
+    }
+
+    .panel-card__titulos {
+      display: grid;
+      min-width: 0;
+    }
+
+    .panel-card__eyebrow {
+      @include d.eyebrow;
+    }
+
+    .panel-card__desc {
+      @include d.type('body-01');
+      @include d.line-clamp(2);
+      color: d.color('text-muted');
+    }
+
+    .panel-card__lista-titulo {
+      display: flex;
+      align-items: center;
+      gap: d.space('2');
+      padding-bottom: d.space('2');
+      border-bottom: 1px solid d.color('border-strong');
+      @include d.type('mono-00-caps');
+      color: d.color('text');
+    }
+
+    .contador {
+      display: inline-grid;
+      place-items: center;
+      min-width: 1.25rem;
+      height: 1.25rem;
+      padding: 0 d.space('2');
+      background: d.color('neutral-soft');
+      @include d.type('label-00');
+      text-transform: none;
+    }
+
+    .modulos {
+      display: grid;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+
+      li + li {
+        border-top: 1px solid d.color('border');
+      }
+
+      a {
+        display: flex;
+        align-items: center;
+        gap: d.space('2');
+        min-height: d.layout('nav-item-height');
+        padding: d.space('1') d.space('2');
+        @include d.type('interface-01');
+        color: d.color('text');
+        @include d.focus-ring(-2px);
+
+        @include d.touch {
+          min-height: d.touch-target();
+        }
+
+        ui-icon {
+          flex-shrink: 0;
+          color: d.color('text-faint');
+        }
+
+        &:hover {
+          background: d.color('surface-hover');
+          color: d.color('text-strong');
+        }
+      }
+    }
+
+    .modulos__nombre {
+      flex: 1;
+      min-width: 0;
+      @include d.truncate;
+    }
+
+    .panel-card__cta {
+      justify-self: start;
+    }
+  `,
 })
 export class SelectorPaneles {
   private readonly auth = inject(Auth);

@@ -284,9 +284,9 @@ class AuditoriaTest extends ApiPrueba {
     void laBitacoraEsAppendOnlyEnLaBd() {
         long id = esperarEventos("accion=LOGIN_EXITOSO", l -> !l.isEmpty()).get(0).path("id").asLong();
         assertThatThrownBy(() -> jdbc.update("UPDATE auditoria_eventos SET accion = 'X' WHERE id = ?", id))
-                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("45000"));
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("RB403"));
         assertThatThrownBy(() -> jdbc.update("DELETE FROM auditoria_eventos WHERE id = ?", id))
-                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("45000"));
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("RB403"));
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM auditoria_eventos WHERE id = ?", Integer.class, id))
                 .isEqualTo(1);
     }

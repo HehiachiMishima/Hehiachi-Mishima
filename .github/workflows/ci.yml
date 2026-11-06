@@ -22,7 +22,7 @@ jobs:
     name: Backend (mvn verify)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Las pruebas levantan su propio MySQL 8.4 con Testcontainers (Docker del runner).
+    # Las pruebas levantan su propio PostgreSQL 17 con Testcontainers (Docker del runner).
     steps:
       - uses: actions/checkout@v5
 

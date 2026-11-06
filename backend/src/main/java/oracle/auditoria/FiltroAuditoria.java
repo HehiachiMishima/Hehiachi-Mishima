@@ -1,6 +1,5 @@
 package oracle.auditoria;
 
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -99,27 +98,27 @@ final class FiltroAuditoria {
         List<Object> args = new ArrayList<>();
         if (desde != null) {
             partes.add("ocurrido_en >= ?");
-            args.add(Timestamp.from(desde));
+            args.add(OffsetDateTime.ofInstant(desde, ZoneOffset.UTC));
         }
         if (hastaExclusivo != null) {
             partes.add("ocurrido_en < ?");
-            args.add(Timestamp.from(hastaExclusivo));
+            args.add(OffsetDateTime.ofInstant(hastaExclusivo, ZoneOffset.UTC));
         }
         if (actorId != null) {
             partes.add("actor_id = ?");
             args.add(actorId);
         }
-        en(partes, args, "accion", acciones);
-        en(partes, args, "entidad", entidades);
+        en(partes, args, "accion", acciones, "text");
+        en(partes, args, "entidad", entidades, "text");
         if (entidadId != null) {
             partes.add("entidad_id = ?");
             args.add(entidadId);
         }
-        en(partes, args, "resultado", resultados);
+        en(partes, args, "resultado", resultados, "resultado_auditoria");
         if (q != null) {
-            // Prefijo (usa indice si existe) sobre el login del actor; exacto sobre id y correlacion.
-            partes.add("(actor_usuario LIKE ? ESCAPE '!' OR entidad_id = ? OR id_correlacion = ?)");
-            args.add(escaparLike(q) + "%");
+            // Prefijo sin mayusculas sobre el login (idx_auditoria_actor_usuario); exacto sobre id y correlacion.
+            partes.add("(lower(actor_usuario) LIKE ? ESCAPE '!' OR entidad_id = ? OR id_correlacion = ?)");
+            args.add(escaparLike(q.toLowerCase(Locale.ROOT)) + "%");
             args.add(q);
             args.add(q);
         }
@@ -180,16 +179,19 @@ final class FiltroAuditoria {
         return m;
     }
 
-    private static void en(List<String> partes, List<Object> args, String columna, List<String> valores) {
+    /** Uno o varios valores en UN parametro de tipo array: columna = ANY(?::tipo[]). */
+    private static void en(List<String> partes, List<Object> args, String columna, List<String> valores,
+            String tipo) {
         if (valores.isEmpty()) {
             return;
         }
         if (valores.size() == 1) {
-            partes.add(columna + " = ?");
+            partes.add(columna + " = ?::" + tipo);
+            args.add(valores.getFirst());
         } else {
-            partes.add(columna + " IN (" + String.join(",", java.util.Collections.nCopies(valores.size(), "?")) + ")");
+            partes.add(columna + " = ANY (?::" + tipo + "[])");
+            args.add(valores.toArray(String[]::new));
         }
-        args.addAll(valores);
     }
 
     private static String escaparLike(String v) {

@@ -2,14 +2,15 @@
 # ============================================================
 # Blueprint de Render: UN servicio web Docker (Dockerfile de la raiz)
 # con frontend (Angular + nginx) y backend (Spring Boot) en la misma
-# imagen. La base de datos es EXTERNA (Aiven/MySQL): no se declara aqui.
+# imagen, y una base de datos Render PostgreSQL declarada en el mismo
+# blueprint (sus credenciales se inyectan con fromDatabase).
 #
 # Desplegar:
 #   1. Sube el repo a GitHub (rama indicada en "branch").
 #   2. Render: New + > Blueprint > selecciona el repositorio.
-#   3. Completa los valores "sync: false" (BD, administrador semilla...).
-#   4. Aplica backend/schema.sql (y protection.admin.sql) en la BD externa
-#      ANTES del primer arranque.
+#   3. Completa los valores "sync: false" (administrador semilla...).
+#   4. Nada mas: Flyway crea el esquema "app" en el primer arranque
+#      (backend/src/main/resources/db/migration).
 # ============================================================
 
 services:
@@ -38,30 +39,27 @@ services:
       - key: SPRING_PROFILES_ACTIVE
         value: prod
 
-      # --- Base de datos EXTERNA (Aiven / MySQL 8) ---
+      # --- Base de datos Render PostgreSQL (declarada abajo, en "databases") ---
+      # Red privada de Render: host interno, sin salir a Internet.
       - key: DB_HOST
-        sync: false
+        fromDatabase: { name: hehiachi-mishima-db, property: host }
       - key: DB_PORT
-        sync: false
+        fromDatabase: { name: hehiachi-mishima-db, property: port }
       - key: DB_NAME
-        sync: false
+        fromDatabase: { name: hehiachi-mishima-db, property: database }
       - key: DB_USER
-        sync: false
+        fromDatabase: { name: hehiachi-mishima-db, property: user }
       - key: DB_PASSWORD
-        sync: false
-      # Parametros JDBC. Aiven exige TLS. Para verificar la CA ademas del
-      # cifrado, define DB_CA_CERT y usa:
-      #   sslMode=VERIFY_CA&trustCertificateKeyStoreUrl=file:/run/app/db-truststore.p12&trustCertificateKeyStoreType=PKCS12&trustCertificateKeyStorePassword=changeit&serverTimezone=UTC
-      - key: DB_PARAMS
-        value: "sslMode=REQUIRED&serverTimezone=UTC&connectTimeout=5000"
-      # (Opcional) PEM de la CA de Aiven (contenido de ca.pem). El entrypoint
-      # lo convierte en /run/app/db-truststore.p12. Dejalo vacio si no se usa.
-      - key: DB_CA_CERT
-        sync: false
-      # Tamaño del pool Hikari (Aiven free admite pocas conexiones). Requiere
-      # spring.datasource.hikari.maximum-pool-size=${DB_POOL_MAX:5} en el perfil prod.
-      - key: DB_POOL_MAX
+        fromDatabase: { name: hehiachi-mishima-db, property: password }
+      # Dentro de la red privada de Render basta "prefer"; desde fuera usa
+      # require o verify-full.
+      - key: DB_SSLMODE
+        value: "prefer"
+      # Pool fijo por instancia (el plan free admite ~100 conexiones).
+      - key: DB_POOL
         value: "5"
+      - key: DB_STATEMENT_TIMEOUT_MS
+        value: "15000"
 
       # --- Seguridad ---
       - key: JWT_SECRET
@@ -98,3 +96,12 @@ services:
         value: "TRUE"
       - key: USER_ROL
         value: "ADMINISTRADOR"
+
+databases:
+  - name: hehiachi-mishima-db
+    plan: free                      # caduca a los 30 dias en Render; usa basic-256mb para produccion
+    region: oregon                  # misma region que el servicio (red privada)
+    databaseName: hehiachi_mishima
+    user: hehiachi
+    postgresMajorVersion: "17"
+    ipAllowList: []                 # solo red privada de Render

@@ -31,6 +31,14 @@ import { formatearLogin, iniciales } from '../../../../shared/util/formato';
 import { PermisosUsuario } from './permisos-usuario';
 import { RestablecerContrasena } from './restablecer-contrasena';
 import { RolesUsuario } from './roles-usuario';
+import { Button } from '../../../../shared/ui/button/button';
+import { Badge } from '../../../../shared/ui/badge/badge';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { Notice } from '../../../../shared/ui/notice/notice';
+import { SearchField } from '../../../../shared/ui/search-field/search-field';
+import { Avatar } from '../../../../shared/ui/avatar/avatar';
+import { Menu, MenuItem, MenuSeparator } from '../../../../shared/ui/menu/menu';
+import { CdkMenuTrigger } from '@angular/cdk/menu';
 
 type Estado = '' | 'activos' | 'inactivos';
 type Pestana = 'resumen' | 'accesos' | 'historial';
@@ -54,7 +62,7 @@ type Campo = 'usuario' | 'contrasena' | 'confirmacion' | 'nombre' | 'apellido' |
     RolesUsuario,
     PermisosUsuario,
     RestablecerContrasena,
-  ],
+    Button, Badge, PageHeader, Notice, SearchField, Avatar, Menu, MenuItem, MenuSeparator, CdkMenuTrigger],
   templateUrl: './usuarios.html',
   styleUrl: './usuarios.scss',
 })

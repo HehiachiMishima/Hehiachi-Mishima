@@ -1,0 +1,13 @@
+@use 'design' as d;
+
+// Lo único con sombra en este diseño: lo que flota sobre la página.
+:host {
+  display: grid;
+  min-width: 12rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: d.space('2') 0;
+  background: d.color('surface');
+  border: 1px solid d.color('border');
+  box-shadow: d.shadow('menu');
+  outline: none;
+}

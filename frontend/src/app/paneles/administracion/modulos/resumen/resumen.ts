@@ -23,8 +23,20 @@ import { BarraHorizontal, BarrasHorizontales } from '../../../../shared/ui/chart
 import { Icon } from '../../../../shared/ui/icon/icon';
 import { fechaRelativa, isoUtc } from '../../../../shared/util/fechas';
 import { formatearNumero, porcentaje } from '../../../../shared/util/formato';
+import { Button } from '../../../../shared/ui/button/button';
+import { Badge } from '../../../../shared/ui/badge/badge';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { Notice } from '../../../../shared/ui/notice/notice';
 
 type Tono = 'brand' | 'success' | 'warning' | 'danger';
+
+/** Tono del indicador → tono del badge de estado (gris si no hay nada que señalar). */
+const TONO_BADGE: Record<Tono, { tone: 'neutral' | 'success' | 'warning' | 'danger'; texto: string } | null> = {
+  brand: null,
+  success: { tone: 'success', texto: 'Correcto' },
+  warning: { tone: 'warning', texto: 'Revisar' },
+  danger: { tone: 'danger', texto: 'Atención' },
+};
 
 interface Kpi {
   id: string;
@@ -50,7 +62,7 @@ const MES = new Intl.DateTimeFormat('es', { month: 'short', year: '2-digit' });
 
 @Component({
   selector: 'app-resumen',
-  imports: [RouterLink, Icon, BarChart, BarrasHorizontales, FechaHoraPipe],
+  imports: [RouterLink, Icon, BarChart, BarrasHorizontales, FechaHoraPipe, Button, Badge, PageHeader, Notice],
   templateUrl: './resumen.html',
   styleUrl: './resumen.scss',
 })
@@ -77,6 +89,7 @@ export class Resumen {
   readonly eventosSeguridad = signal<AuditoriaEvento[] | null>(null);
 
   readonly etiquetaAccion = etiquetaAccion;
+  readonly badgeDe = (tono: Tono) => TONO_BADGE[tono];
   readonly actor = actorDeEvento;
   readonly objetivo = objetivoDeEvento;
 
@@ -165,7 +178,7 @@ export class Resumen {
     (this.datos()?.altasPorMes ?? []).map((punto) => ({
       etiqueta: this.mes(punto.periodo),
       valor: punto.valor,
-      color: 'var(--chart-grad-v)',
+      color: 'var(--color-chart-2)',
       detalle: `${punto.secundario} siguen activas`,
     })),
   );

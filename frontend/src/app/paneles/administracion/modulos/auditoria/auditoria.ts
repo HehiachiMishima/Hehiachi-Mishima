@@ -33,6 +33,10 @@ import { guardarArchivo, nombreDeArchivo } from '../../../../shared/util/descarg
 import { crearEstadoUrl, numeroUrl, opcionUrl, textoUrl } from '../../../../shared/util/estado-url';
 import { aFecha, isoUtc, zonaHoraria } from '../../../../shared/util/fechas';
 import { formatearLogin, formatearNumero } from '../../../../shared/util/formato';
+import { Button } from '../../../../shared/ui/button/button';
+import { Badge } from '../../../../shared/ui/badge/badge';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { Notice } from '../../../../shared/ui/notice/notice';
 
 interface GrupoDia {
   clave: string;
@@ -77,7 +81,7 @@ const VISTAS: Record<string, { etiqueta: string; filtros: Record<string, string 
 
 @Component({
   selector: 'app-auditoria',
-  imports: [Icon, Modal, Confirmacion, EmptyState, Paginador, FechaHoraPipe],
+  imports: [Icon, Modal, Confirmacion, EmptyState, Paginador, FechaHoraPipe, Button, Badge, PageHeader, Notice],
   templateUrl: './auditoria.html',
   styleUrl: './auditoria.scss',
 })

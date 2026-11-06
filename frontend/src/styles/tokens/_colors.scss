@@ -1,0 +1,202 @@
+// Paleta "consola plana": neutros grises puros + un único acento violeta.
+// Los componentes NO usan estos valores directamente: usan los roles de abajo con d.color(rol),
+// que se resuelve a una variable CSS del tema activo (claro u oscuro).
+
+@use 'sass:map';
+
+$palette: (
+  'white': #ffffff,
+  'gray-50': #fafafa,
+  'gray-100': #f0f0f0,
+  'gray-200': #e3e3e3,
+  'gray-300': #c7c7c7,
+  'gray-400': #b3b3b3,
+  'gray-500': #8f8f8f,
+  'gray-600': #6b6b6b,
+  'gray-700': #4d4d4d,
+  'gray-800': #272727,
+  'gray-900': #141414,
+  'gray-950': #0d0d0d,
+  'black': #000000,
+  'violet-50': #f4f0ff,
+  'violet-100': #e7dbff,
+  'violet-200': #d1b8ff,
+  'violet-500': #8a05ff,
+  'violet-700': #48008c,
+  'violet-900': #2a0052,
+  'green-50': #dffeed,
+  'green-100': #b8ffd7,
+  'green-700': #006d4c,
+  'green-900': #003924,
+  'amber-50': #faefe5,
+  'amber-100': #f5dfcc,
+  'amber-700': #6f4116,
+  'red-50': #fce9ea,
+  'red-200': #f4b3b7,
+  'red-500': #e23642,
+  'red-700': #af1d27,
+  'red-900': #63080e,
+  'blue-300': #8ad6ff,
+  'blue-500': #0088e5,
+);
+
+@function _p($key) {
+  @return map.get($palette, $key);
+}
+
+// Roles semánticos. Todos los pares texto/fondo cumplen contraste AA.
+$roles-light: (
+  // Superficies
+  'bg': _p('white'),
+  'surface': _p('white'),
+  'surface-muted': _p('gray-50'),        // barra lateral, cabeceras de grupo
+  'surface-hover': _p('gray-100'),       // hover de ítems y filas
+  'surface-readonly': _p('gray-100'),    // inputs de solo lectura
+  // Bordes
+  'border': _p('gray-200'),              // separadores, contenedores
+  'border-strong': _p('gray-300'),       // tarjetas, inputs, cabecera de tabla
+  'border-control': rgba(0, 0, 0, 0.2),  // botón secundario
+  // Texto
+  'text': _p('gray-800'),
+  'text-strong': _p('gray-900'),         // títulos
+  'text-muted': _p('gray-600'),          // ayudas, metadatos
+  'text-faint': _p('gray-500'),          // etiquetas en mono, íconos
+  'text-disabled': _p('gray-300'),
+  // Acción principal: negro que pasa a violeta al pasar el mouse
+  'primary': _p('gray-950'),
+  'primary-hover': _p('violet-500'),
+  'primary-active': _p('violet-700'),
+  'on-primary': _p('white'),
+  'on-accent': _p('white'),              // texto sobre violeta o rojo sólido
+  // Acento: enlaces, navegación activa, selección
+  'accent': _p('violet-500'),
+  'accent-hover': _p('violet-700'),
+  'primary-soft': _p('violet-50'),       // fondo de ítem activo (nombre compatible con el sistema base)
+  // Estados
+  'neutral-soft': _p('gray-100'),
+  'success': _p('green-700'),
+  'success-soft': _p('green-50'),
+  'warning': _p('amber-700'),
+  'warning-soft': _p('amber-100'),
+  'danger': _p('red-700'),
+  'danger-soft': _p('red-50'),
+  'danger-solid': _p('red-700'),         // fondo de botón destructivo
+  'danger-solid-hover': _p('red-900'),
+  'focus': _p('blue-500'),
+  'overlay': rgba(255, 255, 255, 0.8),
+  // Detalles de interfaz
+  'kbd-bg': rgba(0, 0, 0, 0.05),
+  'skeleton': _p('gray-200'),
+  'scrollbar-thumb': _p('gray-300'),
+  'avatar-bg': #c2eaff,
+  'avatar-text': #002c6f,
+  'tooltip-bg': _p('gray-50'),
+  // Interruptor (encendido en verde)
+  'toggle-on': _p('green-700'),
+  'toggle-off': _p('gray-100'),
+  'toggle-handle': _p('white'),
+  // Progreso
+  'progress-track': rgba(0, 0, 0, 0.05),
+  'progress-fill': #9b52fb,
+  // Logs (fondo y borde por nivel)
+  'log-bg': _p('gray-50'),
+  'log-border': _p('gray-100'),
+  'log-hover': #fbfaff,
+  'log-info-icon': #c29eff,
+  'log-warn-bg': #fdfaf6,
+  'log-warn-border': _p('amber-100'),
+  'log-warn-icon': #d67f2e,
+  'log-error-bg': #fef8f9,
+  'log-error-border': #fad1d3,
+  'log-error-icon': _p('red-500'),
+  'log-match': rgba(194, 152, 0, 0.3),
+  // Código y resaltado de sintaxis
+  'code-bg': _p('gray-800'),
+  'code-text': _p('gray-200'),
+  'code-inline-bg': _p('gray-100'),
+  'syntax-keyword': _p('violet-500'),
+  'syntax-key': #9b52fb,
+  'syntax-function': _p('green-700'),
+  'syntax-string': #005e9e,
+  'syntax-number': #8f6d00,
+  'syntax-comment': _p('gray-500'),
+  'syntax-decorator': #e615f2,
+  // Series de gráficos (líneas de 1 px)
+  'chart-1': #5aa80e,
+  'chart-2': _p('violet-500'),
+  'chart-3': _p('blue-500'),
+  'chart-4': #d67f2e,
+  'chart-grid': _p('gray-200'),
+);
+
+$roles-dark: (
+  'bg': _p('gray-950'),
+  'surface': _p('gray-950'),
+  'surface-muted': _p('gray-900'),
+  'surface-hover': _p('gray-800'),
+  'surface-readonly': _p('gray-800'),
+  'border': _p('gray-700'),
+  'border-strong': _p('gray-600'),
+  'border-control': rgba(255, 255, 255, 0.4),
+  'text': _p('gray-100'),
+  'text-strong': _p('white'),
+  'text-muted': _p('gray-300'),
+  'text-faint': _p('gray-400'),
+  'text-disabled': _p('gray-600'),
+  'primary': _p('white'),
+  'primary-hover': _p('violet-500'),
+  'primary-active': #9b52fb,
+  'on-primary': _p('black'),
+  'on-accent': _p('white'),
+  'accent': _p('violet-200'),
+  'accent-hover': _p('violet-100'),
+  'primary-soft': _p('violet-900'),
+  'neutral-soft': _p('gray-800'),
+  'success': _p('green-100'),
+  'success-soft': _p('green-900'),
+  'warning': _p('amber-50'),
+  'warning-soft': _p('amber-700'),
+  'danger': _p('red-200'),
+  'danger-soft': _p('red-900'),
+  'danger-solid': _p('red-500'),
+  'danger-solid-hover': _p('red-700'),
+  'focus': _p('blue-300'),
+  'overlay': rgba(0, 0, 0, 0.8),
+  'kbd-bg': rgba(255, 255, 255, 0.1),
+  'skeleton': _p('gray-800'),
+  'scrollbar-thumb': _p('gray-700'),
+  'avatar-bg': #005e9e,
+  'avatar-text': #f5fbff,
+  'tooltip-bg': _p('gray-800'),
+  'toggle-on': #009e7a,
+  'toggle-off': _p('gray-900'),
+  'toggle-handle': _p('gray-800'),
+  'progress-track': rgba(255, 255, 255, 0.1),
+  'progress-fill': #9b52fb,
+  'log-bg': _p('gray-950'),
+  'log-border': _p('gray-800'),
+  'log-hover': #1c0037,
+  'log-info-icon': #c29eff,
+  'log-warn-bg': #1f1105,
+  'log-warn-border': #351e09,
+  'log-warn-icon': #d67f2e,
+  'log-error-bg': #390508,
+  'log-error-border': _p('red-900'),
+  'log-error-icon': #e96770,
+  'log-match': rgba(224, 191, 0, 0.3),
+  'code-bg': _p('gray-800'),
+  'code-text': _p('gray-200'),
+  'code-inline-bg': _p('gray-900'),
+  'syntax-keyword': #c29eff,
+  'syntax-key': #c29eff,
+  'syntax-function': _p('green-100'),
+  'syntax-string': #eabe95,
+  'syntax-number': #faf1a3,
+  'syntax-comment': _p('gray-500'),
+  'syntax-decorator': #f79ffe,
+  'chart-1': #c6fb9d,
+  'chart-2': #aa77fd,
+  'chart-3': _p('blue-300'),
+  'chart-4': #e2a66e,
+  'chart-grid': _p('gray-700'),
+);

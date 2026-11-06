@@ -8,7 +8,18 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
-/** Agregados ejecutivos del RBAC resueltos en MySQL sobre tablas y vistas de resolucion. */
+/**
+ * Agregados ejecutivos del RBAC resueltos en PostgreSQL.
+ *
+ * <ul>
+ *   <li>KPIs: una sola pasada por tabla con agregados FILTER (en lugar de una
+ *       subconsulta COUNT por cifra).</li>
+ *   <li>Permisos efectivos: se agregan sobre v_permisos_finales (deny-wins con
+ *       bool_and) con HashAggregate; va detras de la cache del dashboard.</li>
+ *   <li>Altas por mes: generate_series rellena los meses sin altas con 0, de
+ *       modo que la serie siempre tiene 12 puntos consecutivos.</li>
+ * </ul>
+ */
 @Repository
 public class AnaliticaAdminRepository {
 
@@ -24,17 +35,22 @@ public class AnaliticaAdminRepository {
 
     public Kpis kpis() {
         return jdbc.queryForObject("""
-                SELECT
-                  (SELECT COUNT(*) FROM usuarios) AS usuarios,
-                  (SELECT COUNT(*) FROM usuarios WHERE activo = TRUE) AS usuarios_activos,
-                  (SELECT COUNT(*) FROM usuarios u
-                     WHERE NOT EXISTS (SELECT 1 FROM usuarios_roles ur WHERE ur.usuario_id = u.id)) AS sin_rol,
-                  (SELECT COUNT(*) FROM roles) AS roles,
-                  (SELECT COUNT(*) FROM roles WHERE activo = TRUE) AS roles_activos,
-                  (SELECT COUNT(*) FROM permisos) AS permisos,
-                  (SELECT COUNT(*) FROM permisos WHERE activo = TRUE) AS permisos_activos,
-                  (SELECT COUNT(*) FROM usuarios_permisos WHERE otorgado = TRUE) AS grants,
-                  (SELECT COUNT(*) FROM usuarios_permisos WHERE otorgado = FALSE) AS denies
+                WITH u AS (
+                    SELECT count(*)                                  AS usuarios,
+                           count(*) FILTER (WHERE activo)            AS usuarios_activos,
+                           count(*) FILTER (WHERE NOT EXISTS (
+                               SELECT 1 FROM usuarios_roles ur WHERE ur.usuario_id = usuarios.id)) AS sin_rol
+                    FROM usuarios
+                ), r AS (
+                    SELECT count(*) AS roles, count(*) FILTER (WHERE activo) AS roles_activos FROM roles
+                ), p AS (
+                    SELECT count(*) AS permisos, count(*) FILTER (WHERE activo) AS permisos_activos FROM permisos
+                ), o AS (
+                    SELECT count(*) FILTER (WHERE otorgado)     AS grants,
+                           count(*) FILTER (WHERE NOT otorgado) AS denies
+                    FROM usuarios_permisos
+                )
+                SELECT u.*, r.*, p.*, o.* FROM u, r, p, o
                 """, (rs, n) -> new Kpis(rs.getLong("usuarios"), rs.getLong("usuarios_activos"),
                 rs.getLong("sin_rol"), rs.getLong("roles"), rs.getLong("roles_activos"), rs.getLong("permisos"),
                 rs.getLong("permisos_activos"), rs.getLong("grants"), rs.getLong("denies")));
@@ -42,69 +58,59 @@ public class AnaliticaAdminRepository {
 
     public List<Conteo> usuariosPorRol() {
         return jdbc.query("""
-                SELECT r.nombre AS etiqueta, COUNT(ur.usuario_id) AS valor
+                SELECT r.nombre AS etiqueta, count(ur.usuario_id) AS valor
                 FROM roles r
                 LEFT JOIN usuarios_roles ur ON ur.rol_id = r.id
                 GROUP BY r.id, r.nombre
-                ORDER BY valor DESC, etiqueta ASC
+                ORDER BY valor DESC, etiqueta
                 """, CONTEO);
     }
 
-    /**
-     * Usuario u tiene efectivamente el permiso p (deny-wins, respeta activo de
-     * rol y permiso; mismo resultado que v_permisos_finales). Con EXISTS por
-     * par el optimizador usa los PK de usuarios_roles / roles_permisos /
-     * usuarios_permisos en lugar de materializar la vista completa.
-     */
-    private static final String TIENE_PERMISO = """
-            ( EXISTS (SELECT 1 FROM roles_permisos rp
-                      JOIN usuarios_roles ur ON ur.rol_id = rp.rol_id AND ur.usuario_id = u.id
-                      JOIN roles r ON r.id = rp.rol_id AND r.activo = TRUE
-                      WHERE rp.permiso_id = p.id)
-              OR EXISTS (SELECT 1 FROM usuarios_permisos g
-                         WHERE g.usuario_id = u.id AND g.permiso_id = p.id AND g.otorgado = TRUE) )
-            AND NOT EXISTS (SELECT 1 FROM usuarios_permisos d
-                            WHERE d.usuario_id = u.id AND d.permiso_id = p.id AND d.otorgado = FALSE)
-            """;
-
-    /** Permisos con mas usuarios que los tienen efectivamente (deny-wins aplicado). Va detras de la cache. */
+    /** Permisos con mas usuarios que los tienen efectivamente (deny-wins aplicado). */
     public List<Conteo> permisosMasOtorgados() {
         return jdbc.query("""
-                SELECT p.nombre AS etiqueta, COUNT(*) AS valor
-                FROM permisos p
-                JOIN usuarios u
-                WHERE p.activo = TRUE
-                  AND %s
+                SELECT p.nombre AS etiqueta, count(*) AS valor
+                FROM v_permisos_finales f
+                JOIN permisos p ON p.id = f.permiso_id
+                WHERE f.permitido
                 GROUP BY p.id, p.nombre
-                ORDER BY valor DESC, etiqueta ASC
-                LIMIT %d
-                """.formatted(TIENE_PERMISO, TOP_PERMISOS), CONTEO);
+                ORDER BY valor DESC, etiqueta
+                LIMIT ?
+                """, CONTEO, TOP_PERMISOS);
     }
 
     /** Usuarios ACTIVOS con acceso efectivo a cada panel (permisos PANEL_*). */
     public List<Conteo> coberturaPaneles() {
         return jdbc.query("""
-                SELECT p.nombre AS etiqueta, COUNT(*) AS valor
+                SELECT p.nombre AS etiqueta, count(u.id) AS valor
                 FROM permisos p
-                JOIN usuarios u ON u.activo = TRUE
-                WHERE p.activo = TRUE
-                  AND p.nombre LIKE 'PANEL!_%%' ESCAPE '!'
-                  AND %s
+                LEFT JOIN v_permisos_finales f ON f.permiso_id = p.id AND f.permitido
+                LEFT JOIN usuarios u ON u.id = f.usuario_id AND u.activo
+                WHERE p.activo AND p.nombre LIKE 'PANEL\\_%'
                 GROUP BY p.nombre
+                HAVING count(u.id) > 0
                 ORDER BY p.nombre
-                """.formatted(TIENE_PERMISO), CONTEO);
+                """, CONTEO);
     }
 
     /** Altas de usuarios por mes (ultimos 12): valor = altas, secundario = altas aun activas. */
     public List<PuntoSerie> altasPorMes() {
         return jdbc.query("""
-                SELECT DATE_FORMAT(creado_en, '%%Y-%%m') AS periodo, COUNT(*) AS valor,
-                       COALESCE(SUM(activo = TRUE), 0) AS secundario
-                FROM usuarios
-                WHERE creado_en >= DATE_SUB(DATE_FORMAT(CURRENT_DATE, '%%Y-%%m-01'), INTERVAL %d MONTH)
-                GROUP BY periodo
-                ORDER BY periodo
-                """.formatted(MESES_ALTAS - 1),
-                (rs, n) -> new PuntoSerie(rs.getString("periodo"), rs.getLong("valor"), rs.getLong("secundario")));
+                WITH meses AS (
+                    SELECT generate_series(date_trunc('month', now()) - make_interval(months => ?),
+                                           date_trunc('month', now()),
+                                           interval '1 month') AS mes
+                )
+                SELECT to_char(m.mes, 'YYYY-MM')                AS periodo,
+                       count(u.id)                              AS valor,
+                       count(u.id) FILTER (WHERE u.activo)      AS secundario
+                FROM meses m
+                LEFT JOIN usuarios u
+                       ON u.creado_en >= m.mes AND u.creado_en < m.mes + interval '1 month'
+                GROUP BY m.mes
+                ORDER BY m.mes
+                """,
+                (rs, n) -> new PuntoSerie(rs.getString("periodo"), rs.getLong("valor"), rs.getLong("secundario")),
+                MESES_ALTAS - 1);
     }
 }

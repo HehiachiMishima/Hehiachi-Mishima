@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { Auth } from '../../core/services/auth';
 import { SesionVigilante } from '../../core/services/sesion-vigilante';
 import { Modal } from '../../shared/ui/modal/modal';
+import { Button } from '../../shared/ui/button/button';
 
 const HORA = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' });
 
@@ -9,7 +10,7 @@ const HORA = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' 
 @Component({
   selector: 'app-aviso-sesion',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Modal],
+  imports: [Modal, Button],
   template: `
     <ui-modal [abierto]="!!vigilante.aviso()" ancho="sm" [compacto]="true" [alerta]="true"
       titulo="Tu sesión está por vencer" (cerrar)="vigilante.descartarAviso()">
@@ -18,8 +19,8 @@ const HORA = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' 
         después tendrás que volver a iniciar sesión.
       </p>
       <div modal-footer class="modal-foot">
-        <button type="button" class="ui-btn ui-btn--ghost" (click)="cerrarSesion()">Cerrar sesión ahora</button>
-        <button type="button" class="ui-btn ui-btn--primary" data-autofocus (click)="vigilante.descartarAviso()">Entendido</button>
+        <button type="button" appButton variant="ghost" (click)="cerrarSesion()">Cerrar sesión ahora</button>
+        <button type="button" appButton data-autofocus (click)="vigilante.descartarAviso()">Entendido</button>
       </div>
     </ui-modal>
   `,

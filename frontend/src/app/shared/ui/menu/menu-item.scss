@@ -1,0 +1,66 @@
+@use 'design' as d;
+
+:host {
+  display: flex;
+  align-items: center;
+  gap: d.space('2');
+  min-height: d.layout('menu-item-height');
+  padding: d.space('2') d.space('3');
+  border: 0;
+  background: transparent;
+  @include d.type('interface-01');
+  color: d.color('text');
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  outline: none;
+
+  @include d.touch {
+    min-height: d.touch-target();
+  }
+
+  ::ng-deep ui-icon {
+    color: d.color('text-faint');
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: d.color('surface-hover');
+    color: d.color('text-strong');
+  }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px d.color('focus');
+  }
+
+  &[aria-disabled='true'] {
+    color: d.color('text-disabled');
+    cursor: not-allowed;
+    background: transparent;
+  }
+}
+
+:host(.is-selected) {
+  background: d.color('primary-soft');
+  color: d.color('accent');
+
+  ::ng-deep ui-icon {
+    color: d.color('accent');
+  }
+}
+
+:host(.is-danger) {
+  color: d.color('danger');
+
+  ::ng-deep ui-icon {
+    color: d.color('danger');
+  }
+}
+
+:host(.is-danger[aria-disabled='true']) {
+  color: d.color('text-disabled');
+
+  ::ng-deep ui-icon {
+    color: d.color('text-disabled');
+  }
+}

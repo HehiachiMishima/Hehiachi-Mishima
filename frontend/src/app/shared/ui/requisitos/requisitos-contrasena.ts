@@ -19,9 +19,27 @@ import { Icon } from '../icon/icon';
     </ul>
   `,
   styles: `
-    .requisitos { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-xs); color: var(--text-2); }
-    .requisitos__item { display: flex; align-items: center; gap: var(--space-1); }
-    .requisitos__item--ok { color: var(--success); }
+    @use 'design' as d;
+
+    .requisitos {
+      display: grid;
+      gap: 2px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      @include d.type('helper-text-01');
+      color: d.color('text-muted');
+    }
+
+    .requisitos__item {
+      display: flex;
+      align-items: center;
+      gap: d.space('1');
+    }
+
+    .requisitos__item--ok {
+      color: d.color('success');
+    }
   `,
 })
 export class RequisitosContrasena {

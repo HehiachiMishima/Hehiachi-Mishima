@@ -1,0 +1,49 @@
+@use 'sass:map';
+@use 'sass:list';
+@use '../tokens/scale' as s;
+@use '../tokens/type' as t;
+@use '../tokens/breakpoints' as b;
+
+/// Aplica un estilo de la escala tipográfica: @include d.type('heading-05');
+@mixin type($name) {
+  @if not map.has-key(t.$type, $name) {
+    @error 'Estilo tipográfico "#{$name}" no existe. Disponibles: #{map.keys(t.$type)}';
+  }
+  $style: map.get(t.$type, $name);
+  font-family: map.get(s.$font-family, list.nth($style, 1));
+  font-size: list.nth($style, 2);
+  font-weight: list.nth($style, 3);
+  line-height: list.nth($style, 4);
+  letter-spacing: list.nth($style, 5);
+  @if list.nth($style, 6) {
+    text-transform: uppercase;
+  }
+}
+
+/// Etiqueta en mono mayúscula (tipo sobre un título, grupos del menú lateral).
+@mixin eyebrow {
+  @include type('mono-01-caps');
+  color: var(--color-text-faint);
+}
+
+/// Título de página: 32/36 en escritorio, 28/32 en pantallas angostas.
+@mixin page-title {
+  @include type('heading-05');
+  color: var(--color-text-strong);
+
+  @media (min-width: map.get(b.$breakpoints, 'md')) {
+    @include type('heading-06');
+  }
+}
+
+/// Título de sección de página (24/28).
+@mixin section-title {
+  @include type('heading-04');
+  color: var(--color-text-strong);
+}
+
+/// Título de tarjeta o panel (20/28 semibold).
+@mixin card-title {
+  @include type('heading-03');
+  color: var(--color-text-strong);
+}

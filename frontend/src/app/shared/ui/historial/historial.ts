@@ -7,7 +7,11 @@ import { mensajeDeError } from '../../../core/errors/error.util';
 import { AuditoriaEvento, FiltroAuditoria } from '../../../core/models';
 import { AuditoriaApi } from '../../../core/services/auditoria.api';
 import { FechaHoraPipe } from '../../pipes/fecha-hora.pipe';
+import { Badge } from '../badge/badge';
+import { Button } from '../button/button';
 import { Icon } from '../icon/icon';
+import { Notice } from '../notice/notice';
+import { Segmented, SegmentedOption } from '../segmented/segmented';
 
 /**
  * Últimos eventos de auditoría de un registro (relacionadoCon=TIPO:id) o de
@@ -16,23 +20,20 @@ import { Icon } from '../icon/icon';
 @Component({
   selector: 'ui-historial',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, Icon, FechaHoraPipe],
+  imports: [RouterLink, Icon, FechaHoraPipe, Badge, Button, Notice, Segmented],
   template: `
     @if (actorId() !== null) {
-      <div class="ui-chips historial__modo" role="group" aria-label="Qué eventos mostrar">
-        <button type="button" class="ui-chip" [attr.aria-pressed]="modo() === 'sobre'" (click)="cambiarModo('sobre')">Sobre este registro</button>
-        <button type="button" class="ui-chip" [attr.aria-pressed]="modo() === 'actor'" (click)="cambiarModo('actor')">Acciones realizadas</button>
-      </div>
+      <app-segmented class="historial__modo" label="Qué eventos mostrar" [options]="modos" [value]="modo()"
+        (valueChange)="cambiarModo($event)" />
     }
-
     @if (cargando()) {
       <div class="skeleton-filas" aria-busy="true">
         <span class="u-sr-only">Cargando historial…</span>
         @for (fila of [1, 2, 3, 4]; track fila) { <span class="ui-skeleton"></span> }
       </div>
     } @else if (error()) {
-      <p class="historial__vacio">No se pudo cargar el historial. {{ error() }}</p>
-      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()">
+      <app-notice tone="danger">No se pudo cargar el historial. {{ error() }}</app-notice>
+      <button appButton variant="secondary" size="sm" type="button" (click)="cargar()">
         <ui-icon name="refresh" [size]="16" /> Reintentar
       </button>
     } @else if (eventos().length === 0) {
@@ -40,41 +41,86 @@ import { Icon } from '../icon/icon';
     } @else {
       <ol class="historial">
         @for (evento of eventos(); track evento.id) {
-          <li class="historial__item">
-            <span class="historial__marca" [class]="'historial__marca--' + tono(evento.resultado)" aria-hidden="true"></span>
-            <div>
+          <li>
+            <ui-icon class="historial__icono" [class]="'historial__icono--' + tono(evento.resultado)"
+              [name]="evento.resultado === 'EXITO' ? 'checkCircleFilled' : evento.resultado === 'DENEGADO' ? 'lock' : 'alertTriangle'"
+              [size]="16" />
+            <div class="historial__texto">
               <p class="historial__accion">
                 {{ etiquetaAccion(evento.accion) }}
                 @if (evento.resultado !== 'EXITO') {
-                  <span class="ui-badge" [class]="'ui-badge--' + tono(evento.resultado)">{{ resultado(evento.resultado) }}</span>
+                  <app-badge [tone]="$any(tono(evento.resultado))">{{ resultado(evento.resultado) }}</app-badge>
                 }
               </p>
-              <p class="historial__meta">
-                <time [attr.datetime]="evento.ocurridoEn" [title]="evento.ocurridoEn | fechaHora: 'completa' : true">
-                  {{ evento.ocurridoEn | fechaHora: 'relativa' : true }}
-                </time>
-                · {{ modo() === 'actor' ? objetivo(evento) : actor(evento) }}
-              </p>
+              <p class="historial__meta">{{ modo() === 'actor' ? objetivo(evento) : actor(evento) }}</p>
+              <time [attr.datetime]="evento.ocurridoEn" [title]="evento.ocurridoEn | fechaHora: 'completa' : true">
+                {{ evento.ocurridoEn | fechaHora: 'relativa' : true }}
+              </time>
             </div>
           </li>
         }
       </ol>
     }
-    <a class="historial__todo" [routerLink]="rutaAuditoria" [queryParams]="filtroEnlace()">
-      Ver todo en Auditoría <ui-icon name="chevronRight" [size]="14" />
+    <a appButton variant="tertiary" size="sm" class="historial__todo" [routerLink]="rutaAuditoria" [queryParams]="filtroEnlace()">
+      Ver todo en Auditoría <ui-icon name="chevronRight" [size]="16" />
     </a>
   `,
   styles: `
-    :host { display: flex; flex-direction: column; gap: var(--space-3); }
-    .historial { display: flex; flex-direction: column; gap: var(--space-3); }
-    .historial__item { display: grid; grid-template-columns: 12px 1fr; gap: var(--space-3); }
-    .historial__marca { width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--success); }
-    .historial__marca--warning { background: var(--warning); }
-    .historial__marca--danger { background: var(--danger); }
-    .historial__accion { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-weight: 600; font-size: var(--fs-sm); color: var(--text); }
-    .historial__meta { font-size: var(--fs-xs); color: var(--text-2); }
-    .historial__vacio { font-size: var(--fs-sm); color: var(--text-2); }
-    .historial__todo { display: inline-flex; align-items: center; gap: var(--space-1); font-weight: 600; font-size: var(--fs-sm); }
+    @use 'design' as d;
+
+    :host {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: start;
+      gap: d.space('4');
+    }
+
+    .historial {
+      @include d.timeline;
+      width: 100%;
+    }
+
+    .historial__icono {
+      margin-top: 2px;
+      color: d.color('text-faint');
+    }
+
+    .historial__icono--success {
+      color: d.color('success');
+    }
+
+    .historial__icono--warning {
+      color: d.color('warning');
+    }
+
+    .historial__icono--danger {
+      color: d.color('danger');
+    }
+
+    .historial__texto {
+      min-width: 0;
+    }
+
+    .historial__accion {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: d.space('2');
+      @include d.type('body-01-medium');
+      color: d.color('text-strong');
+    }
+
+    .historial__meta {
+      margin-top: 2px;
+      @include d.type('body-01');
+      color: d.color('text-muted');
+      overflow-wrap: anywhere;
+    }
+
+    .historial__vacio {
+      @include d.type('body-01');
+      color: d.color('text-muted');
+    }
   `,
 })
 export class Historial {
@@ -88,6 +134,10 @@ export class Historial {
 
   readonly rutaAuditoria = urlModuloPorId('auditoria');
   readonly modo = signal<'sobre' | 'actor'>('sobre');
+  readonly modos: readonly SegmentedOption<'sobre' | 'actor'>[] = [
+    { value: 'sobre', label: 'Sobre este registro' },
+    { value: 'actor', label: 'Acciones realizadas' },
+  ];
   readonly cargando = signal(false);
   readonly error = signal<string | null>(null);
   readonly eventos = signal<AuditoriaEvento[]>([]);

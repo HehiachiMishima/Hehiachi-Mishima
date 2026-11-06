@@ -1,0 +1,268 @@
+@use 'typography' as ty;
+
+/// Panel de contenido (configuración, variables, métricas): borde fino y relleno amplio.
+@mixin panel($padding: 2rem) {
+  padding: $padding;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+/// Tarjeta de entidad (proyecto, servicio): borde más marcado; con hover violeta si es clicable.
+@mixin entity-card($interactive: false) {
+  display: grid;
+  gap: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border-strong);
+  color: inherit;
+  text-decoration: none;
+  @if $interactive {
+    transition: border-color 200ms ease-out;
+
+    &:hover {
+      border-color: var(--color-accent);
+    }
+  }
+}
+
+/// Tarjeta "crear": borde punteado y contenido centrado.
+@mixin create-card {
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+  border: 1px dashed var(--color-border);
+  color: var(--color-text-strong);
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--color-border-strong);
+  }
+}
+
+/// Lista clave/valor (<dl>): claves en mono mayúscula, filas separadas por líneas.
+@mixin kv-list {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, max-content) 1fr;
+  column-gap: 2rem;
+  margin: 0;
+
+  > div {
+    display: contents;
+  }
+
+  dt,
+  dd {
+    margin: 0;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  dt {
+    @include ty.type('mono-00-caps');
+    display: flex;
+    align-items: center;
+    color: var(--color-text);
+  }
+
+  dd {
+    @include ty.type('body-02');
+    min-width: 0;
+  }
+
+  > div:last-child > * {
+    border-bottom-color: transparent;
+  }
+}
+
+/// Atajo de teclado (⌘K, ESC).
+@mixin kbd {
+  @include ty.type('mono-00-caps');
+  display: inline-flex;
+  align-items: center;
+  height: 1.25rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 4px;
+  background: var(--color-kbd-bg);
+  color: var(--color-text);
+  line-height: 0.75rem;
+}
+
+/// Bloque de código oscuro (también en tema claro).
+@mixin code-block {
+  @include ty.type('mono-01');
+  margin: 0;
+  padding: 1rem;
+  overflow-x: auto;
+  background: var(--color-code-bg);
+  color: var(--color-code-text);
+
+  // Colores de resaltado para Prism/Shiki/highlight.js (clases .token.* o .hljs-*).
+  .token.keyword, .hljs-keyword { color: var(--color-syntax-keyword); }
+  .token.property, .hljs-attr { color: var(--color-syntax-key); }
+  .token.function, .hljs-title { color: var(--color-syntax-function); }
+  .token.string, .hljs-string { color: var(--color-syntax-string); }
+  .token.number, .hljs-number { color: var(--color-syntax-number); }
+  .token.comment, .hljs-comment { color: var(--color-syntax-comment); }
+  .token.decorator, .hljs-meta { color: var(--color-syntax-decorator); }
+}
+
+/// Barra de progreso (uso de plan, cuota): 4 px, sin radio.
+///   <div class="uso" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100"
+///        [style.--value]="'40%'"></div>
+@mixin progress-bar {
+  height: 0.25rem;
+  background: linear-gradient(var(--color-progress-fill), var(--color-progress-fill)) no-repeat,
+    var(--color-progress-track);
+  background-size: var(--value, 0%) 100%, auto;
+}
+
+/// Tooltip: caja pequeña con borde y radio de 4 px (usa CDK Overlay o el atributo popover).
+@mixin tooltip {
+  max-width: 16rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-tooltip-bg);
+  color: var(--color-text-strong);
+  box-shadow: 0 4px 3px rgba(0, 0, 0, 0.07), 0 2px 2px rgba(0, 0, 0, 0.06);
+  @include ty.type('body-00');
+}
+
+/// Marco de un gráfico: el canvas o SVG lee sus colores de --color-chart-1…4 y --color-chart-grid
+/// (getComputedStyle(document.documentElement).getPropertyValue('--color-chart-1')).
+@mixin chart-frame {
+  position: relative;
+  min-height: 12rem;
+  border-bottom: 1px solid var(--color-chart-grid);
+  @include ty.type('mono-00');
+  color: var(--color-text-muted);
+}
+
+/// Estado vacío de página completa: alineado a la izquierda, ancho máximo 500 px.
+///   título heading-03 · texto body-02 8 px debajo · acción 32 px debajo
+@mixin page-empty {
+  max-width: 31.25rem;
+  padding: 5rem 1rem;
+
+  > h2,
+  > h3 {
+    @include ty.type('heading-03');
+  }
+
+  > p {
+    margin-top: 0.5rem;
+    color: var(--color-text-muted);
+  }
+
+  > button,
+  > a {
+    margin-top: 2rem;
+  }
+}
+
+/// Línea de tiempo de eventos (despliegues, cambios): ítems apilados con borde compartido.
+///   <ol class="timeline"><li><app-icon/> <div><a>Despliegue</a> <code>abc123</code>
+///   <time>hace 2 h</time></div></li></ol>
+@mixin timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  > li {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+
+    & + li {
+      border-top: 0;
+    }
+  }
+
+  time {
+    display: block;
+    margin-top: 0.375rem;
+    @include ty.type('body-01');
+    color: var(--color-text-faint);
+  }
+}
+
+/// Visor de logs: líneas mono de 12 px, fecha pegajosa, color por nivel.
+///   <div class="logs"><div class="date">6 nov 2026</div>
+///   <div class="line" data-level="error"><time/> <span class="src"/> <span class="msg"/></div></div>
+@mixin log-viewer {
+  @include ty.type('mono-00');
+  background: var(--color-log-bg);
+  overflow: auto;
+
+  .date {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    height: 1.5rem;
+    padding: 0 1rem;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-log-border);
+    color: var(--color-text-muted);
+  }
+
+  // Coincidencias de la búsqueda dentro del log.
+  mark {
+    background: var(--color-log-match);
+    color: inherit;
+  }
+
+  .line {
+    display: flex;
+    gap: 0.75rem;
+    padding: 3px 1rem;
+    border-block: 1px solid var(--color-log-bg);
+
+    &:hover {
+      background: var(--color-log-hover);
+    }
+
+    time,
+    .src {
+      flex-shrink: 0;
+      color: var(--color-text-muted);
+    }
+
+    // Ícono opcional del nivel (app-icon class="lvl").
+    .lvl {
+      color: var(--color-log-info-icon);
+    }
+
+    .msg {
+      min-width: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: var(--color-text-strong);
+    }
+
+    &[data-level='warn'] {
+      background: var(--color-log-warn-bg);
+      border-color: var(--color-log-warn-border);
+
+      .lvl {
+        color: var(--color-log-warn-icon);
+      }
+    }
+
+    &[data-level='error'] {
+      background: var(--color-log-error-bg);
+      border-color: var(--color-log-error-border);
+
+      .lvl {
+        color: var(--color-log-error-icon);
+      }
+    }
+  }
+
+  @media (min-width: 768px) {
+    .date,
+    .line {
+      padding-inline: 3rem;
+    }
+  }
+}

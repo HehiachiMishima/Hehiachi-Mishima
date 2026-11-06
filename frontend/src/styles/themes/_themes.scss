@@ -1,0 +1,25 @@
+@use '../tokens/colors' as c;
+
+@mixin _emit($roles) {
+  @each $role, $value in $roles {
+    --color-#{$role}: #{$value};
+  }
+}
+
+// Tema claro por defecto; oscuro si el sistema lo pide o si el usuario lo elige (data-theme).
+:root {
+  color-scheme: light;
+  @include _emit(c.$roles-light);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    @include _emit(c.$roles-dark);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  @include _emit(c.$roles-dark);
+}

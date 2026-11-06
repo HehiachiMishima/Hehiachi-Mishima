@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, effect, input, output, signal } from '@angular/core';
+import { Button } from '../button/button';
 import { Icon } from '../icon/icon';
 import { Modal } from '../modal/modal';
 
@@ -12,12 +13,12 @@ let secuencia = 0;
 @Component({
   selector: 'ui-confirmacion',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Modal, Icon],
+  imports: [Modal, Icon, Button],
   template: `
     <ui-modal [abierto]="abierto()" ancho="sm" [compacto]="true" [alerta]="true" [titulo]="titulo()" (cerrar)="cancelar.emit()">
       <div class="confirm">
         <span class="confirm__icon" [class.confirm__icon--neutral]="!peligro()" aria-hidden="true">
-          <ui-icon [name]="icono()" [size]="22" />
+          <ui-icon [name]="icono()" [size]="20" />
         </span>
         <div class="confirm__text">
           <p class="confirm__title">{{ pregunta() }}</p>
@@ -35,12 +36,11 @@ let secuencia = 0;
         </div>
       </div>
       <div modal-footer class="modal-foot">
-        <button type="button" class="ui-btn ui-btn--ghost" data-autofocus (click)="cancelar.emit()">Cancelar</button>
+        <button type="button" appButton variant="ghost" data-autofocus (click)="cancelar.emit()">Cancelar</button>
         <button
           type="button"
-          class="ui-btn"
-          [class.ui-btn--danger]="peligro()"
-          [class.ui-btn--primary]="!peligro()"
+          appButton
+          [variant]="peligro() ? 'danger' : 'primary'"
           [attr.aria-disabled]="procesando() || null"
           [attr.aria-busy]="procesando() || null"
           (click)="!procesando() && confirmar.emit(motivo().trim())"

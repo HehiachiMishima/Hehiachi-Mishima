@@ -1,0 +1,38 @@
+@use 'design' as d;
+
+:host {
+  display: inline-flex;
+  min-width: 0;   // en grid/flex puede encogerse y desplazarse, en vez de ensanchar la página
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+button {
+  min-height: 2.25rem;
+  padding: 0 d.space('3');
+  border: 1px solid d.color('border');
+  border-radius: d.radius('md');
+  background: transparent;
+  @include d.type('interface-01');
+  color: d.color('text-muted');
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color d.motion('fast') d.motion('easing'), background-color d.motion('fast') d.motion('easing');
+  @include d.focus-ring(-2px);
+
+  & + button {
+    margin-left: -1px;   // bordes compartidos, sin doble línea
+  }
+
+  &:hover {
+    background: d.color('primary-soft');
+    color: d.color('accent');
+  }
+
+  &[aria-checked='true'] {
+    position: relative;   // su borde queda por encima de los vecinos
+    background: d.color('primary-soft');
+    border-color: d.color('accent');
+    color: d.color('accent');
+  }
+}

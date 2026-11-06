@@ -1,0 +1,136 @@
+@use 'design' as d;
+
+:host {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: d.space('2');
+  min-height: d.touch-target();
+  padding: 0 d.space('3');
+  border: 1px solid transparent;
+  border-radius: d.radius('md');
+  @include d.type('interface-01');
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color d.motion('fast') d.motion('easing'), background-color d.motion('fast') d.motion('easing'),
+    border-color d.motion('fast') d.motion('easing');
+  @include d.focus-ring;
+
+  &[disabled],
+  &[aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  @include d.bp('md') {
+    min-height: d.layout('control-height');
+  }
+}
+
+// Compacto (32 px): acciones dentro de tarjetas y paneles (Exportar, Editar).
+:host(.btn--sm) {
+  min-height: 2.25rem;
+  padding: 0 d.space('2');
+  @include d.type('interface-00');
+
+  @include d.bp('md') {
+    min-height: 2rem;
+  }
+}
+
+// Principal: negro sólido; al pasar el mouse, violeta.
+:host(.btn--primary) {
+  background: d.color('primary');
+  color: d.color('on-primary');
+
+  &:hover:not([disabled], [aria-disabled='true']) {
+    background: d.color('primary-hover');
+    color: d.color('on-accent');
+  }
+
+  &:active:not([disabled], [aria-disabled='true']) {
+    background: d.color('primary-active');
+  }
+
+  &[disabled],
+  &[aria-disabled='true'] {
+    background: d.color('surface-hover');
+    color: d.color('text-disabled');
+  }
+}
+
+// Secundario: contorno fino; al pasar el mouse se invierte (fondo del color del texto).
+:host(.btn--secondary) {
+  background: transparent;
+  border-color: d.color('border-control');
+  color: d.color('text-strong');
+
+  &:hover:not([disabled], [aria-disabled='true']) {
+    background: d.color('text-strong');
+    border-color: d.color('text-strong');
+    color: d.color('bg');
+  }
+
+  &[disabled],
+  &[aria-disabled='true'] {
+    color: d.color('text-disabled');
+  }
+}
+
+// Terciario: acción de texto con el acento (invitar, ver más).
+:host(.btn--tertiary) {
+  background: transparent;
+  color: d.color('accent');
+
+  &:hover:not([disabled], [aria-disabled='true']) {
+    background: d.color('surface-hover');
+  }
+
+  &:active:not([disabled], [aria-disabled='true']) {
+    color: d.color('accent-hover');
+  }
+}
+
+// Fantasma: acción de texto neutra (editar, cerrar).
+:host(.btn--ghost) {
+  background: transparent;
+  color: d.color('text');
+
+  &:hover:not([disabled], [aria-disabled='true']) {
+    background: d.color('surface-hover');
+    color: d.color('text-strong');
+  }
+}
+
+:host(.btn--danger) {
+  background: d.color('danger-solid');
+  color: d.color('on-accent');
+
+  &:hover:not([disabled], [aria-disabled='true']) {
+    background: d.color('danger-solid-hover');
+  }
+}
+
+:host(.btn--tertiary),
+:host(.btn--ghost),
+:host(.btn--secondary) {
+  &[disabled],
+  &[aria-disabled='true'] {
+    color: d.color('text-disabled');
+  }
+}
+
+.spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: d.radius('full');
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

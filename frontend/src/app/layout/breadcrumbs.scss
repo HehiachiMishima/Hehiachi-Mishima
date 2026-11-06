@@ -1,0 +1,53 @@
+@use 'design' as d;
+
+:host {
+  display: none;   // en celular el título de la página ya dice dónde estás
+  align-items: center;
+  min-width: 0;
+
+  @include d.bp('md') {
+    display: flex;
+  }
+}
+
+ol {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+
+  ui-icon {
+    color: d.color('border-strong');
+  }
+}
+
+a,
+.current {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: d.space('1') d.space('2');
+  @include d.type('body-01');
+  @include d.truncate;
+}
+
+a {
+  color: d.color('text-muted');
+
+  &:hover {
+    background: d.color('surface-hover');
+    color: d.color('text-strong');
+  }
+}
+
+.current {
+  color: d.color('text');
+}

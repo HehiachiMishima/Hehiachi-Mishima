@@ -1,4 +1,4 @@
-@use 'styles/tokens';
-@use 'styles/base';
-@use 'styles/components';
-@use 'styles/view-transition';
+// Estilos globales: sistema "consola plana" (fuentes, temas, base) y el vocabulario
+// compartido de la app (formularios, tablas, modales, toasts…).
+@use 'main';
+@use 'components/ui';

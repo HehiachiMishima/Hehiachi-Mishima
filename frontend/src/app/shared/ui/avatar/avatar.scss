@@ -1,0 +1,30 @@
+@use 'design' as d;
+
+:host {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: d.radius('full');
+  background: d.color('avatar-bg');
+  color: d.color('avatar-text');
+  user-select: none;
+}
+
+:host(.avatar--sm) {
+  width: 1.25rem;
+  height: 1.25rem;
+  @include d.type('avatar-small');
+  font-size: 0.625rem;   // dos iniciales caben en 20 px
+}
+
+:host(.avatar--md) {
+  width: 1.75rem;
+  height: 1.75rem;
+  @include d.type('avatar-medium');
+}
+
+:host(.avatar--lg) {
+  width: 2.25rem;
+  height: 2.25rem;
+  @include d.type('avatar-large');
+}

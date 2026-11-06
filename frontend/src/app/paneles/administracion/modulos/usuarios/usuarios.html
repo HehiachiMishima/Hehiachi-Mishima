@@ -1,29 +1,23 @@
-<header class="page-head">
-  <span class="page-head__icon" aria-hidden="true"><ui-icon name="usuarios" [size]="24" /></span>
-  <div class="page-head__main">
-    <span class="page-head__eyebrow">Panel {{ panel.nombre }}</span>
-    <h1 class="page-head__title" tabindex="-1">Usuarios</h1>
-    <p class="page-head__sub">Cuentas, estado y accesos. Selecciona un usuario para ver su detalle.</p>
-  </div>
-  <button *hasPermiso="permisos.CREAR_USUARIOS" type="button" class="ui-btn ui-btn--primary" (click)="abrirCrear()">
-    <ui-icon name="plus" [size]="18" />
-    Nuevo usuario
-  </button>
-</header>
+<app-page-header [eyebrow]="'Panel ' + panel.nombre" heading="Usuarios">
+  <ng-container pageMeta>
+    <span>Cuentas, estado y accesos. Selecciona un usuario para ver su detalle.</span>
+  </ng-container>
+  <ng-container pageActions>
+    <button *hasPermiso="permisos.CREAR_USUARIOS" type="button" appButton (click)="abrirCrear()">
+      <ui-icon name="plus" [size]="16" />
+      Nuevo usuario
+    </button>
+  </ng-container>
+</app-page-header>
 
 <div class="toolbar" role="search">
-  <div class="ui-search toolbar__grow">
-    <ui-icon name="search" [size]="18" />
-    <input
-      type="search"
-      class="ui-input"
-      aria-label="Buscar usuarios"
-      placeholder="Buscar por usuario, nombre o correo electrónico…"
-      [value]="textoBusqueda()"
-      (input)="buscar($any($event.target).value)"
-    />
-  </div>
-  <button type="button" class="ui-btn ui-btn--secondary toolbar__toggle" aria-controls="usr-filtros"
+  <app-search-field
+    label="Buscar usuarios"
+    placeholder="Buscar por usuario, nombre o correo…"
+    [value]="textoBusqueda()"
+    (valueChange)="buscar($event)"
+  />
+  <button type="button" appButton variant="secondary" class="toolbar__toggle" aria-controls="usr-filtros"
     [attr.aria-expanded]="filtrosAbiertos()" (click)="filtrosAbiertos.update((v) => !v)">
     <ui-icon name="filter" [size]="16" /> Filtros
     @if ((estado() ? 1 : 0) + (rol() ? 1 : 0) + (sinRol() ? 1 : 0); as n) {
@@ -50,7 +44,7 @@
     </button>
   }
   </div>
-  <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()" [attr.aria-disabled]="cargando() || null">
+  <button type="button" appButton variant="secondary" size="sm" (click)="cargar()" [attr.aria-disabled]="cargando() || null">
     <ui-icon name="refresh" [size]="16" />
     Actualizar
   </button>
@@ -71,7 +65,7 @@
     </div>
   } @else if (error()) {
     <ui-empty icono="alerta" titulo="No se pudieron cargar los usuarios" [mensaje]="error()!">
-      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()">
+      <button type="button" appButton variant="secondary" size="sm" (click)="cargar()">
         <ui-icon name="refresh" [size]="16" /> Reintentar
       </button>
     </ui-empty>
@@ -82,9 +76,9 @@
       [mensaje]="hayFiltros() ? 'Ningún usuario coincide con los filtros.' : 'Crea el primer usuario para empezar.'"
     >
       @if (hayFiltros()) {
-        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="limpiarFiltros()">Limpiar filtros</button>
+        <button type="button" appButton variant="secondary" size="sm" (click)="limpiarFiltros()">Limpiar filtros</button>
       } @else {
-        <button *hasPermiso="permisos.CREAR_USUARIOS" type="button" class="ui-btn ui-btn--primary ui-btn--sm" (click)="abrirCrear()">
+        <button *hasPermiso="permisos.CREAR_USUARIOS" type="button" appButton size="sm" (click)="abrirCrear()">
           <ui-icon name="plus" [size]="16" /> Nuevo usuario
         </button>
       }
@@ -109,7 +103,7 @@
             <tr [class.fila-activa]="usuario.id === detalle()?.id">
               <td class="celda-principal">
                 <div class="ui-person">
-                  <span class="ui-avatar" aria-hidden="true">{{ iniciales(usuario) }}</span>
+                  <app-avatar size="md" [name]="usuario.nombre + ' ' + usuario.apellido" />
                   <span class="ui-stack">
                     <button type="button" class="ui-link-btn ui-table__primary" (click)="abrirDetalle(usuario)"
                       [attr.aria-label]="'Ver detalle de ' + usuario.nombre + ' ' + usuario.apellido">
@@ -122,16 +116,16 @@
               <td class="celda-estado">
                 <span class="tag-list">
                   @if (usuario.activo) {
-                    <span class="ui-badge ui-badge--success"><span class="ui-dot" aria-hidden="true"></span> Activo</span>
+                    <app-badge tone="success">Activo</app-badge>
                   } @else {
-                    <span class="ui-badge ui-badge--neutral"><span class="ui-dot" aria-hidden="true"></span> Inactivo</span>
+                    <app-badge tone="neutral">Inactivo</app-badge>
                   }
                   @switch (proteccion(usuario)) {
                     @case ('sistema') {
-                      <span class="ui-badge ui-badge--neutral" [title]="bloqueoAccesos(usuario)"><ui-icon name="lock" [size]="12" /> Protegido</span>
+                      <app-badge tone="neutral" [title]="bloqueoAccesos(usuario)"><ui-icon name="lock" [size]="12" /> Protegido</app-badge>
                     }
                     @case ('propio') {
-                      <span class="ui-badge ui-badge--info">Tú</span>
+                      <app-badge tone="accent">Tú</app-badge>
                     }
                   }
                 </span>
@@ -142,14 +136,14 @@
                     @if (fila.roles.length) {
                       <span class="tag-list" [title]="fila.roles.join(', ')">
                         @for (nombre of fila.roles.slice(0, 2); track nombre) {
-                          <span class="ui-badge ui-badge--brand">{{ nombre }}</span>
+                          <app-badge tone="accent">{{ nombre }}</app-badge>
                         }
                         @if (fila.roles.length > 2) {
-                          <span class="ui-badge ui-badge--neutral">+{{ fila.roles.length - 2 }}<span class="u-sr-only"> roles más: {{ fila.roles.slice(2).join(', ') }}</span></span>
+                          <app-badge tone="neutral">+{{ fila.roles.length - 2 }}<span class="u-sr-only"> roles más: {{ fila.roles.slice(2).join(', ') }}</span></app-badge>
                         }
                       </span>
                     } @else {
-                      <span class="ui-badge ui-badge--warning">Sin rol</span>
+                      <app-badge tone="warning">Sin rol</app-badge>
                     }
                   } @else if (cargandoResumen()) {
                     <span class="ui-skeleton celda-skeleton"><span class="u-sr-only">Cargando</span></span>
@@ -176,31 +170,11 @@
                 </span>
               </td>
               <td class="celda-acciones">
-                <div class="row-actions">
-                  <button *hasPermiso="permisos.ASIGNAR_ROLES" type="button" class="ui-icon-btn"
-                    [title]="bloqueoAccesos(usuario) ?? 'Roles'"
-                    [attr.aria-label]="'Roles de ' + formatearLogin(usuario.usuario)"
-                    [attr.aria-disabled]="!!bloqueoAccesos(usuario) || null" (click)="abrirRoles(usuario)">
-                    <ui-icon name="shieldCheck" [size]="18" />
-                  </button>
-                  <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" class="ui-icon-btn"
-                    [title]="bloqueoEdicion(usuario) ?? 'Editar'"
-                    [attr.aria-label]="'Editar a ' + formatearLogin(usuario.usuario)"
-                    [attr.aria-disabled]="!!bloqueoEdicion(usuario) || null" (click)="abrirEditar(usuario)">
-                    <ui-icon name="edit" [size]="18" />
-                  </button>
-                  <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" class="ui-icon-btn"
-                    [class.ui-icon-btn--danger]="usuario.activo && !bloqueoAccesos(usuario)"
-                    [title]="bloqueoAccesos(usuario) ?? (usuario.activo ? 'Desactivar' : 'Activar')"
-                    [attr.aria-label]="(usuario.activo ? 'Desactivar a ' : 'Activar a ') + formatearLogin(usuario.usuario)"
-                    [attr.aria-disabled]="!!bloqueoAccesos(usuario) || null" (click)="alternarActivo(usuario)">
-                    <ui-icon [name]="usuario.activo ? 'userX' : 'userCheck'" [size]="18" />
-                  </button>
-                  <button type="button" class="ui-icon-btn" title="Detalle"
-                    [attr.aria-label]="'Más acciones y detalle de ' + formatearLogin(usuario.usuario)" (click)="abrirDetalle(usuario)">
-                    <ui-icon name="more" [size]="18" />
-                  </button>
-                </div>
+                <button type="button" class="ui-icon-btn" [cdkMenuTriggerFor]="accionesFila"
+                  [cdkMenuTriggerData]="{ $implicit: usuario }"
+                  [attr.aria-label]="'Acciones de ' + formatearLogin(usuario.usuario)">
+                  <ui-icon name="more" [size]="16" />
+                </button>
               </td>
             </tr>
           }
@@ -217,6 +191,43 @@
     />
   }
 </div>
+
+<ng-template #accionesFila let-usuario>
+  <div appMenu>
+    @if (bloqueoAccesos(usuario); as motivo) {
+      <p class="menu-nota"><ui-icon name="lock" [size]="16" /> {{ motivo }}</p>
+      <app-menu-separator />
+    }
+    <button appMenuItem (cdkMenuItemTriggered)="abrirDetalle(usuario)">
+      <ui-icon name="user" [size]="16" /> Ver detalle
+    </button>
+    <button *hasPermiso="permisos.ASIGNAR_ROLES" appMenuItem [disabled]="!!bloqueoAccesos(usuario)"
+      (cdkMenuItemTriggered)="abrirRoles(usuario)">
+      <ui-icon name="shieldCheck" [size]="16" /> Roles
+    </button>
+    <button *hasPermiso="permisos.VER_PERMISOS" appMenuItem (cdkMenuItemTriggered)="abrirPermisos(usuario)">
+      <ui-icon name="key" [size]="16" /> Permisos efectivos
+    </button>
+    <button *hasPermiso="permisos.MODIFICAR_USUARIOS" appMenuItem [disabled]="!!bloqueoEdicion(usuario)"
+      (cdkMenuItemTriggered)="abrirEditar(usuario)">
+      <ui-icon name="edit" [size]="16" /> Editar
+    </button>
+    <button *hasPermiso="permisos.MODIFICAR_USUARIOS" appMenuItem [disabled]="!!bloqueoAccesos(usuario)"
+      (cdkMenuItemTriggered)="abrirRestablecer(usuario)">
+      <ui-icon name="key" [size]="16" /> Restablecer contraseña
+    </button>
+    <button *hasPermiso="permisos.MODIFICAR_USUARIOS" appMenuItem [disabled]="!!bloqueoAccesos(usuario)"
+      (cdkMenuItemTriggered)="alternarActivo(usuario)">
+      <ui-icon [name]="usuario.activo ? 'userX' : 'userCheck'" [size]="16" /> {{ usuario.activo ? 'Desactivar' : 'Activar' }}
+    </button>
+    <ng-container *hasPermiso="permisos.ELIMINAR_USUARIOS">
+      <app-menu-separator />
+      <button appMenuItem tone="danger" [disabled]="!!bloqueoAccesos(usuario)" (cdkMenuItemTriggered)="confirmarEliminar(usuario)">
+        <ui-icon name="trash" [size]="16" /> Eliminar
+      </button>
+    </ng-container>
+  </div>
+</ng-template>
 
 <!-- Panel de detalle -->
 <ui-modal
@@ -249,7 +260,7 @@
             <dd>{{ u.actualizadoEn ? (u.actualizadoEn | fechaHora) + ' por ' + (u.actualizadoPor | actorLabel) : 'Sin cambios' }}</dd>
           </dl>
           @if (bloqueoAccesos(u); as motivo) {
-            <p class="modal-hint detalle__aviso"><ui-icon name="lock" [size]="14" /> {{ motivo }}</p>
+            <app-notice tone="warning" class="detalle__aviso">{{ motivo }}</app-notice>
           }
         </section>
       }
@@ -259,7 +270,7 @@
             <h3 class="detalle__titulo">Roles</h3>
             @if (fila.roles.length) {
               <span class="tag-list">
-                @for (nombre of fila.roles; track nombre) { <span class="ui-badge ui-badge--brand">{{ nombre }}</span> }
+                @for (nombre of fila.roles; track nombre) { <app-badge tone="accent">{{ nombre }}</app-badge> }
               </span>
             } @else {
               <p class="ui-hint">Sin rol: este usuario no recibe permisos por rol.</p>
@@ -267,7 +278,7 @@
             <h3 class="detalle__titulo">Permisos efectivos ({{ fila.permisos.length }})</h3>
             @if (fila.permisos.length) {
               <ul class="detalle__lista">
-                @for (nombre of fila.permisos; track nombre) { <li><span class="credencial">{{ nombre }}</span></li> }
+                @for (nombre of fila.permisos; track nombre) { <li><code>{{ nombre }}</code></li> }
               </ul>
             } @else {
               <p class="ui-hint">No tiene ningún permiso efectivo.</p>
@@ -276,11 +287,11 @@
             <p class="ui-hint">El resumen de accesos no está disponible con tus permisos.</p>
           }
           <div class="detalle__acciones">
-            <button *hasPermiso="permisos.ASIGNAR_ROLES" type="button" class="ui-btn ui-btn--secondary ui-btn--sm"
+            <button *hasPermiso="permisos.ASIGNAR_ROLES" type="button" appButton variant="secondary" size="sm"
               [attr.aria-disabled]="!!bloqueoAccesos(u) || null" [title]="bloqueoAccesos(u) ?? ''" (click)="abrirRoles(u)">
               <ui-icon name="shieldCheck" [size]="16" /> Gestionar roles
             </button>
-            <button *hasPermiso="permisos.VER_PERMISOS" type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="abrirPermisos(u)">
+            <button *hasPermiso="permisos.VER_PERMISOS" type="button" appButton variant="secondary" size="sm" (click)="abrirPermisos(u)">
               <ui-icon name="key" [size]="16" /> Ver por qué tiene cada permiso
             </button>
           </div>
@@ -296,15 +307,15 @@
 
   <div modal-footer class="modal-foot detalle__pie">
     @if (detalle(); as u) {
-      <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" class="ui-btn ui-btn--secondary ui-btn--sm"
+      <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" appButton variant="secondary" size="sm"
         [attr.aria-disabled]="!!bloqueoEdicion(u) || null" [title]="bloqueoEdicion(u) ?? ''" (click)="abrirEditar(u)">
         <ui-icon name="edit" [size]="16" /> Editar
       </button>
-      <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" class="ui-btn ui-btn--secondary ui-btn--sm"
+      <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" appButton variant="secondary" size="sm"
         [attr.aria-disabled]="!!bloqueoAccesos(u) || null" [title]="bloqueoAccesos(u) ?? ''" (click)="abrirRestablecer(u)">
         <ui-icon name="key" [size]="16" /> Restablecer contraseña
       </button>
-      <button *hasPermiso="permisos.ELIMINAR_USUARIOS" type="button" class="ui-btn ui-btn--danger ui-btn--sm"
+      <button *hasPermiso="permisos.ELIMINAR_USUARIOS" type="button" appButton variant="danger" size="sm"
         [attr.aria-disabled]="!!bloqueoAccesos(u) || null" [title]="bloqueoAccesos(u) ?? ''" (click)="confirmarEliminar(u)">
         <ui-icon name="trash" [size]="16" /> Eliminar
       </button>
@@ -403,7 +414,7 @@
       </div>
       <div class="ui-field">
         <span class="ui-label" aria-hidden="true">&nbsp;</span>
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" [attr.aria-pressed]="verContrasena()" (click)="verContrasena.update((v) => !v)">
+        <button type="button" appButton variant="ghost" size="sm" [attr.aria-pressed]="verContrasena()" (click)="verContrasena.update((v) => !v)">
           <ui-icon [name]="verContrasena() ? 'eyeOff' : 'eye'" [size]="16" /> Mostrar contraseñas
         </button>
       </div>
@@ -419,7 +430,7 @@
               @for (rol of catalogoRoles(); track rol.id) {
                 <label class="check">
                   <input type="checkbox" [checked]="rolesIniciales().has(rol.id)" (change)="alternarRolInicial(rol.id)" />
-                  <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="14" /></span>
+                  <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="16" /></span>
                   <span>{{ rol.nombre }}</span>
                 </label>
               }
@@ -431,14 +442,14 @@
 
     <label class="check">
       <input type="checkbox" formControlName="activo" />
-      <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="14" /></span>
+      <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="16" /></span>
       <span>Cuenta activa (puede iniciar sesión)</span>
     </label>
   </form>
 
   <div modal-footer class="modal-foot">
-    <button type="button" class="ui-btn ui-btn--ghost" (click)="cerrarForm()">Cancelar</button>
-    <button type="submit" form="form-usuario" class="ui-btn ui-btn--primary" [attr.aria-disabled]="guardando() || null">
+    <button type="button" appButton variant="ghost" (click)="cerrarForm()">Cancelar</button>
+    <button type="submit" form="form-usuario" appButton [attr.aria-disabled]="guardando() || null">
       @if (guardando()) { <span class="ui-spinner ui-spinner--sm" aria-hidden="true"></span> }
       {{ editando() ? 'Guardar cambios' : 'Crear usuario' }}
     </button>

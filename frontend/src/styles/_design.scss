@@ -1,0 +1,83 @@
+// Punto de entrada del sistema de diseño para componentes:
+//   @use 'design' as d;
+//   .x { padding: d.space('4'); color: d.color('text-muted'); @include d.bp('md') { ... } }
+// Las funciones fallan en compilación si el token no existe: un error de tipeo no llega a producción.
+
+@use 'sass:map';
+@use 'tokens/colors' as c;
+@use 'tokens/scale' as s;
+@use 'tokens/breakpoints' as b;
+
+@forward 'mixins/responsive';
+@forward 'mixins/a11y';
+@forward 'mixins/text';
+@forward 'mixins/typography';
+@forward 'mixins/patterns';
+
+@function _get($map, $key, $kind) {
+  @if not map.has-key($map, $key) {
+    @error '#{$kind} "#{$key}" no existe. Disponibles: #{map.keys($map)}';
+  }
+  @return map.get($map, $key);
+}
+
+/// Color por rol semántico → variable CSS del tema activo.
+@function color($role) {
+  $_: _get(c.$roles-light, $role, 'Color (tema claro)');
+  $_: _get(c.$roles-dark, $role, 'Color (tema oscuro)');
+  @return var(--color-#{$role});
+}
+
+@function space($key) {
+  @return _get(s.$space, $key, 'Espacio');
+}
+
+@function font-size($key) {
+  @return _get(s.$font-size, $key, 'Tamaño de fuente');
+}
+
+@function font-weight($key) {
+  @return _get(s.$font-weight, $key, 'Peso de fuente');
+}
+
+@function line-height($key) {
+  @return _get(s.$line-height, $key, 'Interlineado');
+}
+
+@function font-family($key) {
+  @return _get(s.$font-family, $key, 'Familia tipográfica');
+}
+
+@function radius($key) {
+  @return _get(s.$radius, $key, 'Radio');
+}
+
+@function shadow($key) {
+  @return _get(s.$shadow, $key, 'Sombra');
+}
+
+@function z($key) {
+  @return _get(s.$z, $key, 'Capa');
+}
+
+@function motion($key) {
+  @return _get(s.$motion, $key, 'Movimiento');
+}
+
+@function tracking($key) {
+  @return _get(s.$tracking, $key, 'Tracking');
+}
+
+/// Medidas del layout de consola: topbar-height, sidebar-width, control-height, nav-item-height, badge-height, content-max.
+@function layout($key) {
+  @return _get(s.$layout, $key, 'Medida de layout');
+}
+
+@function touch-target() {
+  @return s.$touch-target;
+}
+
+/// Ancho de un breakpoint (para container queries o cálculos).
+@function breakpoint($key) {
+  @return _get(b.$breakpoints, $key, 'Breakpoint');
+}

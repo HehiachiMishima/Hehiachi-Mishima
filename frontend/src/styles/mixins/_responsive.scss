@@ -1,0 +1,58 @@
+@use 'sass:map';
+@use '../tokens/breakpoints' as b;
+
+/// Desde el breakpoint hacia arriba (mobile-first). @include d.bp('md') { ... }
+@mixin bp($name) {
+  @if not map.has-key(b.$breakpoints, $name) {
+    @error 'Breakpoint "#{$name}" no existe. Disponibles: #{map.keys(b.$breakpoints)}';
+  }
+  @media (min-width: map.get(b.$breakpoints, $name)) {
+    @content;
+  }
+}
+
+/// Por debajo del breakpoint. Úsalo solo cuando sea más claro que mobile-first.
+@mixin bp-down($name) {
+  @if not map.has-key(b.$breakpoints, $name) {
+    @error 'Breakpoint "#{$name}" no existe. Disponibles: #{map.keys(b.$breakpoints)}';
+  }
+  @media (max-width: calc(#{map.get(b.$breakpoints, $name)} - 0.02px)) {
+    @content;
+  }
+}
+
+/// Declara el elemento como contenedor de consultas: sus hijos se adaptan a SU ancho.
+@mixin container($name: null) {
+  container-type: inline-size;
+  @if $name {
+    container-name: $name;
+  }
+}
+
+/// Estilos cuando el contenedor (no la pantalla) mide al menos $min.
+/// @include d.cq(40rem) { ... } o @include d.cq(40rem, 'tabla') { ... }
+@mixin cq($min, $name: null) {
+  @if $name {
+    @container #{$name} (min-width: #{$min}) {
+      @content;
+    }
+  } @else {
+    @container (min-width: #{$min}) {
+      @content;
+    }
+  }
+}
+
+/// Respeta a quien pide menos movimiento.
+@mixin motion-safe {
+  @media (prefers-reduced-motion: no-preference) {
+    @content;
+  }
+}
+
+/// Pantallas táctiles (dedo, no mouse): agranda las áreas de toque a 44 px.
+@mixin touch {
+  @media (pointer: coarse) {
+    @content;
+  }
+}

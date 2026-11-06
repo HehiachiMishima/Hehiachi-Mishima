@@ -8,12 +8,14 @@ import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
 import { Icon } from '../../../../shared/ui/icon/icon';
 import { Modal } from '../../../../shared/ui/modal/modal';
 import { formatearLogin } from '../../../../shared/util/formato';
+import { Button } from '../../../../shared/ui/button/button';
+import { Badge } from '../../../../shared/ui/badge/badge';
 
 /** Asignación de roles a un usuario. Emite `cerrar(true)` si hubo cambios. */
 @Component({
   selector: 'app-roles-usuario',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Modal, Icon, EmptyState],
+  imports: [Modal, Icon, EmptyState, Button, Badge],
   template: `
     <ui-modal [abierto]="!!usuario()" titulo="Roles del usuario" [subtitulo]="login()" (cerrar)="cerrarModal()">
       <p class="modal-hint">
@@ -32,7 +34,7 @@ import { formatearLogin } from '../../../../shared/util/formato';
                 <span class="role-item__name">
                   {{ rol.nombre }}
                   @if (!rol.activo) {
-                    <span class="ui-badge ui-badge--neutral">Inactivo · no concede permisos</span>
+                    <app-badge tone="neutral">Inactivo · no concede permisos</app-badge>
                   }
                 </span>
                 <span class="role-item__desc" [id]="'ru-desc-' + rol.id">{{ rol.descripcion || 'Sin descripción' }}</span>
@@ -56,7 +58,7 @@ import { formatearLogin } from '../../../../shared/util/formato';
         </ul>
       }
       <div modal-footer class="modal-foot">
-        <button type="button" class="ui-btn ui-btn--primary" (click)="cerrarModal()">Cerrar</button>
+        <button type="button" appButton (click)="cerrarModal()">Cerrar</button>
       </div>
     </ui-modal>
   `,

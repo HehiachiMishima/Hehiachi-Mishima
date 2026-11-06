@@ -9,28 +9,26 @@ import { Icon } from '../../shared/ui/icon/icon';
   selector: 'app-portal',
   imports: [RouterOutlet, RouterLink, Icon, MenuCuenta],
   template: `
-    <div class="portal">
-      <header class="portal__bar">
-        <a class="portal__brand" routerLink="/">
-          <img src="logoImg.png" alt="" width="28" height="28" />
-          <span>Hehiachi Mishima</span>
-        </a>
-        <div class="portal__acciones">
-          <button
-            type="button"
-            class="ui-icon-btn"
-            (click)="tema.alternar($event)"
-            [attr.aria-label]="tema.tema() === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
-          >
-            <ui-icon [name]="tema.tema() === 'dark' ? 'sun' : 'moon'" [size]="18" />
-          </button>
-          <app-menu-cuenta />
-        </div>
-      </header>
-      <main id="contenido" class="portal__contenido" tabindex="-1">
-        <router-outlet />
-      </main>
-    </div>
+    <header class="topbar">
+      <a class="cell marca" routerLink="/">
+        <img src="logoImg.png" alt="" width="20" height="20" />
+        <span>Hehiachi Mishima</span>
+      </a>
+      <div class="topbar__fin">
+        <button
+          type="button"
+          class="cell cell--icono"
+          (click)="tema.alternar($event)"
+          [attr.aria-label]="tema.tema() === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+        >
+          <ui-icon [name]="tema.tema() === 'dark' ? 'sun' : 'moon'" [size]="16" />
+        </button>
+        <app-menu-cuenta />
+      </div>
+    </header>
+    <main id="contenido" class="contenido" tabindex="-1">
+      <router-outlet />
+    </main>
   `,
   styleUrl: './portal.scss',
 })

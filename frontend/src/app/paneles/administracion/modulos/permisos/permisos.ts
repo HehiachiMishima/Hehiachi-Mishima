@@ -21,6 +21,12 @@ import { PANEL_ACTUAL } from '../../../panel-actual';
 import { Modal } from '../../../../shared/ui/modal/modal';
 import { Paginador } from '../../../../shared/ui/paginador/paginador';
 import { crearEstadoUrl, numeroUrl, opcionUrl, paginar, textoUrl } from '../../../../shared/util/estado-url';
+import { Button } from '../../../../shared/ui/button/button';
+import { Badge } from '../../../../shared/ui/badge/badge';
+import { PageHeader } from '../../../../shared/ui/page-header/page-header';
+import { SearchField } from '../../../../shared/ui/search-field/search-field';
+import { Menu, MenuItem, MenuSeparator } from '../../../../shared/ui/menu/menu';
+import { CdkMenuTrigger } from '@angular/cdk/menu';
 
 type Estado = '' | 'activos' | 'inactivos';
 
@@ -37,7 +43,7 @@ type Estado = '' | 'activos' | 'inactivos';
     HasPermiso,
     ColumnasRedimensionables,
     Paginador,
-  ],
+    Button, Badge, PageHeader, SearchField, Menu, MenuItem, MenuSeparator, CdkMenuTrigger],
   templateUrl: './permisos.html',
   styleUrl: './permisos.scss',
 })

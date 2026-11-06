@@ -1,0 +1,20 @@
+/// Una línea con puntos suspensivos. El contenedor necesita un ancho acotado (min-width: 0 en grid/flex).
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/// Máximo $lines líneas con puntos suspensivos.
+@mixin line-clamp($lines) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: $lines;
+  line-clamp: $lines;
+  overflow: hidden;
+}
+
+/// Cifras alineadas en columnas (importes, cantidades).
+@mixin tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

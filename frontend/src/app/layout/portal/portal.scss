@@ -1,81 +1,89 @@
-@use 'breakpoints' as bp;
+@use 'design' as d;
 
-/**
- * Marco de las vistas fuera de un panel (centro de mando, acceso denegado
- * global): barra superior de cristal sobre la aurora a pantalla completa.
- */
 :host {
-  display: block;
+  display: grid;
+  grid-template-rows: d.layout('topbar-height') minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 100dvh;
+  background: d.color('bg');
 }
 
-.portal {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
-
-.portal__bar {
+.topbar {
   position: sticky;
   top: 0;
-  z-index: var(--z-sticky);
+  z-index: d.z('drawer');
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: calc(var(--topbar-h) + var(--safe-top));
-  padding: var(--safe-top) max(var(--gutter), var(--safe-right)) 0 max(var(--gutter), var(--safe-left));
-  background: var(--glass-sheen), var(--surface-glass);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  border-bottom: 1px solid var(--glass-border);
-  box-shadow: 0 1px 0 var(--glass-ring), 0 10px 30px -18px rgba(30, 27, 75, 0.35);
+  align-items: stretch;
+  background: d.color('surface');
+  border-bottom: 1px solid d.color('border');
 }
 
-.portal__brand {
+.cell {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
-  min-height: 44px;
-  min-width: 0;
-  color: var(--text);
-  font-family: var(--font-display);
-  font-size: var(--fs-base);
-  font-weight: var(--fw-bold);
-  letter-spacing: -0.01em;
+  justify-content: center;
+  gap: d.space('2');
+  min-width: d.layout('topbar-height');
+  padding: 0 d.space('4');
+  border: 0;
+  background: transparent;
+  @include d.type('interface-00');
+  color: d.color('text');
+  cursor: pointer;
+  transition: background-color d.motion('fast') d.motion('easing');
+  @include d.focus-ring(-2px);
 
-  &:hover { text-decoration: none; }
+  &:hover {
+    background: d.color('surface-hover');
+  }
 
-  span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  img {
-    width: 34px;
-    height: 34px;
-    flex: none;
-    padding: 3px;
-    border-radius: var(--radius);
-    background: #ffffff; /* el logotipo es opaco: siempre sobre blanco */
-    box-shadow: 0 6px 16px -6px rgba(79, 70, 229, 0.55), 0 0 0 1px rgba(79, 70, 229, 0.18);
+  ui-icon {
+    color: d.color('text-faint');
   }
 }
 
-.portal__acciones {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  flex: none;
+.cell--icono {
+  padding: 0;
 }
 
-.portal__contenido {
-  flex: 1;
+.marca {
+  justify-content: flex-start;
+  border-right: 1px solid d.color('border');
+  @include d.type('mono-01-caps');
+  color: d.color('text-strong');
+
+  @include d.bp('lg') {
+    width: d.layout('sidebar-width');
+  }
+
+  &:hover {
+    color: d.color('text-strong');
+  }
+}
+
+.topbar__fin {
+  display: flex;
+  align-items: stretch;
+  margin-left: auto;
+
+  > * {
+    border-left: 1px solid d.color('border');
+  }
+}
+
+.contenido {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
   width: 100%;
-  max-width: var(--content-max);
-  min-width: 0;
-  margin: 0 auto;
-  padding: var(--space-8) max(var(--gutter), var(--safe-right)) calc(var(--space-12) + var(--safe-bottom))
-    max(var(--gutter), var(--safe-left));
+  max-width: d.layout('content-max');
+  padding: d.space('8') d.space('4') d.space('12');
 
-  &:focus { outline: none; }
+  @include d.bp('md') {
+    padding-inline: d.space('6');
+  }
 
-  @include bp.up(lg) { padding-top: var(--space-16); }
+  @include d.bp('lg') {
+    padding-inline: d.space('12');
+  }
 }

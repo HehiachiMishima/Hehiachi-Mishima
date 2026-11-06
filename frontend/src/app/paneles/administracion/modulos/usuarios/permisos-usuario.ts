@@ -9,6 +9,11 @@ import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
 import { Icon } from '../../../../shared/ui/icon/icon';
 import { Modal } from '../../../../shared/ui/modal/modal';
 import { formatearLogin } from '../../../../shared/util/formato';
+import { Button } from '../../../../shared/ui/button/button';
+import { Badge } from '../../../../shared/ui/badge/badge';
+import { Notice } from '../../../../shared/ui/notice/notice';
+import { SearchField } from '../../../../shared/ui/search-field/search-field';
+import { Segmented } from '../../../../shared/ui/segmented/segmented';
 
 type Ajuste = 'heredar' | 'conceder' | 'denegar';
 type Filtro = 'todos' | 'permitidos' | 'bloqueados' | 'ajustes';
@@ -34,7 +39,7 @@ interface Resolucion {
 @Component({
   selector: 'app-permisos-usuario',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Modal, Icon, EmptyState],
+  imports: [Modal, Icon, EmptyState, Button, Badge, Notice, SearchField, Segmented],
   templateUrl: './permisos-usuario.html',
 })
 export class PermisosUsuario {
@@ -95,6 +100,8 @@ export class PermisosUsuario {
     { id: 'conceder', etiqueta: 'Conceder', clase: 'grant' },
     { id: 'denegar', etiqueta: 'Denegar', clase: 'deny' },
   ];
+
+  readonly opcionesFiltro = computed(() => this.filtros.map((f) => ({ value: f.id, label: f.etiqueta })));
 
   readonly filtros: { id: Filtro; etiqueta: string }[] = [
     { id: 'todos', etiqueta: 'Todos' },

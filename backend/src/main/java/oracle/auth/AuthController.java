@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Mono;
 
 /** Acceso: login (publico), sesion vigente y cambio de la propia contrasena. */
 @RestController
@@ -38,7 +37,7 @@ public class AuthController {
 
     @PostMapping("/login")
     @PreAuthorize("permitAll()")
-    public Mono<ApiResponse<AuthResponse>> login(
+    public ApiResponse<AuthResponse> login(
             @Valid @RequestBody LoginRequest peticion,
             HttpServletRequest http) {
         // Doble cubo reservado ANTES de verificar (sin carrera): por IP (frena la
@@ -65,7 +64,7 @@ public class AuthController {
     /** Sesion vigente (usuario + permisos actuales) del portador del token. */
     @GetMapping("/sesion")
     @PreAuthorize("isAuthenticated()")
-    public Mono<ApiResponse<SesionResponse>> sesion() {
+    public ApiResponse<SesionResponse> sesion() {
         return authService.sesionActual(ActorActual.id());
     }
 
@@ -75,7 +74,7 @@ public class AuthController {
      */
     @PutMapping("/contrasena")
     @PreAuthorize("isAuthenticated()")
-    public Mono<ApiResponse<AuthResponse>> cambiarContrasena(@Valid @RequestBody CambiarContrasenaRequest peticion) {
+    public ApiResponse<AuthResponse> cambiarContrasena(@Valid @RequestBody CambiarContrasenaRequest peticion) {
         return authService.cambiarContrasena(ActorActual.id(), peticion);
     }
 }

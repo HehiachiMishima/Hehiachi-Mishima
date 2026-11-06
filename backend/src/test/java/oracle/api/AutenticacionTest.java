@@ -126,7 +126,7 @@ class AutenticacionTest extends ApiPrueba {
             assertThat(fallidos.get(0).path("detalle").path("bloqueada").asBoolean()).isTrue();
 
             // Al vencer el bloqueo (simulado) la clave correcta entra y el contador vuelve a 0.
-            jdbc.update("UPDATE usuarios SET bloqueado_hasta = NOW(6) - INTERVAL 1 SECOND WHERE id = ?", u.id());
+            jdbc.update("UPDATE usuarios SET bloqueado_hasta = now() - interval '1 second' WHERE id = ?", u.id());
             esperarStatus(intentarLogin(u.usuario(), u.contrasena(), ipNueva()), 200);
             assertThat(jdbc.queryForObject("SELECT intentos_fallidos FROM usuarios WHERE id = ?", Integer.class,
                     u.id())).isZero();

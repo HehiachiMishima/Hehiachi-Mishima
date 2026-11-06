@@ -1,0 +1,208 @@
+@use '../design' as d;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  @include d.type('body-02');
+  color: d.color('text');
+  background: d.color('bg');
+  -webkit-font-smoothing: antialiased;
+}
+
+// Jerarquía: h1 página (32/28) · h2 sección (24) · h3 tarjeta o panel (20) · h4 elemento (16).
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+}
+
+h1 {
+  @include d.page-title;
+}
+
+h2 {
+  @include d.section-title;
+}
+
+h3 {
+  @include d.card-title;
+}
+
+h4 {
+  @include d.type('heading-02');
+  color: d.color('text-strong');
+}
+
+p {
+  margin: 0;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+a {
+  color: d.color('accent');
+  text-decoration: none;
+  transition: color d.motion('fast') d.motion('easing');
+  @include d.focus-ring;
+
+  &:hover {
+    color: d.color('accent-hover');
+  }
+}
+
+code,
+samp {
+  font-family: d.font-family('mono');
+}
+
+// Código en línea: fondo gris suave, sin radio.
+:not(pre) > code {
+  padding: 0 d.space('1');
+  background: d.color('code-inline-bg');
+  font-size: 0.875em;
+}
+
+pre {
+  @include d.code-block;
+}
+
+kbd {
+  @include d.kbd;
+}
+
+// Acordeón nativo (<details><summary>): fila de 48 px, chevron a la izquierda.
+details {
+  border: 1px solid d.color('border');
+
+  & + details {
+    border-top: 0;
+  }
+
+  > summary {
+    display: flex;
+    align-items: center;
+    gap: d.space('3');
+    min-height: 3rem;
+    padding: d.space('3');
+    @include d.type('body-02-semi-bold');
+    cursor: pointer;
+    list-style: none;
+    transition: background-color d.motion('fast') d.motion('easing');
+    @include d.focus-ring(-2px);
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::before {
+      content: '';
+      width: 0.4375rem;
+      height: 0.4375rem;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      transform: rotate(-45deg);
+      transition: transform d.motion('fast') d.motion('easing');
+    }
+
+    &:hover {
+      background: d.color('surface-hover');
+    }
+  }
+
+  &[open] > summary::before {
+    transform: rotate(45deg);
+  }
+
+  > :not(summary) {
+    padding: 0 d.space('3') d.space('3') d.space('8');
+  }
+}
+
+// Barras de desplazamiento finas y neutras.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+}
+
+// Controles de formulario: rectos, borde gris, 40 px de alto, fondo transparente.
+input:not([type='checkbox'], [type='radio'], [type='range']),
+select,
+textarea {
+  width: 100%;
+  min-height: d.layout('control-height');
+  padding: d.space('2') d.space('3');
+  border: 1px solid d.color('border-strong');
+  border-radius: d.radius('md');
+  background: transparent;
+  @include d.type('interface-01');
+  color: d.color('text');
+  transition: border-color d.motion('fast') d.motion('easing');
+
+  &::placeholder {
+    color: d.color('text-faint');
+  }
+
+  &:hover:not(:disabled, [readonly]) {
+    border-color: d.color('text-faint');
+  }
+
+  &:focus-visible {
+    outline: 2px solid d.color('focus');
+    outline-offset: -1px;
+  }
+
+  &[readonly],
+  &:disabled {
+    background: d.color('surface-readonly');
+    border-color: d.color('border');
+    color: d.color('text-muted');
+  }
+
+  &[aria-invalid='true'] {
+    border-color: d.color('danger');
+  }
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-accent);
+}
+
+::selection {
+  background: d.color('primary-soft');
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

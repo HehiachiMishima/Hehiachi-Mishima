@@ -11,6 +11,7 @@ import { coinciden, contrasenaSegura } from '../../shared/forms/validadores';
 import { Icon } from '../../shared/ui/icon/icon';
 import { Modal } from '../../shared/ui/modal/modal';
 import { RequisitosContrasena } from '../../shared/ui/requisitos/requisitos-contrasena';
+import { Button } from '../../shared/ui/button/button';
 
 type Campo = 'contrasenaActual' | 'contrasenaNueva' | 'confirmacion';
 
@@ -18,7 +19,7 @@ type Campo = 'contrasenaActual' | 'contrasenaNueva' | 'confirmacion';
 @Component({
   selector: 'app-cambiar-contrasena',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, Modal, Icon, RequisitosContrasena],
+  imports: [ReactiveFormsModule, Modal, Icon, RequisitosContrasena, Button],
   template: `
     <ui-modal [abierto]="abierto()" titulo="Cambiar mi contraseña" subtitulo="Por seguridad, confirma tu contraseña actual." (cerrar)="cerrar.emit()">
       <form id="form-contrasena" class="grid-form" [formGroup]="formulario" (ngSubmit)="guardar()" novalidate>
@@ -58,15 +59,15 @@ type Campo = 'contrasenaActual' | 'contrasenaNueva' | 'confirmacion';
           }
         </div>
 
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" [attr.aria-pressed]="visible()" (click)="visible.update((v) => !v)">
+        <button type="button" appButton variant="ghost" size="sm" [attr.aria-pressed]="visible()" (click)="visible.update((v) => !v)">
           <ui-icon [name]="visible() ? 'eyeOff' : 'eye'" [size]="16" />
           Mostrar contraseñas
         </button>
       </form>
 
       <div modal-footer class="modal-foot">
-        <button type="button" class="ui-btn ui-btn--ghost" (click)="cerrar.emit()">Cancelar</button>
-        <button type="submit" form="form-contrasena" class="ui-btn ui-btn--primary" [attr.aria-disabled]="guardando() || null">
+        <button type="button" appButton variant="ghost" (click)="cerrar.emit()">Cancelar</button>
+        <button type="submit" form="form-contrasena" appButton [attr.aria-disabled]="guardando() || null">
           @if (guardando()) { <span class="ui-spinner ui-spinner--sm" aria-hidden="true"></span> }
           Cambiar contraseña
         </button>

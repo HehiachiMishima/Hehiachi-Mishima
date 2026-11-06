@@ -1,521 +1,563 @@
--- Active: 1791152181635@@127.0.0.1@3306@hehiachi_mishima
--- ============================================================
--- ESQUEMA: RBAC + Overrides
--- ============================================================
--- Lógica combinada:
---   1) RBAC puro        → roles, permisos, roles_permisos
---   2) Asignación       → usuarios_roles
---   3) Overrides        → usuarios_permisos (grant/deny por usuario)
---   4) Resolución       → v_permisos_efectivos + v_permisos_finales (deny-wins)
---
--- Protecciones (todas por NOMBRE, sin flags):
---
---   * Rol 'ADMINISTRADOR':
---       - No se puede eliminar.
---       - No se puede modificar NADA.
---       - Se le pueden AGREGAR permisos.
---       - No se le pueden QUITAR permisos.
---       - Un trigger AFTER INSERT en `permisos` le asigna
---         automáticamente cada permiso nuevo.
---
---   * Permisos BASE (lista hardcodeada por nombre):
---       - No se pueden eliminar.
---       - No se pueden renombrar, cambiar descripción ni desactivar.
---
---   * Usuario '@hehiachi': ver protection.admin.sql.
---
---   * Bitácora `auditoria_eventos`: APPEND-ONLY (triggers bloquean
---     UPDATE y DELETE). Ver sección 7.
---
--- Idempotencia: el script puede re-ejecutarse completo. Tablas con
--- IF NOT EXISTS, vistas con OR REPLACE, triggers con DROP + CREATE y
--- seed con upsert. Para BDs ya existentes aplicar además
--- backend/migrations/V2__auditoria.sql (columnas nuevas de usuarios,
--- cambios de índices, auditoría y VER_AUDITORIA).
-CREATE DATABASE IF NOT EXISTS hehiachi_mishima CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- Active: 1793813862107@@localhost@5432@app_configuration
 
-USE hehiachi_mishima;
+BEGIN;
 
-SET NAMES utf8mb4;
+SET LOCAL client_min_messages = warning;
+SET LOCAL TIME ZONE 'UTC';
+DROP SCHEMA IF EXISTS seguridad CASCADE;
+DROP SCHEMA IF EXISTS comun CASCADE;
+
+-- Búsquedas "contiene" (LIKE '%texto%') por índice trigram.
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
+
+-- ############################################################
+-- 1. comun: piezas compartidas por todos los dominios
+-- ############################################################
+CREATE SCHEMA comun;
+COMMENT ON SCHEMA comun IS 'Colación, funciones y triggers compartidos.';
+
+-- Igualdad sin mayúsculas ni tildes (ICU, nivel 1). No determinista: sirve
+-- para =, IN, UNIQUE, GROUP BY y ORDER BY; no se usa con LIKE.
+CREATE COLLATION comun.ci (provider = icu, locale = 'und-u-ks-level1', deterministic = false);
+
+-- Mantiene actualizado_en en cada UPDATE salvo que quien escribe ya lo haya
+-- cambiado (Hibernate lo fija con @LastModifiedDate).
+CREATE FUNCTION comun.fijar_actualizado_en()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF NEW.actualizado_en IS NOT DISTINCT FROM OLD.actualizado_en THEN
+        NEW.actualizado_en := now();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- Error de protección: el backend responde 403 con este mensaje.
+CREATE FUNCTION comun.proteger(mensaje text)
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    RAISE EXCEPTION USING ERRCODE = 'AT403', MESSAGE = mensaje;
+END;
+$$;
+
+-- ############################################################
+-- 2. seguridad: RBAC + overrides + sesiones
+-- ############################################################
+CREATE SCHEMA seguridad;
+COMMENT ON SCHEMA seguridad IS 'Usuarios, roles, permisos, overrides, sesiones y resolución de permisos.';
+
+-- Nombres protegidos: el backend replica estas listas en Protecciones.
+CREATE FUNCTION seguridad.es_usuario_protegido(usuario text)
+RETURNS boolean
+LANGUAGE sql IMMUTABLE
+SET search_path = ''
+RETURN usuario COLLATE comun.ci IN ('@admin', '@hehiachi');
+
+CREATE FUNCTION seguridad.es_rol_protegido(nombre text)
+RETURNS boolean
+LANGUAGE sql IMMUTABLE
+SET search_path = ''
+RETURN nombre COLLATE comun.ci = 'ADMINISTRADOR';
+
+CREATE FUNCTION seguridad.es_permiso_base(nombre text)
+RETURNS boolean
+LANGUAGE sql IMMUTABLE
+SET search_path = ''
+RETURN nombre COLLATE comun.ci IN (
+    'ASIGNAR_ROLES', 'VER_ROLES', 'CREAR_ROLES', 'MODIFICAR_ROLES', 'ELIMINAR_ROLES',
+    'ASIGNAR_PERMISOS', 'VER_PERMISOS', 'CREAR_PERMISOS', 'MODIFICAR_PERMISOS', 'ELIMINAR_PERMISOS',
+    'VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS',
+    'PANEL_ADMIN', 'DASHBOARD_ADMIN', 'VER_AUDITORIA');
 
 -- ------------------------------------------------------------
--- Limpieza de objetos de versiones previas
+-- usuarios
 -- ------------------------------------------------------------
-DROP VIEW IF EXISTS v_permisos_finales;
-
-DROP VIEW IF EXISTS v_permisos_efectivos;
-
-DROP TRIGGER IF EXISTS trg_roles_admin_update;
-
-DROP TRIGGER IF EXISTS trg_roles_admin_delete;
-
-DROP TRIGGER IF EXISTS trg_roles_permisos_admin_delete;
-
-DROP TRIGGER IF EXISTS trg_permisos_after_insert;
-
-DROP TRIGGER IF EXISTS trg_permisos_base_update;
-
-DROP TRIGGER IF EXISTS trg_permisos_base_delete;
-
-DROP TRIGGER IF EXISTS trg_auditoria_eventos_no_update;
-
-DROP TRIGGER IF EXISTS trg_auditoria_eventos_no_delete;
-
-DROP TRIGGER IF EXISTS trg_transacciones_after_insert;
-
-DROP TRIGGER IF EXISTS trg_transacciones_after_update;
-
-DROP TRIGGER IF EXISTS trg_transacciones_incidencia_after_insert;
-
-DROP TRIGGER IF EXISTS trg_transacciones_incidencia_after_update;
-
--- ============================================================
--- 1) usuarios
--- ============================================================
-CREATE TABLE IF NOT EXISTS usuarios (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Identificador único del usuario.',
-    usuario VARCHAR(50) NOT NULL COMMENT 'Nombre de login, único.',
-    contrasena VARCHAR(100) NOT NULL COMMENT 'Contraseña hasheada con bcrypt.',
-    nombre VARCHAR(100) NOT NULL COMMENT 'Nombre real del usuario.',
-    apellido VARCHAR(100) NOT NULL COMMENT 'Apellido real del usuario.',
-    email VARCHAR(100) NOT NULL COMMENT 'Correo electrónico único.',
-    telefono VARCHAR(20) NULL COMMENT 'Teléfono de contacto. Opcional.',
-    activo BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'TRUE = puede iniciar sesión; FALSE = bloqueado.',
-    credenciales_version INT NOT NULL DEFAULT 0 COMMENT 'Se incrementa al cambiar contraseña o desactivar. El JWT lleva el claim ver; si no coincide, el token queda revocado.',
-    intentos_fallidos INT NOT NULL DEFAULT 0 COMMENT 'Logins fallidos consecutivos. Se pone a 0 tras un login correcto.',
-    bloqueado_hasta TIMESTAMP(6) NULL DEFAULT NULL COMMENT 'Bloqueo temporal por fuerza bruta (UTC). NULL = sin bloqueo.',
-    creado_por BIGINT DEFAULT NULL COMMENT 'ID del usuario que creó este registro. NULL si es el primero. 0 = sistema/seeding.',
-    actualizado_por BIGINT NOT NULL COMMENT 'ID del usuario que actualizó el registro por última vez. 0 = sistema/seeding.',
-    creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora exacta de creación.',
-    actualizado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora de la última modificación.',
+CREATE TABLE seguridad.usuarios (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    usuario         VARCHAR(50)  COLLATE comun.ci NOT NULL,
+    contrasena      VARCHAR(100) NOT NULL,
+    nombre          VARCHAR(100) NOT NULL,
+    apellido        VARCHAR(100) NOT NULL,
+    email           VARCHAR(100) COLLATE comun.ci NOT NULL,
+    telefono        VARCHAR(20),
+    activo          BOOLEAN      NOT NULL DEFAULT TRUE,
+    credenciales_desde TIMESTAMPTZ NOT NULL DEFAULT now(),
+    intentos_fallidos INTEGER    NOT NULL DEFAULT 0,
+    bloqueado_hasta TIMESTAMPTZ,
+    creado_por      BIGINT,
+    actualizado_por BIGINT       NOT NULL,
+    creado_en       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    actualizado_en  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     CONSTRAINT uq_usuarios_usuario UNIQUE (usuario),
     CONSTRAINT uq_usuarios_email UNIQUE (email),
-    INDEX idx_usuarios_activo_nombre (activo, apellido, nombre) COMMENT 'Listado de activos/bloqueados ordenado alfabéticamente. Cubre también filtro solo por activo.',
-    INDEX idx_usuarios_nombre (apellido, nombre) COMMENT 'Listado general ordenado alfabéticamente, sin filtrar por estado.',
-    INDEX idx_usuarios_creado_activo (creado_en, activo) COMMENT 'Altas por mes (analítica): rango por creado_en y SUM(activo) cubiertos sin leer la fila.'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Usuarios del sistema. @hehiachi está protegido por nombre en triggers.';
+    CONSTRAINT ck_usuarios_usuario CHECK (btrim(usuario) <> ''),
+    CONSTRAINT ck_usuarios_intentos CHECK (intentos_fallidos >= 0)
+);
+CREATE INDEX idx_usuarios_activo_nombre ON seguridad.usuarios (activo, apellido, nombre);
+CREATE INDEX idx_usuarios_nombre ON seguridad.usuarios (apellido, nombre);
+CREATE INDEX idx_usuarios_creado_en ON seguridad.usuarios (creado_en);
+-- Búsqueda "contiene" por nombre y apellido (columnas deterministas: admiten LIKE).
+CREATE INDEX idx_usuarios_nombre_trgm ON seguridad.usuarios
+    USING gin (nombre public.gin_trgm_ops, apellido public.gin_trgm_ops);
+-- Solo las cuentas con bloqueo temporal (fracción mínima de la tabla).
+CREATE INDEX idx_usuarios_bloqueados ON seguridad.usuarios (bloqueado_hasta) WHERE bloqueado_hasta IS NOT NULL;
+COMMENT ON TABLE seguridad.usuarios IS 'Usuarios del sistema. @admin y @hehiachi están protegidos por nombre.';
+COMMENT ON COLUMN seguridad.usuarios.usuario IS 'Login único, sin distinguir mayúsculas ni tildes.';
+COMMENT ON COLUMN seguridad.usuarios.contrasena IS 'Hash bcrypt.';
+COMMENT ON COLUMN seguridad.usuarios.activo IS 'TRUE = puede iniciar sesión; FALSE = bloqueado.';
+COMMENT ON COLUMN seguridad.usuarios.credenciales_desde IS 'Último cambio de contraseña: los tokens emitidos antes dejan de valer (lo fija un trigger).';
+COMMENT ON COLUMN seguridad.usuarios.intentos_fallidos IS 'Logins fallidos consecutivos; vuelve a 0 tras un login correcto.';
+COMMENT ON COLUMN seguridad.usuarios.bloqueado_hasta IS 'Bloqueo temporal por fuerza bruta (1, 2, 4... min). NULL = sin bloqueo.';
+COMMENT ON COLUMN seguridad.usuarios.creado_por IS 'Usuario que lo creó; NULL en el primero, 0 = sistema.';
 
--- ============================================================
--- 2) roles
--- ============================================================
-CREATE TABLE IF NOT EXISTS roles (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Identificador único del rol.',
-    nombre VARCHAR(50) NOT NULL COMMENT 'Nombre del rol, único. Ej: ADMINISTRADOR.',
-    descripcion VARCHAR(200) NULL COMMENT 'Descripción legible del rol.',
-    activo BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'TRUE = sus permisos cuentan; FALSE = inactivo.',
-    creado_por BIGINT NOT NULL COMMENT 'ID del usuario que creó el rol. 0 = sistema/seeding.',
-    actualizado_por BIGINT NOT NULL COMMENT 'ID del usuario que modificó el rol. 0 = sistema/seeding.',
-    creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora exacta de creación.',
-    actualizado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora de la última modificación.',
+-- ------------------------------------------------------------
+-- roles
+-- ------------------------------------------------------------
+CREATE TABLE seguridad.roles (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nombre          VARCHAR(50)  COLLATE comun.ci NOT NULL,
+    descripcion     VARCHAR(200),
+    activo          BOOLEAN      NOT NULL DEFAULT TRUE,
+    creado_por      BIGINT       NOT NULL,
+    actualizado_por BIGINT       NOT NULL,
+    creado_en       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    actualizado_en  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     CONSTRAINT uq_roles_nombre UNIQUE (nombre),
-    INDEX idx_roles_activo (activo) COMMENT 'Filtrado masivo de roles activos/inactivos.'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Roles. ADMINISTRADOR está protegido por nombre en triggers.';
+    CONSTRAINT ck_roles_nombre CHECK (btrim(nombre) <> '')
+);
+CREATE INDEX idx_roles_activo ON seguridad.roles (activo);
+CREATE INDEX idx_roles_descripcion_trgm ON seguridad.roles USING gin (descripcion public.gin_trgm_ops);
+COMMENT ON TABLE seguridad.roles IS 'Roles. ADMINISTRADOR está protegido: solo se le agregan permisos.';
 
--- ============================================================
--- 3) permisos
--- ============================================================
-CREATE TABLE IF NOT EXISTS permisos (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Identificador único del permiso.',
-    nombre VARCHAR(50) NOT NULL COMMENT 'Nombre del permiso, único. Ej: CREAR_INCIDENCIAS.',
-    descripcion VARCHAR(200) NULL COMMENT 'Descripción legible del permiso.',
-    activo BOOLEAN NOT NULL DEFAULT TRUE COMMENT 'TRUE = el permiso cuenta; FALSE = ignorado en la resolución.',
-    creado_por BIGINT NOT NULL COMMENT 'ID del usuario que creó el permiso. 0 = sistema/seeding.',
-    actualizado_por BIGINT NOT NULL COMMENT 'ID del usuario que modificó el permiso. 0 = sistema/seeding.',
-    creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora exacta de creación.',
-    actualizado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora de la última modificación.',
+-- ------------------------------------------------------------
+-- permisos
+-- ------------------------------------------------------------
+CREATE TABLE seguridad.permisos (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nombre          VARCHAR(50)  COLLATE comun.ci NOT NULL,
+    descripcion     VARCHAR(200),
+    activo          BOOLEAN      NOT NULL DEFAULT TRUE,
+    creado_por      BIGINT       NOT NULL,
+    actualizado_por BIGINT       NOT NULL,
+    creado_en       TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    actualizado_en  TIMESTAMPTZ  NOT NULL DEFAULT now(),
     CONSTRAINT uq_permisos_nombre UNIQUE (nombre),
-    INDEX idx_permisos_activo (activo) COMMENT 'Filtrado masivo de permisos activos/inactivos.'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Catálogo de permisos. Los base están protegidos por nombre en triggers.';
+    CONSTRAINT ck_permisos_nombre CHECK (btrim(nombre) <> '')
+);
+CREATE INDEX idx_permisos_activo ON seguridad.permisos (activo);
+CREATE INDEX idx_permisos_descripcion_trgm ON seguridad.permisos USING gin (descripcion public.gin_trgm_ops);
+COMMENT ON TABLE seguridad.permisos IS 'Catálogo de permisos. Los permisos base son inmutables.';
 
--- ============================================================
--- 4) roles_permisos — plantilla RBAC
--- ============================================================
-CREATE TABLE IF NOT EXISTS roles_permisos (
-    rol_id BIGINT NOT NULL COMMENT 'FK al rol.',
-    permiso_id BIGINT NOT NULL COMMENT 'FK al permiso.',
-    creado_por BIGINT NOT NULL COMMENT 'ID del usuario que otorgó el permiso al rol. 0 = sistema/seeding.',
-    creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora en que se asignó.',
-    PRIMARY KEY (rol_id, permiso_id),
-    CONSTRAINT fk_roles_permisos_rol_id FOREIGN KEY (rol_id) REFERENCES roles (id) ON DELETE CASCADE,
-    CONSTRAINT fk_roles_permisos_permiso_id FOREIGN KEY (permiso_id) REFERENCES permisos (id) ON DELETE CASCADE,
-    INDEX idx_roles_permisos_permiso_id (permiso_id, rol_id) COMMENT 'Reverse lookup: qué roles tienen un permiso concreto.'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Plantilla de permisos por rol (RBAC).';
+-- ------------------------------------------------------------
+-- roles_permisos: plantilla RBAC
+-- ------------------------------------------------------------
+CREATE TABLE seguridad.roles_permisos (
+    rol_id      BIGINT      NOT NULL REFERENCES seguridad.roles (id) ON DELETE CASCADE,
+    permiso_id  BIGINT      NOT NULL REFERENCES seguridad.permisos (id) ON DELETE CASCADE,
+    creado_por  BIGINT      NOT NULL,
+    creado_en   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (rol_id, permiso_id)
+);
+CREATE INDEX idx_roles_permisos_permiso ON seguridad.roles_permisos (permiso_id, rol_id);
+COMMENT ON TABLE seguridad.roles_permisos IS 'Permisos que concede cada rol.';
 
--- ============================================================
--- 5) usuarios_roles — asignación de roles a usuarios
--- ============================================================
-CREATE TABLE IF NOT EXISTS usuarios_roles (
-    usuario_id BIGINT NOT NULL COMMENT 'FK al usuario.',
-    rol_id BIGINT NOT NULL COMMENT 'FK al rol.',
-    creado_por BIGINT NOT NULL COMMENT 'ID del usuario que asignó el rol. 0 = sistema/seeding.',
-    creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora en que se asignó.',
-    PRIMARY KEY (usuario_id, rol_id),
-    CONSTRAINT fk_usuarios_roles_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE,
-    CONSTRAINT fk_usuarios_roles_rol_id FOREIGN KEY (rol_id) REFERENCES roles (id) ON DELETE CASCADE,
-    INDEX idx_usuarios_roles_rol_id (rol_id, usuario_id) COMMENT 'Reverse lookup: qué usuarios tienen un rol concreto.'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Asignación usuario-rol.';
+-- ------------------------------------------------------------
+-- usuarios_roles
+-- ------------------------------------------------------------
+CREATE TABLE seguridad.usuarios_roles (
+    usuario_id  BIGINT      NOT NULL REFERENCES seguridad.usuarios (id) ON DELETE CASCADE,
+    rol_id      BIGINT      NOT NULL REFERENCES seguridad.roles (id) ON DELETE CASCADE,
+    creado_por  BIGINT      NOT NULL,
+    creado_en   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (usuario_id, rol_id)
+);
+CREATE INDEX idx_usuarios_roles_rol ON seguridad.usuarios_roles (rol_id, usuario_id);
+COMMENT ON TABLE seguridad.usuarios_roles IS 'Roles asignados a cada usuario.';
 
--- ============================================================
--- 6) usuarios_permisos — overrides individuales
--- ============================================================
-CREATE TABLE IF NOT EXISTS usuarios_permisos (
-    usuario_id BIGINT NOT NULL COMMENT 'FK al usuario.',
-    permiso_id BIGINT NOT NULL COMMENT 'FK al permiso.',
-    otorgado BOOLEAN NOT NULL COMMENT 'TRUE = concede; FALSE = deniega (deny-wins).',
-    creado_por BIGINT NOT NULL COMMENT 'ID del usuario que creó el override. 0 = sistema/seeding.',
-    actualizado_por BIGINT NOT NULL COMMENT 'ID del usuario que modificó el override. 0 = sistema/seeding.',
-    creado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora de creación.',
-    actualizado_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Fecha y hora de la última modificación.',
-    PRIMARY KEY (usuario_id, permiso_id),
-    CONSTRAINT fk_usuarios_permisos_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuarios (id) ON DELETE CASCADE,
-    CONSTRAINT fk_usuarios_permisos_permiso_id FOREIGN KEY (permiso_id) REFERENCES permisos (id) ON DELETE CASCADE,
-    INDEX idx_usuarios_permisos_permiso_id (permiso_id, usuario_id) COMMENT 'Reverse lookup: qué usuarios tienen override sobre un permiso.'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Overrides individuales de permisos.';
+-- ------------------------------------------------------------
+-- usuarios_permisos: overrides individuales (deny-wins)
+-- ------------------------------------------------------------
+CREATE TABLE seguridad.usuarios_permisos (
+    usuario_id      BIGINT      NOT NULL REFERENCES seguridad.usuarios (id) ON DELETE CASCADE,
+    permiso_id      BIGINT      NOT NULL REFERENCES seguridad.permisos (id) ON DELETE CASCADE,
+    otorgado        BOOLEAN     NOT NULL,
+    creado_por      BIGINT      NOT NULL,
+    actualizado_por BIGINT      NOT NULL,
+    creado_en       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    actualizado_en  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (usuario_id, permiso_id)
+);
+CREATE INDEX idx_usuarios_permisos_permiso ON seguridad.usuarios_permisos (permiso_id, usuario_id);
+COMMENT ON TABLE seguridad.usuarios_permisos IS 'Overrides por usuario: TRUE concede, FALSE deniega (la denegación gana).';
 
--- ============================================================
--- 7) auditoria_eventos — bitácora append-only
--- ============================================================
--- Solo INSERT y SELECT. UPDATE/DELETE bloqueados por trigger.
--- accion/entidad/resultado son códigos controlados por la app:
--- se guardan en ASCII (claves de índice 4x más pequeñas que utf8mb4)
--- con collation _ci para que el filtro no dependa de mayúsculas.
--- ip, user_agent, id_correlacion y actor_usuario vienen del cliente:
--- se quedan en utf8mb4 para que un valor raro nunca rompa el INSERT.
--- ocurrido_en es UTC (la conexión JDBC usa serverTimezone=UTC).
--- Orden canónico de lectura: ocurrido_en DESC, id DESC (todos los
--- índices secundarios llevan `id` implícito al final → sin filesort).
-CREATE TABLE IF NOT EXISTS auditoria_eventos (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT 'Identificador del evento.',
-    ocurrido_en TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Instante del evento (UTC).',
-    actor_id BIGINT NULL COMMENT 'Usuario que actúa. NULL = anónimo (login fallido), 0 = sistema.',
-    actor_usuario VARCHAR(100) NULL COMMENT 'Snapshot del login del actor (o credencial intentada en LOGIN_FALLIDO).',
-    accion VARCHAR(40) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL COMMENT 'Código de acción (catálogo en la app).',
-    entidad VARCHAR(30) CHARACTER SET ascii COLLATE ascii_general_ci NULL COMMENT 'USUARIO, ROL, PERMISO, USUARIO_ROL, ROL_PERMISO, USUARIO_PERMISO, SESION.',
-    entidad_id VARCHAR(64) NULL COMMENT 'Id afectado; compuesto como "usuarioId:rolId".',
-    resultado VARCHAR(10) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL COMMENT 'EXITO, FALLO, DENEGADO.',
-    ip VARCHAR(45) NULL COMMENT 'IP del cliente (IPv4/IPv6).',
-    user_agent VARCHAR(255) NULL COMMENT 'User-Agent truncado a 255.',
-    id_correlacion VARCHAR(64) NULL COMMENT 'X-Request-Id de la petición.',
-    detalle JSON NULL COMMENT '{antes,despues} o {motivo}. NUNCA contraseñas, hashes ni tokens.',
-    CONSTRAINT ck_auditoria_eventos_resultado CHECK (resultado IN ('EXITO', 'FALLO', 'DENEGADO')),
-    INDEX idx_auditoria_ocurrido (ocurrido_en) COMMENT 'Listado general por rango de fechas, orden DESC.',
-    INDEX idx_auditoria_actor (actor_id, ocurrido_en) COMMENT 'Actividad de un actor.',
-    INDEX idx_auditoria_entidad (entidad, entidad_id, ocurrido_en) COMMENT 'Historia de una entidad concreta.',
-    INDEX idx_auditoria_accion (accion, ocurrido_en) COMMENT 'Filtro por tipo de acción.',
-    INDEX idx_auditoria_resultado (resultado, ocurrido_en) COMMENT 'Filtro por resultado (FALLO/DENEGADO).'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = 'Bitácora de auditoría append-only (UPDATE/DELETE bloqueados por trigger).';
+-- ------------------------------------------------------------
+-- sesiones_refresh: renovación del access token sin contraseña
+-- ------------------------------------------------------------
+CREATE TABLE seguridad.sesiones_refresh (
+    id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    usuario_id        BIGINT      NOT NULL REFERENCES seguridad.usuarios (id) ON DELETE CASCADE,
+    familia           UUID        NOT NULL,
+    token_hash        CHAR(64)    NOT NULL,
+    expira_en         TIMESTAMPTZ NOT NULL,
+    familia_expira_en TIMESTAMPTZ NOT NULL,
+    revocado_en       TIMESTAMPTZ,
+    ip                VARCHAR(45),
+    creado_en         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_sesiones_refresh_token UNIQUE (token_hash),
+    CONSTRAINT ck_sesiones_refresh_hash CHECK (token_hash ~ '^[0-9a-f]{64}$'),
+    CONSTRAINT ck_sesiones_refresh_expira CHECK (expira_en <= familia_expira_en)
+);
+CREATE INDEX idx_sesiones_refresh_familia ON seguridad.sesiones_refresh (familia) WHERE revocado_en IS NULL;
+CREATE INDEX idx_sesiones_refresh_usuario ON seguridad.sesiones_refresh (usuario_id, familia_expira_en);
+-- Purga programada de familias vencidas de todos los usuarios (SesionesRefresh.purgarVencidas).
+CREATE INDEX idx_sesiones_refresh_vencidas ON seguridad.sesiones_refresh (familia_expira_en);
+COMMENT ON TABLE seguridad.sesiones_refresh IS 'Refresh tokens (solo su SHA-256). Un login = una familia; cada renovación rota el token.';
+COMMENT ON COLUMN seguridad.sesiones_refresh.expira_en IS 'Vence por inactividad; nunca después de familia_expira_en.';
+COMMENT ON COLUMN seguridad.sesiones_refresh.familia_expira_en IS 'Máximo de la sesión desde el login.';
 
--- ============================================================
--- VISTAS DE RESOLUCIÓN — respetan activo de rol y permiso
--- ============================================================
--- Resolución:
---   v_permisos_efectivos → une rol (TRUE) + override (otorgado)
---   v_permisos_finales   → MIN(otorgado) → deny-wins
-CREATE OR REPLACE VIEW v_permisos_efectivos AS
-SELECT ur.usuario_id, rp.permiso_id, TRUE AS otorgado, 'ROL' AS origen
-FROM
-    usuarios_roles ur
-    JOIN roles r ON r.id = ur.rol_id
-    AND r.activo = TRUE
-    JOIN roles_permisos rp ON rp.rol_id = ur.rol_id
-    JOIN permisos p ON p.id = rp.permiso_id
-    AND p.activo = TRUE
+-- ------------------------------------------------------------
+-- Vistas de resolución (respetan activo de rol y de permiso)
+-- ------------------------------------------------------------
+CREATE VIEW seguridad.v_permisos_efectivos AS
+SELECT ur.usuario_id, rp.permiso_id, TRUE AS otorgado, 'ROL'::text AS origen
+FROM seguridad.usuarios_roles ur
+JOIN seguridad.roles r ON r.id = ur.rol_id AND r.activo
+JOIN seguridad.roles_permisos rp ON rp.rol_id = ur.rol_id
+JOIN seguridad.permisos p ON p.id = rp.permiso_id AND p.activo
 UNION ALL
-SELECT up.usuario_id, up.permiso_id, up.otorgado, 'OVERRIDE' AS origen
-FROM
-    usuarios_permisos up
-    JOIN permisos p ON p.id = up.permiso_id
-    AND p.activo = TRUE;
+SELECT up.usuario_id, up.permiso_id, up.otorgado, 'OVERRIDE'::text AS origen
+FROM seguridad.usuarios_permisos up
+JOIN seguridad.permisos p ON p.id = up.permiso_id AND p.activo;
+COMMENT ON VIEW seguridad.v_permisos_efectivos IS 'Cada concesión de un usuario: por rol (TRUE) o por override.';
 
-CREATE OR REPLACE VIEW v_permisos_finales AS
-SELECT
-    usuario_id,
-    permiso_id,
-    MIN(otorgado) AS permitido
-FROM v_permisos_efectivos
-GROUP BY
-    usuario_id,
-    permiso_id;
+CREATE VIEW seguridad.v_permisos_finales AS
+SELECT usuario_id, permiso_id, bool_and(otorgado) AS permitido
+FROM seguridad.v_permisos_efectivos
+GROUP BY usuario_id, permiso_id;
+COMMENT ON VIEW seguridad.v_permisos_finales IS 'Permiso final por usuario: basta una denegación para negarlo.';
 
--- ============================================================
--- TRIGGER PREVIO AL SEEDING: auto-asignación de permisos al
--- rol ADMINISTRADOR. Se crea ANTES del seed para que los
--- permisos base queden auto-asignados sin INSERT manual.
--- ============================================================
-DELIMITER $$
+-- ------------------------------------------------------------
+-- Triggers de seguridad
+-- ------------------------------------------------------------
 
-CREATE TRIGGER trg_permisos_after_insert
-AFTER INSERT ON permisos
-FOR EACH ROW
+-- Todo permiso nuevo se concede al rol ADMINISTRADOR.
+CREATE FUNCTION seguridad.conceder_a_administrador()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
-    DECLARE v_admin_id BIGINT;
-    SELECT id INTO v_admin_id
-    FROM roles
-    WHERE nombre = 'ADMINISTRADOR'
-    LIMIT 1;
-    IF v_admin_id IS NOT NULL THEN
-        INSERT IGNORE INTO roles_permisos (rol_id, permiso_id, creado_por)
-        VALUES (v_admin_id, NEW.id, 0);
+    INSERT INTO seguridad.roles_permisos (rol_id, permiso_id, creado_por)
+    SELECT r.id, NEW.id, 0
+    FROM seguridad.roles r
+    WHERE seguridad.es_rol_protegido(r.nombre)
+    ON CONFLICT DO NOTHING;
+    RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER trg_permisos_conceder_admin
+AFTER INSERT ON seguridad.permisos
+FOR EACH ROW EXECUTE FUNCTION seguridad.conceder_a_administrador();
+
+-- Rol ADMINISTRADOR: no se modifica ni se elimina.
+CREATE FUNCTION seguridad.proteger_rol()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF seguridad.es_rol_protegido(OLD.nombre) THEN
+        IF TG_OP = 'DELETE' THEN
+            PERFORM comun.proteger('No se puede eliminar el rol ADMINISTRADOR.');
+        END IF;
+        PERFORM comun.proteger('No se puede modificar el rol ADMINISTRADOR. Solo se le pueden agregar permisos.');
     END IF;
-END$$
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
 
-DELIMITER ;
+CREATE TRIGGER trg_roles_proteger
+BEFORE UPDATE OR DELETE ON seguridad.roles
+FOR EACH ROW EXECUTE FUNCTION seguridad.proteger_rol();
 
--- ============================================================
--- DATOS INICIALES
--- ============================================================
+-- Al rol ADMINISTRADOR no se le quitan permisos (salvo que el permiso mismo
+-- se esté eliminando: ese borrado llega aquí en cascada).
+CREATE FUNCTION seguridad.proteger_permisos_administrador()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM seguridad.roles r
+               WHERE r.id = OLD.rol_id AND seguridad.es_rol_protegido(r.nombre))
+       AND EXISTS (SELECT 1 FROM seguridad.permisos p WHERE p.id = OLD.permiso_id) THEN
+        PERFORM comun.proteger('No se pueden quitar permisos al rol ADMINISTRADOR. Solo se pueden agregar.');
+    END IF;
+    RETURN OLD;
+END;
+$$;
 
--- ------------------------------------------------------------
--- Rol núcleo (primero, para que el trigger lo encuentre)
--- ------------------------------------------------------------
-INSERT INTO
-    roles (
-        nombre,
-        descripcion,
-        activo,
-        creado_por,
-        actualizado_por
-    )
-VALUES (
-        'ADMINISTRADOR',
+CREATE TRIGGER trg_roles_permisos_proteger
+BEFORE DELETE ON seguridad.roles_permisos
+FOR EACH ROW EXECUTE FUNCTION seguridad.proteger_permisos_administrador();
+
+-- Permisos base: ni se modifican (tampoco se desactivan) ni se eliminan.
+CREATE FUNCTION seguridad.proteger_permiso_base()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF seguridad.es_permiso_base(OLD.nombre) THEN
+        IF TG_OP = 'DELETE' THEN
+            PERFORM comun.proteger('No se puede eliminar un permiso base. Es inmutable e intocable.');
+        END IF;
+        PERFORM comun.proteger('No se puede modificar un permiso base. Ni siquiera se puede desactivar.');
+    END IF;
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+CREATE TRIGGER trg_permisos_proteger
+BEFORE UPDATE OR DELETE ON seguridad.permisos
+FOR EACH ROW EXECUTE FUNCTION seguridad.proteger_permiso_base();
+
+-- Un cambio de contraseña invalida los tokens emitidos antes.
+CREATE FUNCTION seguridad.renovar_credenciales()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF NEW.contrasena IS DISTINCT FROM OLD.contrasena THEN
+        NEW.credenciales_desde := now();
+    ELSE
+        NEW.credenciales_desde := OLD.credenciales_desde;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_usuarios_credenciales
+BEFORE UPDATE ON seguridad.usuarios
+FOR EACH ROW EXECUTE FUNCTION seguridad.renovar_credenciales();
+
+-- Usuarios protegidos: no se eliminan y solo puede cambiar su contraseña
+-- (y con ella la auditoría y credenciales_desde) y sus contadores de bloqueo
+-- (si no, un login fallido suyo rompería la autenticación); nada más.
+CREATE FUNCTION seguridad.proteger_usuario()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+    -- Lo único que puede cambiar: contraseña, contadores de bloqueo y su sello.
+    v_libres text[] := ARRAY['contrasena', 'credenciales_desde', 'intentos_fallidos', 'bloqueado_hasta',
+                             'actualizado_por', 'actualizado_en'];
+BEGIN
+    IF seguridad.es_usuario_protegido(OLD.usuario) THEN
+        IF TG_OP = 'DELETE' THEN
+            PERFORM comun.proteger(format('No se puede eliminar al usuario %s.', OLD.usuario));
+        END IF;
+        IF (to_jsonb(NEW) - v_libres) IS DISTINCT FROM (to_jsonb(OLD) - v_libres) THEN
+            PERFORM comun.proteger(format('No se puede modificar al usuario %s.', OLD.usuario));
+        END IF;
+    END IF;
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+CREATE TRIGGER trg_usuarios_proteger
+BEFORE UPDATE OR DELETE ON seguridad.usuarios
+FOR EACH ROW EXECUTE FUNCTION seguridad.proteger_usuario();
+
+-- Usuarios protegidos: reciben su primer rol (alta del usuario semilla) y
+-- después sus roles no cambian. Un rol que se elimina llega en cascada.
+CREATE FUNCTION seguridad.proteger_roles_usuario()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+    v_usuario text;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        SELECT u.usuario INTO v_usuario FROM seguridad.usuarios u WHERE u.id = NEW.usuario_id;
+        IF seguridad.es_usuario_protegido(v_usuario)
+           AND EXISTS (SELECT 1 FROM seguridad.usuarios_roles ur WHERE ur.usuario_id = NEW.usuario_id) THEN
+            PERFORM comun.proteger(format('No se puede modificar el rol de %s.', v_usuario));
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    SELECT u.usuario INTO v_usuario FROM seguridad.usuarios u WHERE u.id = OLD.usuario_id;
+    IF seguridad.es_usuario_protegido(v_usuario)
+       AND EXISTS (SELECT 1 FROM seguridad.roles r WHERE r.id = OLD.rol_id) THEN
+        PERFORM comun.proteger(format('No se puede modificar el rol de %s.', v_usuario));
+    END IF;
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+CREATE TRIGGER trg_usuarios_roles_proteger
+BEFORE INSERT OR UPDATE OR DELETE ON seguridad.usuarios_roles
+FOR EACH ROW EXECUTE FUNCTION seguridad.proteger_roles_usuario();
+
+-- Usuarios protegidos: sin overrides (ni crear, ni cambiar, ni moverlos
+-- hacia ellos, ni quitarlos). Un permiso que se elimina llega en cascada.
+CREATE FUNCTION seguridad.proteger_overrides_usuario()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+DECLARE
+    v_usuario text;
+BEGIN
+    IF TG_OP IN ('INSERT', 'UPDATE') THEN
+        SELECT u.usuario INTO v_usuario FROM seguridad.usuarios u WHERE u.id = NEW.usuario_id;
+        IF seguridad.es_usuario_protegido(v_usuario) THEN
+            PERFORM comun.proteger(format('No se pueden otorgar ni denegar permisos al usuario %s.', v_usuario));
+        END IF;
+    END IF;
+    IF TG_OP IN ('UPDATE', 'DELETE') THEN
+        SELECT u.usuario INTO v_usuario FROM seguridad.usuarios u WHERE u.id = OLD.usuario_id;
+        IF seguridad.es_usuario_protegido(v_usuario)
+           AND EXISTS (SELECT 1 FROM seguridad.permisos p WHERE p.id = OLD.permiso_id) THEN
+            PERFORM comun.proteger(format('No se pueden modificar los permisos del usuario %s.', v_usuario));
+        END IF;
+    END IF;
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END;
+$$;
+
+CREATE TRIGGER trg_usuarios_permisos_proteger
+BEFORE INSERT OR UPDATE OR DELETE ON seguridad.usuarios_permisos
+FOR EACH ROW EXECUTE FUNCTION seguridad.proteger_overrides_usuario();
+
+-- actualizado_en al día en cada UPDATE (la función de comun ya existía,
+-- faltaba engancharla a las tablas que tienen esa columna).
+CREATE TRIGGER trg_usuarios_actualizado_en
+BEFORE UPDATE ON seguridad.usuarios
+FOR EACH ROW EXECUTE FUNCTION comun.fijar_actualizado_en();
+
+CREATE TRIGGER trg_roles_actualizado_en
+BEFORE UPDATE ON seguridad.roles
+FOR EACH ROW EXECUTE FUNCTION comun.fijar_actualizado_en();
+
+CREATE TRIGGER trg_permisos_actualizado_en
+BEFORE UPDATE ON seguridad.permisos
+FOR EACH ROW EXECUTE FUNCTION comun.fijar_actualizado_en();
+
+CREATE TRIGGER trg_usuarios_permisos_actualizado_en
+BEFORE UPDATE ON seguridad.usuarios_permisos
+FOR EACH ROW EXECUTE FUNCTION comun.fijar_actualizado_en();
+
+-- ############################################################
+-- 3. bitacora: auditoría append-only
+-- ############################################################
+CREATE SCHEMA IF NOT EXISTS bitacora;
+COMMENT ON SCHEMA bitacora IS 'Bitácora de auditoría: solo INSERT y SELECT.';
+-- Idempotente: este script NO borra la bitácora al re-ejecutarse (los
+-- eventos se conservan); solo crea lo que falte y refresca funciones y triggers.
+
+CREATE TABLE IF NOT EXISTS bitacora.auditoria_eventos (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ocurrido_en     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    actor_id        BIGINT,
+    actor_usuario   VARCHAR(100),
+    accion          VARCHAR(40)  NOT NULL,
+    entidad         VARCHAR(30),
+    entidad_id      VARCHAR(64),
+    resultado       VARCHAR(10)  NOT NULL,
+    ip              VARCHAR(45),
+    user_agent      VARCHAR(255),
+    id_correlacion  VARCHAR(64),
+    detalle         JSONB,
+    CONSTRAINT ck_auditoria_accion CHECK (accion ~ '^[A-Z_]+$'),
+    CONSTRAINT ck_auditoria_entidad CHECK (entidad ~ '^[A-Z_]+$'),
+    CONSTRAINT ck_auditoria_resultado CHECK (resultado IN ('EXITO', 'FALLO', 'DENEGADO')),
+    CONSTRAINT ck_auditoria_detalle CHECK (detalle IS NULL OR jsonb_typeof(detalle) = 'object')
+);
+-- Orden canónico de lectura: ocurrido_en DESC, id DESC (sin Sort).
+CREATE INDEX IF NOT EXISTS idx_auditoria_ocurrido ON bitacora.auditoria_eventos (ocurrido_en DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_auditoria_actor ON bitacora.auditoria_eventos (actor_id, ocurrido_en DESC);
+CREATE INDEX IF NOT EXISTS idx_auditoria_entidad ON bitacora.auditoria_eventos (entidad, entidad_id, ocurrido_en DESC);
+CREATE INDEX IF NOT EXISTS idx_auditoria_accion ON bitacora.auditoria_eventos (accion, ocurrido_en DESC);
+-- FALLO y DENEGADO son minoría: índice parcial pequeño.
+CREATE INDEX IF NOT EXISTS idx_auditoria_incidencias ON bitacora.auditoria_eventos (resultado, ocurrido_en DESC)
+    WHERE resultado <> 'EXITO';
+CREATE INDEX IF NOT EXISTS idx_auditoria_correlacion ON bitacora.auditoria_eventos (id_correlacion)
+    WHERE id_correlacion IS NOT NULL;
+-- Búsquedas dentro del detalle: detalle @> '{"motivo": "cuenta_bloqueada"}'.
+CREATE INDEX IF NOT EXISTS idx_auditoria_detalle ON bitacora.auditoria_eventos USING gin (detalle jsonb_path_ops);
+COMMENT ON TABLE bitacora.auditoria_eventos IS 'Eventos de auditoría. Append-only: UPDATE, DELETE y TRUNCATE bloqueados.';
+COMMENT ON COLUMN bitacora.auditoria_eventos.actor_id IS 'Usuario que actúa. NULL = anónimo (login fallido), 0 = sistema.';
+COMMENT ON COLUMN bitacora.auditoria_eventos.actor_usuario IS 'Login del actor en ese momento (o la credencial intentada).';
+COMMENT ON COLUMN bitacora.auditoria_eventos.entidad_id IS 'Id afectado; las relaciones usan "usuarioId:rolId".';
+COMMENT ON COLUMN bitacora.auditoria_eventos.detalle IS '{antes, despues} o {motivo}. Nunca contraseñas, hashes ni tokens.';
+
+-- Append-only. A diferencia de MySQL, PostgreSQL también dispara triggers
+-- en TRUNCATE (a nivel de sentencia), así que se bloquea también.
+CREATE OR REPLACE FUNCTION bitacora.solo_insercion()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' THEN
+        PERFORM comun.proteger('La bitácora de auditoría es append-only: no se puede modificar un evento.');
+    END IF;
+    PERFORM comun.proteger('La bitácora de auditoría es append-only: no se pueden eliminar eventos.');
+    RETURN NULL;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER trg_auditoria_solo_insercion
+BEFORE UPDATE OR DELETE ON bitacora.auditoria_eventos
+FOR EACH ROW EXECUTE FUNCTION bitacora.solo_insercion();
+
+CREATE OR REPLACE TRIGGER trg_auditoria_sin_truncate
+BEFORE TRUNCATE ON bitacora.auditoria_eventos
+FOR EACH STATEMENT EXECUTE FUNCTION bitacora.solo_insercion();
+
+-- ############################################################
+-- 4. Datos iniciales
+-- ############################################################
+-- Rol núcleo primero: el trigger de permisos lo necesita para concederle
+-- cada permiso que se inserte después.
+INSERT INTO seguridad.roles (nombre, descripcion, activo, creado_por, actualizado_por)
+VALUES ('ADMINISTRADOR',
         'Rol núcleo con acceso total al sistema. No editable ni eliminable, solo se le pueden agregar permisos.',
-        TRUE,
-        0,
-        0
-    )
-AS nuevo
-ON DUPLICATE KEY UPDATE
-    descripcion = nuevo.descripcion;
+        TRUE, 0, 0);
 
--- ------------------------------------------------------------
--- Permisos BASE (protegidos por nombre en triggers)
--- (el trigger los asigna automáticamente a ADMINISTRADOR)
--- ------------------------------------------------------------
-INSERT INTO
-    permisos (
-        nombre,
-        descripcion,
-        activo,
-        creado_por,
-        actualizado_por
-    )
-VALUES (
-        'ASIGNAR_ROLES',
-        'Permite asignar roles a los usuarios.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'VER_ROLES',
-        'Permite listar y consultar roles.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'CREAR_ROLES',
-        'Permite crear nuevos roles.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'MODIFICAR_ROLES',
-        'Permite editar roles no protegidos.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'ELIMINAR_ROLES',
-        'Permite eliminar roles no protegidos.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'ASIGNAR_PERMISOS',
-        'Permite asignar permisos a un rol.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'VER_PERMISOS',
-        'Permite listar y consultar permisos.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'CREAR_PERMISOS',
-        'Permite crear nuevos permisos.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'MODIFICAR_PERMISOS',
-        'Permite editar permisos no base.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'ELIMINAR_PERMISOS',
-        'Permite eliminar permisos no base.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'VER_USUARIOS',
-        'Permite listar y consultar usuarios.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'CREAR_USUARIOS',
-        'Permite crear nuevos usuarios.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'MODIFICAR_USUARIOS',
-        'Permite editar usuarios existentes.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'ELIMINAR_USUARIOS',
-        'Permite eliminar usuarios no protegidos.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'PANEL_ADMIN',
-        'Permite el ingreso al panel administrador.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'DASHBOARD_ADMIN',
-        'Permite ver el dashboard de administradores.',
-        TRUE,
-        0,
-        0
-    ),
-    (
-        'VER_AUDITORIA',
-        'Permite consultar y exportar la bitácora de auditoría.',
-        TRUE,
-        0,
-        0
-    )
-AS nuevo
-ON DUPLICATE KEY UPDATE
-    descripcion = nuevo.descripcion;
+-- Permisos base (los mismos que seguridad.es_permiso_base).
+INSERT INTO seguridad.permisos (nombre, descripcion, activo, creado_por, actualizado_por)
+SELECT v.nombre, v.descripcion, TRUE, 0, 0
+FROM (VALUES
+    ('ASIGNAR_ROLES',      'Permite asignar roles a los usuarios.'),
+    ('VER_ROLES',          'Permite listar y consultar roles.'),
+    ('CREAR_ROLES',        'Permite crear nuevos roles.'),
+    ('MODIFICAR_ROLES',    'Permite editar roles no protegidos.'),
+    ('ELIMINAR_ROLES',     'Permite eliminar roles no protegidos.'),
+    ('ASIGNAR_PERMISOS',   'Permite asignar permisos a un rol.'),
+    ('VER_PERMISOS',       'Permite listar y consultar permisos.'),
+    ('CREAR_PERMISOS',     'Permite crear nuevos permisos.'),
+    ('MODIFICAR_PERMISOS', 'Permite editar permisos no base.'),
+    ('ELIMINAR_PERMISOS',  'Permite eliminar permisos no base.'),
+    ('VER_USUARIOS',       'Permite listar y consultar usuarios.'),
+    ('CREAR_USUARIOS',     'Permite crear nuevos usuarios.'),
+    ('MODIFICAR_USUARIOS', 'Permite editar usuarios existentes.'),
+    ('ELIMINAR_USUARIOS',  'Permite eliminar usuarios no protegidos.'),
+    ('PANEL_ADMIN',        'Permite el ingreso al panel administrador.'),
+    ('DASHBOARD_ADMIN',    'Permite ver el dashboard de administradores.'),
+    ('VER_AUDITORIA',      'Permite consultar y exportar la bitácora de auditoría.')
+) AS v (nombre, descripcion);
 
--- ============================================================
--- TRIGGERS DE PROTECCIÓN
--- ============================================================
-DELIMITER $$
-
--- ------------------------------------------------------------
--- ROL 'ADMINISTRADOR' (protección por NOMBRE)
--- ------------------------------------------------------------
-CREATE TRIGGER trg_roles_admin_update
-BEFORE UPDATE ON roles
-FOR EACH ROW
-BEGIN
-    IF OLD.nombre = 'ADMINISTRADOR' THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'No se puede modificar el rol ADMINISTRADOR. Solo se le pueden agregar permisos.';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_roles_admin_delete
-BEFORE DELETE ON roles
-FOR EACH ROW
-BEGIN
-    IF OLD.nombre = 'ADMINISTRADOR' THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'No se puede eliminar el rol ADMINISTRADOR.';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_roles_permisos_admin_delete
-BEFORE DELETE ON roles_permisos
-FOR EACH ROW
-BEGIN
-    DECLARE v_nombre VARCHAR(50);
-    SELECT nombre INTO v_nombre FROM roles WHERE id = OLD.rol_id;
-    IF v_nombre = 'ADMINISTRADOR' THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'No se pueden quitar permisos al rol ADMINISTRADOR. Solo se pueden agregar.';
-    END IF;
-END$$
-
--- ------------------------------------------------------------
--- PERMISOS BASE (por NOMBRE)
--- La lista se repite en: protection.admin.sql, migrations/V2__auditoria.sql
--- y oracle.admin.service.Protecciones.PERMISOS_BASE. Mantenerlas iguales.
--- ------------------------------------------------------------
-CREATE TRIGGER trg_permisos_base_update
-BEFORE UPDATE ON permisos
-FOR EACH ROW
-BEGIN
-    IF OLD.nombre IN (
-        'ASIGNAR_ROLES', 'VER_ROLES', 'CREAR_ROLES', 'MODIFICAR_ROLES', 'ELIMINAR_ROLES',
-        'ASIGNAR_PERMISOS', 'VER_PERMISOS', 'CREAR_PERMISOS', 'MODIFICAR_PERMISOS', 'ELIMINAR_PERMISOS',
-        'VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS',
-        'PANEL_ADMIN', 'DASHBOARD_ADMIN', 'VER_AUDITORIA'
-    ) THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'No se puede modificar un permiso base. Ni siquiera se puede desactivar.';
-    END IF;
-END$$
-
-CREATE TRIGGER trg_permisos_base_delete
-BEFORE DELETE ON permisos
-FOR EACH ROW
-BEGIN
-    IF OLD.nombre IN (
-        'ASIGNAR_ROLES', 'VER_ROLES', 'CREAR_ROLES', 'MODIFICAR_ROLES', 'ELIMINAR_ROLES',
-        'ASIGNAR_PERMISOS', 'VER_PERMISOS', 'CREAR_PERMISOS', 'MODIFICAR_PERMISOS', 'ELIMINAR_PERMISOS',
-        'VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS',
-        'PANEL_ADMIN', 'DASHBOARD_ADMIN', 'VER_AUDITORIA'
-    ) THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'No se puede eliminar un permiso base. Es inmutable e intocable.';
-    END IF;
-END$$
-
--- ------------------------------------------------------------
--- BITÁCORA DE AUDITORÍA: append-only
--- (TRUNCATE/DROP no disparan triggers: retirar esos privilegios
---  al usuario de la aplicación; ver migrations/V2__auditoria.sql)
--- ------------------------------------------------------------
-CREATE TRIGGER trg_auditoria_eventos_no_update
-BEFORE UPDATE ON auditoria_eventos
-FOR EACH ROW
-BEGIN
-    SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'La bitácora de auditoría es append-only: no se puede modificar un evento.';
-END$$
-
-CREATE TRIGGER trg_auditoria_eventos_no_delete
-BEFORE DELETE ON auditoria_eventos
-FOR EACH ROW
-BEGIN
-    SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'La bitácora de auditoría es append-only: no se puede eliminar un evento.';
-END$$
-
-DELIMITER ;
+COMMIT;

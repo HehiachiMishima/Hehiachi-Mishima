@@ -1,0 +1,1670 @@
+@use '../design' as d;
+
+// Vocabulario global de la app en estilo "consola plana".
+// Lo usan las plantillas de los módulos (formularios, tablas, modales, toasts, paginador…)
+// y los componentes compartidos sin SCSS propio (ui-modal, ui-paginador, ui-toast-host, ui-empty).
+// Esquinas rectas, bordes en lugar de sombras (salvo lo que flota) y un solo acento violeta.
+
+$z-modal: calc(#{d.z('drawer')} + 5);
+
+// ===================== Utilidades =====================
+.u-sr-only {
+  @include d.visually-hidden;
+}
+
+.u-muted {
+  color: d.color('text-muted');
+}
+
+.u-mono {
+  font-family: d.font-family('mono');
+  font-variant-numeric: tabular-nums;
+}
+
+// Destino de foco programático (h1, main): sin anillo al recibir foco por código.
+[tabindex='-1']:focus {
+  outline: none;
+}
+
+.skip-link {
+  position: fixed;
+  top: d.space('2');
+  left: d.space('2');
+  z-index: d.z('toast');
+  padding: d.space('2') d.space('3');
+  background: d.color('primary');
+  color: d.color('on-primary');
+  @include d.type('interface-01');
+  transform: translateY(-200%);
+
+  &:focus {
+    transform: none;
+    color: d.color('on-primary');
+  }
+}
+
+// Código o identificador técnico (permiso, id de petición).
+.credencial {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 d.space('1');
+  background: d.color('code-inline-bg');
+  @include d.type('mono-01');
+  color: d.color('text');
+  overflow-wrap: anywhere;
+}
+
+.ui-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+
+  > * {
+    max-width: 100%;
+  }
+
+  > .u-muted {
+    @include d.type('body-01');
+    @include d.truncate;
+  }
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: d.space('1');
+}
+
+.ui-person {
+  display: flex;
+  align-items: center;
+  gap: d.space('3');
+  min-width: 0;
+}
+
+// Botón con aspecto de enlace (acciones de texto en línea).
+.ui-link-btn {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: d.color('accent');
+  text-align: start;
+  cursor: pointer;
+  @include d.focus-ring;
+
+  &:hover {
+    color: d.color('accent-hover');
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+}
+
+// Botón cuadrado de solo ícono (cerrar, copiar, ⋯ por fila).
+.ui-icon-btn {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: d.layout('control-height-sm');
+  height: d.layout('control-height-sm');
+  padding: 0;
+  border: 0;
+  border-radius: d.radius('md');
+  background: transparent;
+  color: d.color('text');
+  cursor: pointer;
+  transition: background-color d.motion('fast') d.motion('easing'), color d.motion('fast') d.motion('easing');
+  @include d.focus-ring;
+
+  &:hover:not([aria-disabled='true']),
+  &[aria-expanded='true'] {
+    background: d.color('surface-hover');
+    color: d.color('text-strong');
+  }
+
+  &[aria-disabled='true'] {
+    color: d.color('text-disabled');
+    cursor: not-allowed;
+  }
+
+  @include d.touch {
+    width: d.touch-target();
+    height: d.touch-target();
+  }
+}
+
+.ui-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: d.radius('full');
+  animation: ui-spin 0.7s linear infinite;
+}
+
+.ui-spinner--sm {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.ui-skeleton {
+  display: block;
+  height: 0.75rem;
+  border-radius: d.radius('sm');
+  background: d.color('skeleton');
+
+  @include d.motion-safe {
+    animation: ui-pulse 1.2s ease-in-out infinite;
+  }
+}
+
+// Filas de carga de una tabla: 48 px separadas por líneas.
+.skeleton-filas {
+  display: grid;
+
+  .ui-skeleton {
+    width: 64%;
+    margin: d.space('5') d.space('2');
+  }
+
+  .ui-skeleton:nth-of-type(3n + 2) {
+    width: 42%;
+  }
+
+  .ui-skeleton:nth-of-type(3n) {
+    width: 78%;
+  }
+
+  > .ui-skeleton + .ui-skeleton {
+    border-top: 0;
+  }
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: d.space('2');
+  padding: d.space('6') 0;
+  @include d.type('body-01');
+  color: d.color('text-muted');
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ui-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes ui-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+// ===================== Formularios =====================
+.grid-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: d.space('5') d.space('6');
+
+  @include d.bp('md') {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  > .ui-btn,
+  > [appButton] {
+    justify-self: start;
+  }
+}
+
+.grid-form__nota {
+  grid-column: 1 / -1;
+}
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: d.space('2');
+  min-width: 0;
+}
+
+.ui-field--full {
+  grid-column: 1 / -1;
+}
+
+fieldset.ui-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ui-label {
+  @include d.type('body-01-semi-bold');
+  color: d.color('text-strong');
+
+  .u-muted {
+    font-weight: d.font-weight('regular');
+  }
+}
+
+.ui-required {
+  color: d.color('danger');
+}
+
+// Los inputs nativos ya vienen estilizados desde base; estas clases solo agregan variantes.
+.ui-textarea {
+  min-height: 5.5rem;
+  resize: vertical;
+}
+
+select,
+.ui-select {
+  appearance: none;
+  padding-right: d.space('8');
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 1.125rem) 50%, calc(100% - 0.8125rem) 50%;
+  background-size: 0.3125rem 0.3125rem;
+  background-repeat: no-repeat;
+  cursor: pointer;
+
+  option,
+  optgroup {
+    background: d.color('surface');
+    color: d.color('text');
+  }
+}
+
+.ui-input--invalid,
+.ui-textarea--invalid {
+  border-color: d.color('danger') !important;
+}
+
+.ui-error {
+  @include d.type('helper-text-01');
+  color: d.color('danger');
+}
+
+.ui-hint {
+  @include d.type('helper-text-01');
+  color: d.color('text-muted');
+}
+
+// Casilla: checkbox nativo con el acento (el cuadro dibujado a mano ya no se usa).
+.check {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: d.space('2');
+  min-height: d.layout('control-height-sm');
+  @include d.type('body-01');
+  color: d.color('text');
+  cursor: pointer;
+  user-select: none;
+
+  input {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+    @include d.focus-ring;
+  }
+
+  &__box {
+    display: none;
+  }
+
+  @include d.touch {
+    min-height: d.touch-target();
+  }
+}
+
+// Interruptor role="switch" con las medidas de app-toggle (pista 36 × 20, perilla 16).
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: d.radius('full');
+  background: d.color('toggle-off');
+  cursor: pointer;
+  transition: background-color d.motion('fast') d.motion('easing');
+  @include d.focus-ring;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -12px -4px;
+  }
+
+  &__thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 1rem;
+    height: 1rem;
+    border-radius: d.radius('full');
+    background: d.color('toggle-handle');
+
+    @include d.motion-safe {
+      transition: transform d.motion('fast') d.motion('easing');
+    }
+  }
+
+  &--on {
+    background: d.color('toggle-on');
+
+    .switch__thumb {
+      transform: translateX(1rem);
+    }
+  }
+
+  &:disabled,
+  &[aria-disabled='true'] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ===================== Chips (filtros de alternancia) =====================
+.ui-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: d.space('2');
+}
+
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: d.space('1');
+  min-height: d.layout('control-height');
+  padding: 0 d.space('3');
+  border: 1px solid d.color('border');
+  border-radius: d.radius('md');
+  background: transparent;
+  @include d.type('interface-01');
+  color: d.color('text-muted');
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color d.motion('fast') d.motion('easing'), background-color d.motion('fast') d.motion('easing'),
+    border-color d.motion('fast') d.motion('easing');
+  @include d.focus-ring(-2px);
+
+  &:hover {
+    color: d.color('text-strong');
+    background: d.color('surface-hover');
+  }
+
+  &[aria-pressed='true'] {
+    background: d.color('primary-soft');
+    border-color: d.color('accent');
+    color: d.color('accent');
+  }
+
+  @include d.touch {
+    min-height: d.touch-target();
+  }
+}
+
+// ===================== Barra de herramientas y filtros =====================
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: d.space('3') d.space('4');
+  margin-top: d.space('8');
+  margin-bottom: d.space('4');
+
+  > app-search-field {
+    flex: 1 1 16rem;
+  }
+
+  > .ui-select,
+  .toolbar__filtros > .ui-select {
+    width: auto;
+    min-width: 11rem;
+  }
+
+  > :last-child:not(.toolbar__filtros) {
+    margin-left: auto;
+  }
+}
+
+.toolbar__filtros {
+  display: contents;
+}
+
+.toolbar__toggle {
+  display: none !important;
+}
+
+.toolbar__cuenta {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 d.space('1');
+  background: d.color('neutral-soft');
+  @include d.type('label-00');
+  color: d.color('text');
+}
+
+.filtros {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: d.space('4');
+  margin-top: d.space('8');
+
+  .ui-label {
+    @include d.type('mono-00-caps');
+    color: d.color('text-muted');
+  }
+}
+
+.filtros-toggle {
+  display: none;
+}
+
+.filtros__resumen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: d.space('2') d.space('3');
+  margin: d.space('4') 0;
+  @include d.type('body-01');
+  color: d.color('text-muted');
+
+  strong {
+    color: d.color('text-strong');
+    font-weight: d.font-weight('semibold');
+  }
+}
+
+@include d.bp-down('md') {
+  .toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: d.space('6');
+
+    > app-search-field {
+      grid-column: 1 / -1;
+      max-width: none;
+    }
+
+    > :last-child:not(.toolbar__filtros) {
+      margin-left: 0;
+    }
+
+    > [appButton] {
+      width: 100%;
+    }
+  }
+
+  .toolbar__toggle {
+    display: inline-flex !important;
+    width: 100%;
+  }
+
+  .toolbar__filtros {
+    order: 1;
+    grid-column: 1 / -1;
+    display: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: d.space('2');
+    padding: d.space('3');
+    border: 1px solid d.color('border');
+
+    > .ui-select {
+      width: 100%;
+      min-width: 0;
+    }
+
+    > .ui-chip {
+      justify-content: center;
+    }
+  }
+
+  .toolbar__filtros--abierto {
+    display: grid;
+  }
+
+  .filtros {
+    margin-top: 0;
+  }
+
+  .filtros:not(.filtros--abierto) {
+    display: none;
+  }
+
+  .filtros-toggle {
+    display: flex;
+    margin-top: d.space('6');
+    margin-bottom: d.space('4');
+
+    > [appButton] {
+      flex: 1;
+    }
+  }
+}
+
+// ===================== Tablas =====================
+// Sin tarjeta alrededor: la tabla vive sobre la página; filas de 48 px separadas por líneas.
+.table-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.ui-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.ui-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  @include d.type('body-01');
+  @include d.tabular-nums;
+
+  thead th {
+    height: d.layout('control-height');
+    padding: 0 d.space('2');
+    border-bottom: 1px solid d.color('border-strong');
+    background: d.color('bg');
+    @include d.type('mono-00-caps');
+    color: d.color('text');
+    text-align: start;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  thead th.num,
+  td.num,
+  .num {
+    text-align: end;
+  }
+
+  td,
+  tbody th[scope='row'] {
+    height: d.layout('row-height');
+    padding: d.space('2');
+    border-bottom: 1px solid d.color('border');
+    vertical-align: middle;
+    text-align: start;
+  }
+
+  tbody th[scope='row'] {
+    @include d.type('body-01-medium');
+    color: d.color('text-muted');
+  }
+
+  tbody tr {
+    transition: background-color d.motion('fast') d.motion('easing');
+  }
+
+  tbody tr:hover {
+    background: d.color('surface-muted');
+  }
+
+  tbody tr.fila-activa {
+    background: d.color('primary-soft');
+  }
+
+  // Dato principal de la fila: enlace subrayado, oscuro → violeta.
+  .ui-table__primary {
+    color: d.color('text-strong');
+    @include d.type('body-01-medium');
+  }
+
+  .ui-link-btn.ui-table__primary,
+  .ui-link-btn[data-fila-evento] {
+    color: d.color('text-strong');
+    text-decoration: underline;
+    text-decoration-color: d.color('border-strong');
+    text-underline-offset: 0.2em;
+
+    &:hover {
+      color: d.color('accent');
+      text-decoration-color: currentColor;
+    }
+  }
+
+  .col-actions,
+  .celda-acciones {
+    width: 1%;
+    text-align: end;
+    white-space: nowrap;
+  }
+}
+
+// Tabla fija con columnas redimensionables (directiva appColumnasRedimensionables).
+.ui-table--rigid {
+  table-layout: fixed;
+
+  th,
+  td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  thead th {
+    position: relative;
+  }
+
+  td:has(> .row-actions),
+  td.celda-acciones {
+    overflow: visible;
+  }
+
+  .tag-list {
+    flex-wrap: nowrap;
+  }
+}
+
+.col-resize {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  z-index: 1;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+
+  &:hover {
+    background: d.color('border-strong');
+  }
+
+  &:focus-visible {
+    outline: 2px solid d.color('focus');
+    outline-offset: 0;
+    background: d.color('focus');
+  }
+}
+
+body.col-resize--activo {
+  cursor: col-resize;
+  user-select: none;
+
+  .col-resize {
+    background: d.color('border-strong');
+  }
+}
+
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: d.space('1');
+}
+
+@include d.bp('md') {
+  .ui-table th.col-w-principal {
+    width: 30%;
+  }
+
+  .ui-table th.col-w-estado {
+    width: 18%;
+  }
+
+  .ui-table th.col-w-etiquetas {
+    width: 24%;
+  }
+
+  .ui-table th.col-w-num {
+    width: 9%;
+  }
+
+  .ui-table th.col-w-fecha {
+    width: 15%;
+  }
+}
+
+// Tableta y escritorio compacto: sin columnas de prioridad 3.
+@media (min-width: d.breakpoint('md')) and (max-width: calc(#{d.breakpoint('xl')} - 0.02px)) {
+  .ui-table .col-p3 {
+    display: none;
+  }
+}
+
+// Tablas sin modo tarjeta: en móvil toman su ancho natural y se desplazan.
+@include d.bp-down('md') {
+  .ui-table--rigid {
+    table-layout: auto;
+    min-width: 0 !important;
+
+    col {
+      width: auto !important;
+    }
+
+    th,
+    td {
+      white-space: normal;
+    }
+  }
+
+  .ui-table .col-resize {
+    display: none;
+  }
+
+  .ui-table:not(.ui-table--tarjetas) {
+    width: max-content;
+    min-width: 100%;
+  }
+
+  // Celular: cada fila es una tarjeta. Primera línea: dato principal y ⋯; debajo, estado
+  // y las demás columnas como clave (mono mayúscula) / valor.
+  .ui-table--tarjetas {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+
+    colgroup {
+      display: none;
+    }
+
+    thead {
+      @include d.visually-hidden;
+    }
+
+    tbody {
+      display: block;
+    }
+
+    tbody tr {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: d.space('2') d.space('3');
+      padding: d.space('4') d.space('1');
+      border-bottom: 1px solid d.color('border');
+    }
+
+    td {
+      display: block;
+      height: auto;
+      min-width: 0;
+      padding: 0;
+      border: 0;
+      white-space: normal;
+      overflow: visible;
+      text-align: start;
+    }
+
+    td.num {
+      text-align: start;
+    }
+
+    .celda-principal {
+      grid-column: 1;
+      grid-row: 1;
+
+      .ui-table__primary {
+        @include d.type('body-02-medium');
+      }
+    }
+
+    .celda-acciones {
+      grid-column: 2;
+      grid-row: 1;
+      width: auto;
+    }
+
+    .celda-estado {
+      grid-column: 1 / -1;
+    }
+
+    td[data-label] {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: d.space('3');
+
+      &::before {
+        content: attr(data-label);
+        flex-shrink: 0;
+        @include d.type('mono-00-caps');
+        color: d.color('text-faint');
+      }
+
+      > * {
+        min-width: 0;
+        text-align: end;
+      }
+    }
+
+    .ui-stack > .u-muted {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+  }
+}
+
+// ===================== Badge legado (texto en línea) =====================
+.ui-dot {
+  display: none;
+}
+
+// ===================== Avisos breves y listas de asignación =====================
+.modal-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: d.space('2');
+  margin-bottom: d.space('4');
+  @include d.type('body-01');
+  color: d.color('text-muted');
+
+  ui-icon {
+    margin-top: 2px;
+    color: d.color('text-faint');
+  }
+
+  strong {
+    color: d.color('text-strong');
+    font-weight: d.font-weight('semibold');
+  }
+}
+
+.role-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid d.color('border');
+}
+
+.role-item {
+  display: flex;
+  align-items: center;
+  gap: d.space('3');
+  min-height: 3.5rem;
+  padding: d.space('3') d.space('4');
+
+  & + & {
+    border-top: 1px solid d.color('border');
+  }
+
+  &__icon {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    color: d.color('text-faint');
+  }
+
+  &__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: d.space('2');
+    @include d.type('body-01-medium');
+    color: d.color('text-strong');
+  }
+
+  &__desc {
+    @include d.type('body-00');
+    color: d.color('text-muted');
+  }
+}
+
+// Permisos individuales de un usuario.
+.perm-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: d.space('4');
+}
+
+.perm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: d.space('2');
+
+  > app-search-field {
+    flex: 1 1 14rem;
+    max-width: none;
+  }
+}
+
+.perm-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: d.space('2');
+  @include d.type('body-01');
+  color: d.color('text-muted');
+}
+
+.perm-list {
+  display: grid;
+  max-height: min(52vh, 30rem);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid d.color('border');
+}
+
+.perm-item {
+  display: flex;
+  align-items: center;
+  gap: d.space('4');
+  padding: d.space('3') d.space('4');
+  border-left: 2px solid d.color('border-strong');
+
+  & + & {
+    border-top: 1px solid d.color('border');
+  }
+
+  &--permitido {
+    border-left-color: d.color('success');
+  }
+
+  &--bloqueado {
+    border-left-color: d.color('danger');
+  }
+
+  &__text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__resultado {
+    display: inline-flex;
+    align-items: center;
+    gap: d.space('1');
+    @include d.type('mono-00-caps');
+  }
+
+  &--permitido &__resultado {
+    color: d.color('success');
+  }
+
+  &--bloqueado &__resultado {
+    color: d.color('danger');
+  }
+
+  &__name {
+    @include d.type('body-01-medium');
+    color: d.color('text-strong');
+  }
+
+  &__code {
+    @include d.type('mono-00');
+    color: d.color('text-muted');
+  }
+
+  &__porque {
+    @include d.type('body-00');
+    color: d.color('text-muted');
+  }
+}
+
+// Selector Heredar · Conceder · Denegar (segmentos con borde compartido).
+.perm-seg {
+  display: inline-flex;
+  flex-shrink: 0;
+
+  &__btn {
+    min-height: d.layout('control-height-sm');
+    padding: 0 d.space('3');
+    border: 1px solid d.color('border');
+    border-radius: d.radius('md');
+    background: transparent;
+    @include d.type('interface-00');
+    color: d.color('text-muted');
+    cursor: pointer;
+    transition: color d.motion('fast') d.motion('easing'), background-color d.motion('fast') d.motion('easing');
+    @include d.focus-ring(-2px);
+
+    & + & {
+      margin-left: -1px;
+    }
+
+    &:hover:not([aria-disabled='true']) {
+      background: d.color('surface-hover');
+      color: d.color('text-strong');
+    }
+
+    &[aria-disabled='true'] {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    @include d.touch {
+      min-height: d.touch-target();
+    }
+  }
+
+  &__btn--on {
+    position: relative;
+    background: d.color('primary-soft');
+    border-color: d.color('accent');
+    color: d.color('accent');
+  }
+
+  &__btn--grant.perm-seg__btn--on {
+    background: d.color('success-soft');
+    border-color: d.color('success');
+    color: d.color('success');
+  }
+
+  &__btn--deny.perm-seg__btn--on {
+    background: d.color('danger-soft');
+    border-color: d.color('danger');
+    color: d.color('danger');
+  }
+}
+
+@include d.bp-down('md') {
+  .perm-item {
+    flex-wrap: wrap;
+  }
+
+  .perm-item__text {
+    flex-basis: 100%;
+  }
+
+  .perm-seg {
+    width: 100%;
+  }
+
+  .perm-seg__btn {
+    flex: 1;
+  }
+}
+
+// ===================== Pestañas en página y lista clave/valor =====================
+.ui-tabs {
+  display: flex;
+  gap: d.space('6');
+  margin-bottom: d.space('6');
+  overflow-x: auto;
+  border-bottom: 1px solid d.color('border');
+  scrollbar-width: none;
+}
+
+.ui-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: d.layout('control-height');
+  margin-bottom: -1px;
+  padding: 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  @include d.type('interface-01');
+  color: d.color('text-muted');
+  white-space: nowrap;
+  cursor: pointer;
+  @include d.focus-ring(-2px);
+
+  &:hover {
+    color: d.color('text-strong');
+  }
+
+  &[aria-selected='true'] {
+    border-bottom-color: d.color('accent');
+    color: d.color('text-strong');
+  }
+
+  @include d.touch {
+    min-height: d.touch-target();
+  }
+}
+
+.ui-dl {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, max-content) minmax(0, 1fr);
+  column-gap: d.space('8');
+  margin: 0;
+
+  dt,
+  dd {
+    margin: 0;
+    padding: d.space('2');
+    border-bottom: 1px solid d.color('border');
+  }
+
+  dt {
+    display: flex;
+    align-items: center;
+    @include d.type('mono-00-caps');
+    color: d.color('text');
+  }
+
+  dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: d.space('2');
+    min-width: 0;
+    @include d.type('body-01');
+    overflow-wrap: anywhere;
+  }
+
+  dt:last-of-type,
+  dd:last-of-type {
+    border-bottom: 0;
+  }
+
+  @include d.bp-down('sm') {
+    grid-template-columns: minmax(0, 1fr);
+
+    dt {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    dd {
+      padding-top: d.space('1');
+    }
+  }
+}
+
+// ===================== Estado vacío =====================
+.ui-empty {
+  display: grid;
+  justify-items: start;
+  gap: d.space('2');
+  max-width: 31.25rem;
+  padding: d.space('16') d.space('2');
+
+  &__icon {
+    color: d.color('text-faint');
+  }
+
+  &__title {
+    @include d.type('heading-03');
+    color: d.color('text-strong');
+  }
+
+  &__text {
+    @include d.type('body-02');
+    color: d.color('text-muted');
+  }
+
+  &__acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: d.space('2');
+    margin-top: d.space('6');
+
+    &:empty {
+      display: none;
+    }
+  }
+}
+
+// ===================== Paginador =====================
+.ui-paginador {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: d.space('3') d.space('6');
+  padding: d.space('4') 0;
+  @include d.type('body-01');
+  color: d.color('text-muted');
+
+  strong {
+    color: d.color('text-strong');
+    font-weight: d.font-weight('medium');
+  }
+
+  &__size {
+    display: inline-flex;
+    align-items: center;
+    gap: d.space('2');
+
+    select {
+      width: auto;
+      min-height: d.layout('control-height-sm');
+      padding-block: 0;
+    }
+  }
+
+  &__nav {
+    display: flex;
+    align-items: center;
+    gap: d.space('1');
+    margin-left: auto;
+  }
+
+  &__btn {
+    display: inline-grid;
+    place-items: center;
+    min-width: d.layout('control-height-sm');
+    height: d.layout('control-height-sm');
+    padding: 0 d.space('2');
+    border: 1px solid d.color('border');
+    border-radius: d.radius('md');
+    background: transparent;
+    @include d.type('interface-00');
+    @include d.tabular-nums;
+    color: d.color('text');
+    cursor: pointer;
+    @include d.focus-ring;
+
+    &:hover:not([aria-disabled='true']) {
+      background: d.color('surface-hover');
+    }
+
+    &--activa {
+      background: d.color('primary-soft');
+      border-color: d.color('accent');
+      color: d.color('accent');
+    }
+
+    &[aria-disabled='true'] {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    @include d.touch {
+      min-width: d.touch-target();
+      height: d.touch-target();
+    }
+  }
+
+  &__gap {
+    padding: 0 d.space('1');
+  }
+
+  @include d.bp-down('md') {
+    &__nav {
+      margin-left: 0;
+    }
+  }
+}
+
+// ===================== Modal =====================
+.ui-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: $z-modal;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: d.space('6');
+  background: d.color('overlay');
+
+  @include d.motion-safe {
+    animation: ui-fade d.motion('normal') d.motion('easing') both;
+  }
+}
+
+.ui-modal-backdrop:not(.ui-modal-backdrop--lateral) {
+  z-index: calc(#{$z-modal} + 1);
+}
+
+.ui-modal-backdrop:has(> [role='alertdialog']) {
+  z-index: calc(#{$z-modal} + 2);
+}
+
+.ui-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100dvh - #{d.space('12')});
+  background: d.color('surface');
+  border: 1px solid d.color('border');
+  border-radius: d.radius('lg');
+  box-shadow: d.shadow('lg');
+  outline: none;
+
+  @include d.motion-safe {
+    animation: ui-rise d.motion('normal') d.motion('easing') both;
+  }
+
+  &__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: d.space('4');
+    padding: d.space('6') d.space('6') d.space('4');
+  }
+
+  &__heading {
+    display: grid;
+    gap: d.space('1');
+    min-width: 0;
+  }
+
+  &__title {
+    @include d.type('heading-03');
+    color: d.color('text-strong');
+    overflow-wrap: anywhere;
+  }
+
+  &__subtitle {
+    @include d.type('body-01');
+    color: d.color('text-muted');
+    overflow-wrap: anywhere;
+  }
+
+  &__body {
+    flex: 1;
+    min-height: 0;
+    padding: 0 d.space('6') d.space('6');
+    overflow-y: auto;
+  }
+
+  &__footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: d.space('2');
+    padding: d.space('4') d.space('6');
+    border-top: 1px solid d.color('border');
+
+    &:has(> .modal-foot:empty),
+    &:empty {
+      display: none;
+    }
+  }
+}
+
+.ui-modal--sm {
+  max-width: 28rem;
+}
+
+.ui-modal--md {
+  max-width: 36rem;
+}
+
+.ui-modal--lg {
+  max-width: 48rem;
+}
+
+.ui-modal--compacto {
+  .ui-modal__header {
+    padding-bottom: d.space('2');
+  }
+}
+
+.modal-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: d.space('2');
+  width: 100%;
+}
+
+// Panel lateral de detalle (a la derecha, alto completo).
+.ui-modal-backdrop--lateral {
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+}
+
+.ui-modal--lateral {
+  max-width: min(36rem, 100vw);
+  max-height: none;
+  height: 100dvh;
+  border-width: 0 0 0 1px;
+
+  @include d.motion-safe {
+    animation: ui-slide d.motion('normal') d.motion('easing') both;
+  }
+
+  .ui-modal__title {
+    @include d.type('heading-04');
+  }
+
+  .ui-modal__footer,
+  .modal-foot {
+    justify-content: flex-start;
+  }
+}
+
+@include d.bp-down('md') {
+  .ui-modal-backdrop:not(.ui-modal-backdrop--lateral) {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .ui-modal:not(.ui-modal--lateral) {
+    max-width: none;
+    max-height: 92dvh;
+    border-width: 1px 0 0;
+  }
+
+  .ui-modal__header,
+  .ui-modal__body,
+  .ui-modal__footer {
+    padding-inline: d.space('4');
+  }
+
+  .modal-foot > [appButton] {
+    flex: 1 1 auto;
+  }
+}
+
+@keyframes ui-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ui-slide {
+  from {
+    transform: translateX(1.5rem);
+    opacity: 0;
+  }
+}
+
+// Confirmación de acciones con impacto.
+.confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: d.space('4');
+
+  &__icon {
+    display: inline-grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: d.layout('control-height');
+    height: d.layout('control-height');
+    background: d.color('danger-soft');
+    color: d.color('danger');
+  }
+
+  &__icon--neutral {
+    background: d.color('primary-soft');
+    color: d.color('accent');
+  }
+
+  &__text {
+    display: grid;
+    gap: d.space('2');
+    min-width: 0;
+  }
+
+  &__title {
+    @include d.type('body-02-semi-bold');
+    color: d.color('text-strong');
+  }
+
+  &__desc {
+    @include d.type('body-01');
+    color: d.color('text-muted');
+  }
+
+  &__motivo {
+    margin-top: d.space('2');
+
+    .ui-textarea {
+      min-height: 4rem;
+    }
+  }
+}
+
+// ===================== Toasts =====================
+.ui-toast-host {
+  position: fixed;
+  right: d.space('6');
+  bottom: d.space('6');
+  z-index: d.z('toast');
+  display: flex;
+  flex-direction: column;
+  gap: d.space('2');
+  width: min(24rem, calc(100vw - #{d.space('8')}));
+  pointer-events: none;
+
+  @include d.bp-down('md') {
+    right: d.space('4');
+    bottom: d.space('4');
+    left: d.space('4');
+    width: auto;
+  }
+}
+
+.ui-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: d.space('3');
+  padding: d.space('3') d.space('3') d.space('3') d.space('4');
+  background: d.color('surface');
+  border: 1px solid d.color('border');
+  border-left: 3px solid d.color('accent');
+  box-shadow: d.shadow('menu');
+  pointer-events: auto;
+
+  @include d.motion-safe {
+    animation: ui-rise d.motion('normal') d.motion('easing') both;
+  }
+
+  &__icon {
+    margin-top: 1px;
+    color: d.color('accent');
+  }
+
+  &__body {
+    display: grid;
+    flex: 1;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  &__title {
+    @include d.type('body-01-semi-bold');
+    color: d.color('text-strong');
+  }
+
+  &__text {
+    @include d.type('body-01');
+    color: d.color('text-muted');
+    overflow-wrap: anywhere;
+  }
+
+  &__action {
+    justify-self: start;
+    margin-top: d.space('1');
+    padding: 0;
+    border: 0;
+    background: none;
+    @include d.type('body-01-medium');
+    color: d.color('accent');
+    cursor: pointer;
+    @include d.focus-ring;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  &__close {
+    margin: -#{d.space('1')} -#{d.space('1')} 0 0;
+  }
+
+  &--exito {
+    border-left-color: d.color('success');
+
+    .ui-toast__icon {
+      color: d.color('success');
+    }
+  }
+
+  &--error {
+    border-left-color: d.color('danger');
+
+    .ui-toast__icon {
+      color: d.color('danger');
+    }
+  }
+
+  &--advertencia {
+    border-left-color: d.color('warning');
+
+    .ui-toast__icon {
+      color: d.color('warning');
+    }
+  }
+}
+
+// ===================== Modo de alto contraste =====================
+@media (forced-colors: active) {
+  .switch {
+    border: 1px solid ButtonText;
+  }
+
+  .switch--on {
+    background: Highlight;
+  }
+
+  .perm-seg__btn--on,
+  .ui-paginador__btn--activa,
+  .ui-chip[aria-pressed='true'],
+  .ui-tab[aria-selected='true'],
+  .ui-table tbody tr.fila-activa {
+    outline: 2px solid Highlight;
+  }
+}
+
+// Nota informativa dentro de un menú CDK (p. ej. motivo de protección del registro).
+.menu-nota {
+  display: flex;
+  align-items: flex-start;
+  gap: d.space('2');
+  max-width: 18rem;
+  padding: d.space('2') d.space('3');
+  @include d.type('body-00');
+  color: d.color('text-muted');
+
+  ui-icon {
+    flex-shrink: 0;
+    color: d.color('text-faint');
+  }
+}
+
+// Avisos dentro de un modal: separados del contenido que sigue.
+.ui-modal__body > app-notice {
+  margin-bottom: d.space('4');
+}

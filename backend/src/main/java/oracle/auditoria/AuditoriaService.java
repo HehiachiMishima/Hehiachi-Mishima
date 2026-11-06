@@ -19,8 +19,6 @@ import oracle.common.response.PaginaResponse;
 import oracle.common.support.CondicionSql;
 import oracle.common.support.Trazas;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /** Consulta y exportacion de la bitacora de auditoria (solo lectura). */
 @Slf4j
@@ -49,7 +47,7 @@ public class AuditoriaService {
         this.transacciones = transacciones;
     }
 
-    public Mono<ApiResponse<PaginaResponse<AuditoriaEventoResponse>>> listar(AuditoriaFiltroRequest peticion) {
+    public ApiResponse<PaginaResponse<AuditoriaEventoResponse>> listar(AuditoriaFiltroRequest peticion) {
         int pagina = peticion.pagina() == null ? 1 : peticion.pagina();
         int tamano = peticion.tamano() == null ? TAMANO_POR_DEFECTO : peticion.tamano();
         if (pagina < 1 || tamano < 1 || tamano > TAMANO_MAXIMO) {
@@ -62,24 +60,22 @@ public class AuditoriaService {
                     + " eventos. Acota el rango de fechas o los filtros.");
         }
         CondicionSql condicion = FiltroAuditoria.de(peticion, Instant.now()).condicion();
-        return Mono.fromCallable(() -> Trazas.medir(log, "AuditoriaService.listar", () -> transacciones.consultar(() -> {
-                    List<AuditoriaEventoResponse> contenido = repositorio.pagina(condicion, (int) offset, tamano);
-                    long total = repositorio.contar(condicion, MAX_FILAS);
-                    return PaginaResponse.of(contenido, total, pagina, tamano);
-                })))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(p -> ApiResponse.ok("Eventos de auditoría.", p));
+        var p = Trazas.medir(log, "AuditoriaService.listar", () -> transacciones.consultar(() -> {
+            List<AuditoriaEventoResponse> contenido = repositorio.pagina(condicion, (int) offset, tamano);
+            long total = repositorio.contar(condicion, MAX_FILAS);
+            return PaginaResponse.of(contenido, total, pagina, tamano);
+        }));
+        return ApiResponse.ok("Eventos de auditoría.", p);
     }
 
-    public Mono<ApiResponse<AuditoriaEventoResponse>> obtener(Long id) {
-        return Mono.fromCallable(() -> repositorio.porId(id)
-                        .orElseThrow(() -> new RecursoNoEncontradoException("No existe el evento de auditoría con id " + id + ".")))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(e -> ApiResponse.ok("Evento de auditoría.", e));
+    public ApiResponse<AuditoriaEventoResponse> obtener(Long id) {
+        var e = repositorio.porId(id)
+            .orElseThrow(() -> new RecursoNoEncontradoException("No existe el evento de auditoría con id " + id + "."));
+        return ApiResponse.ok("Evento de auditoría.", e);
     }
 
-    public Mono<ApiResponse<CatalogoAuditoriaResponse>> catalogo() {
-        return Mono.just(ApiResponse.ok("Catálogo de auditoría.", CATALOGO));
+    public ApiResponse<CatalogoAuditoriaResponse> catalogo() {
+        return ApiResponse.ok("Catálogo de auditoría.", CATALOGO);
     }
 
     /** Valida el filtro antes de abrir la respuesta (los errores salen como 400 JSON). */

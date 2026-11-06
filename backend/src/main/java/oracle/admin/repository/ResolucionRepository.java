@@ -1,8 +1,9 @@
 package oracle.admin.repository;
 
+import java.sql.Array;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,20 +14,17 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 /**
- * Consultas de resolucion de permisos sobre las vistas de MySQL.
- * Al ser vistas (no entidades), se leen con JdbcTemplate y se mapean
- * directamente a las respuestas.
+ * Consultas de resolucion de permisos sobre las vistas de PostgreSQL
+ * (v_permisos_efectivos / v_permisos_finales, deny-wins con bool_and).
+ * Al ser vistas (no entidades), se leen con JdbcTemplate.
  *
  * Regla de rendimiento: v_permisos_finales solo se consulta FILTRADA por
- * usuario_id (MySQL empuja el predicado dentro de la vista). Las consultas
- * globales materializarian todos los pares usuario x permiso; por eso el
- * resumen trabaja por lotes de ids.
+ * usuario_id (el planner empuja el predicado dentro de la vista). Los lotes
+ * de ids viajan como UN parametro bigint[] (= ANY(?)): una sola sentencia
+ * preparada para cualquier tamano de lote.
  */
 @Repository
 public class ResolucionRepository {
-
-    /** Separador de GROUP_CONCAT que no puede aparecer en un nombre de rol. */
-    private static final String SEPARADOR = "\u001F";
 
     private static final RowMapper<PermisoFinalResponse> FINAL = (rs, fila) ->
             new PermisoFinalResponse(
@@ -41,34 +39,21 @@ public class ResolucionRepository {
     }
 
     /**
-     * Aportes por permiso: una fila ROL (con los roles activos que lo conceden)
-     * y una fila OVERRIDE si existe. Mismas reglas de activo que v_permisos_efectivos.
+     * Aportes por permiso: una fila ROL (con el array de roles activos que lo
+     * conceden) y una fila OVERRIDE si existe. Lee directamente la vista.
      */
     public List<PermisoEfectivoResponse> efectivos(Long usuarioId) {
         return jdbc.query("""
-                SELECT ur.usuario_id, rp.permiso_id, TRUE AS otorgado, 'ROL' AS origen,
-                       GROUP_CONCAT(r.nombre ORDER BY r.nombre SEPARATOR '%1$s') AS roles
-                FROM usuarios_roles ur
-                JOIN roles r ON r.id = ur.rol_id AND r.activo = TRUE
-                JOIN roles_permisos rp ON rp.rol_id = ur.rol_id
-                JOIN permisos p ON p.id = rp.permiso_id AND p.activo = TRUE
-                WHERE ur.usuario_id = ?
-                GROUP BY ur.usuario_id, rp.permiso_id
-                UNION ALL
-                SELECT up.usuario_id, up.permiso_id, up.otorgado, 'OVERRIDE' AS origen, NULL AS roles
-                FROM usuarios_permisos up
-                JOIN permisos p ON p.id = up.permiso_id AND p.activo = TRUE
-                WHERE up.usuario_id = ?
+                SELECT usuario_id, permiso_id, otorgado, origen, roles
+                FROM v_permisos_efectivos
+                WHERE usuario_id = ?
                 ORDER BY permiso_id, origen
-                """.formatted(SEPARADOR), (rs, fila) -> {
-                    String roles = rs.getString("roles");
-                    return new PermisoEfectivoResponse(
-                            rs.getLong("usuario_id"),
-                            rs.getLong("permiso_id"),
-                            rs.getBoolean("otorgado"),
-                            rs.getString("origen"),
-                            roles == null ? List.of() : Arrays.asList(roles.split(SEPARADOR)));
-                }, usuarioId, usuarioId);
+                """, (rs, fila) -> new PermisoEfectivoResponse(
+                        rs.getLong("usuario_id"),
+                        rs.getLong("permiso_id"),
+                        rs.getBoolean("otorgado"),
+                        rs.getString("origen"),
+                        textos(rs.getArray("roles"))), usuarioId);
     }
 
     public List<PermisoFinalResponse> finales(Long usuarioId) {
@@ -84,27 +69,21 @@ public class ResolucionRepository {
         return jdbc.query("""
                 SELECT usuario_id, permiso_id, permitido
                 FROM v_permisos_finales
-                WHERE usuario_id = ? AND permitido = TRUE
+                WHERE usuario_id = ? AND permitido
                 ORDER BY permiso_id
                 """, FINAL, usuarioId);
     }
 
     public boolean tienePermitido(Long usuarioId, Long permisoId) {
-        Integer total = jdbc.queryForObject("""
-                SELECT COUNT(*) FROM v_permisos_finales
-                WHERE usuario_id = ? AND permiso_id = ? AND permitido = TRUE
-                """, Integer.class, usuarioId, permisoId);
-        return total != null && total > 0;
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM v_permisos_finales
+                               WHERE usuario_id = ? AND permiso_id = ? AND permitido)
+                """, Boolean.class, usuarioId, permisoId));
     }
 
+    /** Nombres permitidos via la funcion SQL inlinable app.permisos_de(). */
     public List<String> nombresPermitidos(Long usuarioId) {
-        return jdbc.queryForList("""
-                SELECT p.nombre
-                FROM v_permisos_finales v
-                JOIN permisos p ON p.id = v.permiso_id
-                WHERE v.usuario_id = ? AND v.permitido = TRUE
-                ORDER BY p.nombre
-                """, String.class, usuarioId);
+        return jdbc.queryForList("SELECT nombre FROM permisos_de(?)", String.class, usuarioId);
     }
 
     /**
@@ -113,14 +92,13 @@ public class ResolucionRepository {
      * anti-escalada al reactivar permisos.
      */
     public boolean recibiriaPermiso(Long usuarioId, Long permisoId) {
-        Integer total = jdbc.queryForObject("""
-                SELECT (EXISTS (SELECT 1 FROM usuarios_roles ur
-                                JOIN roles_permisos rp ON rp.rol_id = ur.rol_id
-                                WHERE ur.usuario_id = ? AND rp.permiso_id = ?)
-                     OR EXISTS (SELECT 1 FROM usuarios_permisos up
-                                WHERE up.usuario_id = ? AND up.permiso_id = ? AND up.otorgado = TRUE))
-                """, Integer.class, usuarioId, permisoId, usuarioId, permisoId);
-        return total != null && total > 0;
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM usuarios_roles ur
+                               JOIN roles_permisos rp ON rp.rol_id = ur.rol_id
+                               WHERE ur.usuario_id = ? AND rp.permiso_id = ?)
+                    OR EXISTS (SELECT 1 FROM usuarios_permisos up
+                               WHERE up.usuario_id = ? AND up.permiso_id = ? AND up.otorgado)
+                """, Boolean.class, usuarioId, permisoId, usuarioId, permisoId));
     }
 
     /** Roles por usuario para los ids dados (usuario_id -> nombres). */
@@ -132,15 +110,14 @@ public class ResolucionRepository {
                 SELECT ur.usuario_id AS usuario_id, r.nombre AS nombre
                 FROM usuarios_roles ur
                 JOIN roles r ON r.id = ur.rol_id
-                WHERE ur.usuario_id IN (%s)
+                WHERE ur.usuario_id = ANY (?)
                 ORDER BY ur.usuario_id, r.nombre
-                """.formatted(marcadores(ids.size())), ids);
+                """, ids);
     }
 
     /**
-     * Permisos efectivos (permitido = TRUE) para los ids dados. Con IN (...) el
-     * predicado se empuja dentro de la vista (decenas de ms por cada 100 usuarios
-     * frente a minutos al materializarla entera).
+     * Permisos efectivos (permitido) para los ids dados. Con = ANY(?) el
+     * predicado se empuja dentro de la vista (no la materializa entera).
      */
     public Map<Long, List<String>> permitidosPorUsuario(List<Long> ids) {
         if (ids.isEmpty()) {
@@ -150,20 +127,27 @@ public class ResolucionRepository {
                 SELECT v.usuario_id AS usuario_id, p.nombre AS nombre
                 FROM v_permisos_finales v
                 JOIN permisos p ON p.id = v.permiso_id
-                WHERE v.usuario_id IN (%s) AND v.permitido = TRUE
+                WHERE v.usuario_id = ANY (?) AND v.permitido
                 ORDER BY v.usuario_id, p.nombre
-                """.formatted(marcadores(ids.size())), ids);
+                """, ids);
     }
 
     private Map<Long, List<String>> agrupar(String sql, List<Long> ids) {
         Map<Long, List<String>> mapa = new LinkedHashMap<>();
         jdbc.query(sql, rs -> {
             mapa.computeIfAbsent(rs.getLong("usuario_id"), k -> new ArrayList<>()).add(rs.getString("nombre"));
-        }, ids.toArray());
+        }, (Object) ids.toArray(Long[]::new));
         return mapa;
     }
 
-    private static String marcadores(int n) {
-        return String.join(",", Collections.nCopies(n, "?"));
+    private static List<String> textos(Array array) throws SQLException {
+        if (array == null) {
+            return List.of();
+        }
+        try {
+            return Arrays.asList((String[]) array.getArray());
+        } finally {
+            array.free();
+        }
     }
 }

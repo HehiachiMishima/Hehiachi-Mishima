@@ -90,9 +90,9 @@ class ProteccionesTest extends ApiPrueba {
     void elTriggerDeLaBdTambienProtegeLosPermisosBase() {
         assertThatThrownBy(() -> jdbc.update("UPDATE permisos SET descripcion = 'x' WHERE nombre = 'VER_ROLES'"))
                 .isInstanceOf(DataAccessException.class)
-                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("45000"));
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("RB403"));
         assertThatThrownBy(() -> jdbc.update("DELETE FROM permisos WHERE nombre = 'VER_AUDITORIA'"))
-                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("45000"));
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("RB403"));
     }
 
     // ---------------- Usuarios protegidos ----------------
@@ -135,13 +135,13 @@ class ProteccionesTest extends ApiPrueba {
                 m("permisoId", idPermiso("VER_ROLES"), "otorgado", false), admin()), 403);
 
         assertThatThrownBy(() -> jdbc.update("UPDATE usuarios SET nombre = 'x' WHERE id = ?", raiz))
-                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("45000"));
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("RB403"));
         assertThatThrownBy(() -> jdbc.update("UPDATE usuarios SET credenciales_version = credenciales_version + 1 "
-                + "WHERE id = ?", raiz)).satisfies(e -> assertThat(sqlState(e)).isEqualTo("45000"));
+                + "WHERE id = ?", raiz)).satisfies(e -> assertThat(sqlState(e)).isEqualTo("RB403"));
         assertThatThrownBy(() -> jdbc.update("DELETE FROM usuarios WHERE id = ?", raiz))
-                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("45000"));
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("RB403"));
         assertThatThrownBy(() -> jdbc.update("DELETE FROM usuarios_roles WHERE usuario_id = ?", raiz))
-                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("45000"));
+                .satisfies(e -> assertThat(sqlState(e)).isEqualTo("RB403"));
         // Contadores de bloqueo: permitidos por el trigger.
         jdbc.update("UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?", raiz);
     }

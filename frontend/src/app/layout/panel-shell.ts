@@ -7,17 +7,29 @@ import { TemaService } from '../core/services/tema';
 import { MenuCuenta } from '../features/cuenta/menu-cuenta';
 import { PANEL_ACTUAL, proveerPanelActual } from '../paneles/panel-actual';
 import { moduloDeUrl, modulosAccesibles, panelesAccesibles, primerModuloAccesible, urlModulo, urlPanel } from '../paneles/registro';
+import { CdkMenuTrigger } from '@angular/cdk/menu';
 import { Icon } from '../shared/ui/icon/icon';
+import { Menu, MenuItem, MenuSeparator } from '../shared/ui/menu/menu';
+import { Breadcrumbs, Miga } from './breadcrumbs';
 import { PaletaModulos } from './paleta-modulos/paleta-modulos';
-
-/** Preferencia de presentación: barra lateral compacta en escritorio (por navegador). */
-const CLAVE_COMPACTA = 'hm.barraCompacta';
 
 const esMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 @Component({
   selector: 'app-panel-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, Icon, MenuCuenta, PaletaModulos],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    CdkMenuTrigger,
+    Icon,
+    Menu,
+    MenuItem,
+    MenuSeparator,
+    Breadcrumbs,
+    MenuCuenta,
+    PaletaModulos,
+  ],
   providers: [proveerPanelActual()],
   host: {
     '[attr.data-tono]': 'panel.tono',
@@ -42,7 +54,6 @@ export class PanelShell {
 
   /** Paneles a los que se puede saltar desde el conmutador de la barra lateral. */
   readonly paneles = computed(() => panelesAccesibles(this.auth.permisos()));
-  readonly conmutadorAbierto = signal(false);
   /**
    * En móvil/tableta (<1024 px) la barra lateral es un panel superpuesto que
    * se comporta como un diálogo: arranca cerrada, deja el contenido inerte
@@ -56,14 +67,6 @@ export class PanelShell {
    */
   private readonly consultaEscritorio = window.matchMedia('(min-width: 1024px)');
   readonly escritorio = signal(this.consultaEscritorio.matches);
-
-  /**
-   * Barra lateral compacta (solo iconos con tooltip) en escritorio. Se recuerda
-   * por navegador. En móvil/tableta no aplica: allí es un cajón completo.
-   */
-  readonly compacta = signal(this.leerCompacta());
-  /** Tooltip de la barra compacta: se pinta fuera del scroll de la navegación. */
-  readonly tip = signal<{ texto: string; y: number } | null>(null);
 
   /** Paleta de módulos (Ctrl/⌘ K). */
   readonly paletaAbierta = signal(false);
@@ -85,6 +88,19 @@ export class PanelShell {
 
   /** Módulo activo para la miga de pan. */
   readonly moduloActual = computed(() => moduloDeUrl(this.panel, this.url()) ?? null);
+
+  /** Migas: Paneles › Panel › Módulo. */
+  readonly migas = computed<Miga[]>(() => {
+    const modulo = this.moduloActual();
+    const migas: Miga[] = [
+      { etiqueta: 'Paneles', url: '/paneles' },
+      { etiqueta: this.panel.nombre, url: this.inicio() },
+    ];
+    if (modulo) {
+      migas.push({ etiqueta: modulo.nombre });
+    }
+    return migas;
+  });
 
   /** Destino de la miga raíz: la entrada del panel (primer módulo accesible). */
   readonly inicio = computed(() => {
@@ -123,11 +139,11 @@ export class PanelShell {
 
   alNavegar(): void {
     this.menuAbierto.set(false);
-    this.conmutadorAbierto.set(false);
   }
 
-  alternarConmutador(): void {
-    this.conmutadorAbierto.update((valor) => !valor);
+  irA(url: string): void {
+    this.menuAbierto.set(false);
+    void this.router.navigateByUrl(url);
   }
 
   cerrarMenu(): void {
@@ -135,10 +151,6 @@ export class PanelShell {
   }
 
   cerrarConEscape(): void {
-    if (this.conmutadorAbierto()) {
-      this.conmutadorAbierto.set(false);
-      return;
-    }
     // Los modales gestionan su propio Escape.
     if (document.querySelector('.ui-modal') || !this.menuAbierto()) {
       return;
@@ -146,28 +158,6 @@ export class PanelShell {
     this.cerrarMenu();
     // Tras el render: el cuerpo deja de ser inert y el botón ya acepta el foco.
     setTimeout(() => this.botonMenu()?.nativeElement.focus());
-  }
-
-  alternarCompacta(): void {
-    this.compacta.update((valor) => !valor);
-    this.tip.set(null);
-    try {
-      localStorage.setItem(CLAVE_COMPACTA, String(this.compacta()));
-    } catch {
-      /* almacenamiento no disponible */
-    }
-  }
-
-  mostrarTip(evento: Event, texto: string): void {
-    if (!this.escritorio() || !this.compacta()) {
-      return;
-    }
-    const caja = (evento.currentTarget as HTMLElement).getBoundingClientRect();
-    this.tip.set({ texto, y: caja.top + caja.height / 2 });
-  }
-
-  ocultarTip(): void {
-    this.tip.set(null);
   }
 
   abrirPaleta(): void {
@@ -187,14 +177,6 @@ export class PanelShell {
       } else {
         this.abrirPaleta();
       }
-    }
-  }
-
-  private leerCompacta(): boolean {
-    try {
-      return localStorage.getItem(CLAVE_COMPACTA) === 'true';
-    } catch {
-      return false;
     }
   }
 

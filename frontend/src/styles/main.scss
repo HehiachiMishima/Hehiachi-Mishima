@@ -1,0 +1,10 @@
+// Estilos globales: fuentes, tema y base. Todo lo demás vive en el SCSS de cada componente,
+// que importa el sistema con @use 'design' as d;
+// Fuentes (OFL), instaladas con: npm i @fontsource-variable/geist @fontsource-variable/geist-mono
+@use '@fontsource-variable/geist';
+@use '@fontsource-variable/geist-mono';
+@use 'themes/themes';
+@use 'base/base';
+// Posicionamiento de menús y popovers (CDK Overlay, usado por app-menu).
+@use '@angular/cdk' as cdk;
+@include cdk.overlay();

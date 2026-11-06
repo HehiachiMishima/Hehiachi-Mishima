@@ -1,29 +1,23 @@
-<header class="page-head">
-  <span class="page-head__icon" aria-hidden="true"><ui-icon name="roles" [size]="24" /></span>
-  <div class="page-head__main">
-    <span class="page-head__eyebrow">Panel {{ panel.nombre }}</span>
-    <h1 class="page-head__title" tabindex="-1">Roles</h1>
-    <p class="page-head__sub">Roles y los permisos que conceden a sus usuarios.</p>
-  </div>
-  <button *hasPermiso="permisos.CREAR_ROLES" type="button" class="ui-btn ui-btn--primary" (click)="abrirCrear()">
-    <ui-icon name="plus" [size]="18" />
-    Nuevo rol
-  </button>
-</header>
+<app-page-header [eyebrow]="'Panel ' + panel.nombre" heading="Roles">
+  <ng-container pageMeta>
+    <span>Roles y los permisos que conceden a sus usuarios.</span>
+  </ng-container>
+  <ng-container pageActions>
+    <button *hasPermiso="permisos.CREAR_ROLES" type="button" appButton (click)="abrirCrear()">
+      <ui-icon name="plus" [size]="16" />
+      Nuevo rol
+    </button>
+  </ng-container>
+</app-page-header>
 
 <div class="toolbar" role="search">
-  <div class="ui-search toolbar__grow">
-    <ui-icon name="search" [size]="18" />
-    <input
-      type="search"
-      class="ui-input"
-      aria-label="Buscar roles"
-      placeholder="Buscar por nombre o descripción…"
-      [value]="textoBusqueda()"
-      (input)="buscar($any($event.target).value)"
-    />
-  </div>
-  <button type="button" class="ui-btn ui-btn--secondary toolbar__toggle" aria-controls="rol-filtros"
+  <app-search-field
+    label="Buscar roles"
+    placeholder="Buscar por nombre o descripción…"
+    [value]="textoBusqueda()"
+    (valueChange)="buscar($event)"
+  />
+  <button type="button" appButton variant="secondary" class="toolbar__toggle" aria-controls="rol-filtros"
     [attr.aria-expanded]="filtrosAbiertos()" (click)="filtrosAbiertos.update((v) => !v)">
     <ui-icon name="filter" [size]="16" /> Filtros
     @if (estado()) {
@@ -38,7 +32,7 @@
     <option value="inactivos">Inactivos</option>
   </select>
   </div>
-  <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()" [attr.aria-disabled]="cargando() || null">
+  <button type="button" appButton variant="secondary" size="sm" (click)="cargar()" [attr.aria-disabled]="cargando() || null">
     <ui-icon name="refresh" [size]="16" />
     Actualizar
   </button>
@@ -52,7 +46,7 @@
     </div>
   } @else if (error()) {
     <ui-empty icono="alerta" titulo="No se pudieron cargar los roles" [mensaje]="error()!">
-      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()">
+      <button type="button" appButton variant="secondary" size="sm" (click)="cargar()">
         <ui-icon name="refresh" [size]="16" /> Reintentar
       </button>
     </ui-empty>
@@ -63,9 +57,9 @@
       [mensaje]="hayFiltros() ? 'Ningún rol coincide con los filtros.' : 'Crea el primer rol para agrupar permisos.'"
     >
       @if (hayFiltros()) {
-        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="limpiarFiltros()">Limpiar filtros</button>
+        <button type="button" appButton variant="secondary" size="sm" (click)="limpiarFiltros()">Limpiar filtros</button>
       } @else {
-        <button *hasPermiso="permisos.CREAR_ROLES" type="button" class="ui-btn ui-btn--primary ui-btn--sm" (click)="abrirCrear()">
+        <button *hasPermiso="permisos.CREAR_ROLES" type="button" appButton size="sm" (click)="abrirCrear()">
           <ui-icon name="plus" [size]="16" /> Nuevo rol
         </button>
       }
@@ -96,12 +90,12 @@
               <td class="celda-estado">
                 <span class="tag-list">
                   @if (rol.activo) {
-                    <span class="ui-badge ui-badge--success"><span class="ui-dot" aria-hidden="true"></span> Activo</span>
+                    <app-badge tone="success">Activo</app-badge>
                   } @else {
-                    <span class="ui-badge ui-badge--neutral"><span class="ui-dot" aria-hidden="true"></span> Inactivo</span>
+                    <app-badge tone="neutral">Inactivo</app-badge>
                   }
                   @if (protegido(rol)) {
-                    <span class="ui-badge ui-badge--neutral" [title]="motivoProteccion"><ui-icon name="lock" [size]="12" /> Protegido</span>
+                    <app-badge tone="neutral" [title]="motivoProteccion"><ui-icon name="lock" [size]="12" /> Protegido</app-badge>
                   }
                 </span>
               </td>
@@ -121,36 +115,11 @@
                 </span>
               </td>
               <td class="celda-acciones">
-                <div class="row-actions">
-                  <button *hasPermiso="permisos.VER_AUDITORIA" type="button" class="ui-icon-btn" title="Historial"
-                    [attr.aria-label]="'Historial del rol ' + rol.nombre" (click)="historialDe.set(rol)">
-                    <ui-icon name="history" [size]="18" />
-                  </button>
-                  <button *hasPermiso="permisos.ASIGNAR_PERMISOS" type="button" class="ui-icon-btn" title="Permisos del rol"
-                    [attr.aria-label]="'Permisos del rol ' + rol.nombre" (click)="abrirPermisos(rol)">
-                    <ui-icon name="key" [size]="18" />
-                  </button>
-                  <button *hasPermiso="permisos.MODIFICAR_ROLES" type="button" class="ui-icon-btn"
-                    [title]="protegido(rol) ? motivoProteccion : 'Editar'"
-                    [attr.aria-label]="'Editar el rol ' + rol.nombre"
-                    [attr.aria-disabled]="protegido(rol) || null" (click)="abrirEditar(rol)">
-                    <ui-icon name="edit" [size]="18" />
-                  </button>
-                  <button *hasPermiso="permisos.MODIFICAR_ROLES" type="button" class="ui-icon-btn"
-                    [class.ui-icon-btn--danger]="rol.activo && !protegido(rol)"
-                    [title]="protegido(rol) ? motivoProteccion : rol.activo ? 'Desactivar' : 'Activar'"
-                    [attr.aria-label]="(rol.activo ? 'Desactivar el rol ' : 'Activar el rol ') + rol.nombre"
-                    [attr.aria-disabled]="protegido(rol) || null" (click)="alternarActivo(rol)">
-                    <ui-icon name="power" [size]="18" />
-                  </button>
-                  <button *hasPermiso="permisos.ELIMINAR_ROLES" type="button" class="ui-icon-btn"
-                    [class.ui-icon-btn--danger]="!protegido(rol)"
-                    [title]="protegido(rol) ? motivoProteccion : 'Eliminar'"
-                    [attr.aria-label]="'Eliminar el rol ' + rol.nombre"
-                    [attr.aria-disabled]="protegido(rol) || null" (click)="confirmarEliminar(rol)">
-                    <ui-icon name="trash" [size]="18" />
-                  </button>
-                </div>
+                <button type="button" class="ui-icon-btn" [cdkMenuTriggerFor]="accionesFila"
+                  [cdkMenuTriggerData]="{ $implicit: rol }"
+                  [attr.aria-label]="'Acciones del rol ' + rol.nombre">
+                  <ui-icon name="more" [size]="16" />
+                </button>
               </td>
             </tr>
           }
@@ -192,14 +161,14 @@
     </div>
     <label class="check">
       <input type="checkbox" formControlName="activo" />
-      <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="14" /></span>
+      <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="16" /></span>
       <span>Rol activo</span>
     </label>
   </form>
 
   <div modal-footer class="modal-foot">
-    <button type="button" class="ui-btn ui-btn--ghost" (click)="cerrarForm()">Cancelar</button>
-    <button type="submit" form="form-rol" class="ui-btn ui-btn--primary" [attr.aria-disabled]="guardando() || null">
+    <button type="button" appButton variant="ghost" (click)="cerrarForm()">Cancelar</button>
+    <button type="submit" form="form-rol" appButton [attr.aria-disabled]="guardando() || null">
       @if (guardando()) { <span class="ui-spinner ui-spinner--sm" aria-hidden="true"></span> }
       {{ editando() ? 'Guardar cambios' : 'Crear rol' }}
     </button>
@@ -233,7 +202,7 @@
 
 <ui-modal [abierto]="permisosAbierto()" ancho="lg" titulo="Permisos del rol" [subtitulo]="rolPermisos()?.nombre ?? ''"
   (cerrar)="permisosAbierto.set(false)">
-  <p class="modal-hint" role="note">
+  <app-notice class="aviso-modal" silent>
     Los cambios se aplican al instante
     @if (usuariosDelRol() !== null) {
       a <strong>{{ usuariosDelRol() }} {{ usuariosDelRol() === 1 ? 'usuario' : 'usuarios' }}</strong> con este rol.
@@ -243,7 +212,7 @@
     @if (rolPermisos() && protegido(rolPermisos()!)) {
       Este rol está protegido: solo se le pueden agregar permisos.
     }
-  </p>
+  </app-notice>
   @if (cargandoPermisos()) {
     <div class="loading" role="status"><span class="ui-spinner" aria-hidden="true"></span> Cargando permisos…</div>
   } @else if (catalogoPermisos().length === 0) {
@@ -252,15 +221,15 @@
     <ul class="role-list">
       @for (permiso of catalogoPermisos(); track permiso.id) {
         <li class="role-item">
-          <span class="role-item__icon" aria-hidden="true"><ui-icon name="key" [size]="18" /></span>
+          <span class="role-item__icon" aria-hidden="true"><ui-icon name="key" [size]="16" /></span>
           <span class="role-item__text">
             <span class="role-item__name">
               {{ permiso.descripcion || permiso.nombre }}
               @if (!permiso.activo) {
-                <span class="ui-badge ui-badge--neutral">Inactivo</span>
+                <app-badge tone="neutral">Inactivo</app-badge>
               }
             </span>
-            <span class="role-item__desc" [id]="'rp-desc-' + permiso.id"><span class="credencial">{{ permiso.nombre }}</span></span>
+            <code class="role-item__desc" [id]="'rp-desc-' + permiso.id">{{ permiso.nombre }}</code>
           </span>
           <button
             type="button"
@@ -282,7 +251,7 @@
     </ul>
   }
   <div modal-footer class="modal-foot">
-    <button type="button" class="ui-btn ui-btn--primary" (click)="permisosAbierto.set(false)">Cerrar</button>
+    <button type="button" appButton (click)="permisosAbierto.set(false)">Cerrar</button>
   </div>
 </ui-modal>
 
@@ -292,3 +261,30 @@
     <ui-historial [relacionadoCon]="'ROL:' + rol.id" />
   }
 </ui-modal>
+
+<ng-template #accionesFila let-rol>
+  <div appMenu>
+    @if (protegido(rol)) {
+      <p class="menu-nota"><ui-icon name="lock" [size]="16" /> {{ motivoProteccion }}</p>
+      <app-menu-separator />
+    }
+    <button *hasPermiso="permisos.VER_AUDITORIA" appMenuItem (cdkMenuItemTriggered)="historialDe.set(rol)">
+      <ui-icon name="history" [size]="16" /> Historial
+    </button>
+    <button *hasPermiso="permisos.ASIGNAR_PERMISOS" appMenuItem (cdkMenuItemTriggered)="abrirPermisos(rol)">
+      <ui-icon name="key" [size]="16" /> Permisos del rol
+    </button>
+    <button *hasPermiso="permisos.MODIFICAR_ROLES" appMenuItem [disabled]="protegido(rol)" (cdkMenuItemTriggered)="abrirEditar(rol)">
+      <ui-icon name="edit" [size]="16" /> Editar
+    </button>
+    <button *hasPermiso="permisos.MODIFICAR_ROLES" appMenuItem [disabled]="protegido(rol)" (cdkMenuItemTriggered)="alternarActivo(rol)">
+      <ui-icon name="power" [size]="16" /> {{ rol.activo ? 'Desactivar' : 'Activar' }}
+    </button>
+    <ng-container *hasPermiso="permisos.ELIMINAR_ROLES">
+      <app-menu-separator />
+      <button appMenuItem tone="danger" [disabled]="protegido(rol)" (cdkMenuItemTriggered)="confirmarEliminar(rol)">
+        <ui-icon name="trash" [size]="16" /> Eliminar
+      </button>
+    </ng-container>
+  </div>
+</ng-template>

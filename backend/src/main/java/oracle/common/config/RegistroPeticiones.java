@@ -1,7 +1,5 @@
 package oracle.common.config;
 
-import jakarta.servlet.AsyncEvent;
-import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,10 +20,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * correlation-id en el MDC (y en la cabecera X-Request-Id) para poder cruzar
  * todas las lineas de log de una misma peticion.
  *
- * Los controllers devuelven Mono, de modo que la respuesta se completa en un
- * dispatch ASYNC posterior. Por eso, cuando la peticion entra en modo async, el
- * registro se hace en un AsyncListener (con el estado y la duracion reales) en
- * lugar del finally del filtro. No registra la query string para no volcar PII.
+ * Los controllers son sincronos (Spring MVC + hilos virtuales): la respuesta
+ * esta completa al volver de la cadena, asi que el registro va en el finally.
+ * No registra la query string para no volcar PII.
  *
  * El X-Request-Id entrante solo se acepta si cumple [A-Za-z0-9_-]{1,64} (mismo
  * largo que auditoria_eventos.id_correlacion): un valor mas largo o con otros
@@ -41,14 +38,9 @@ public class RegistroPeticiones extends OncePerRequestFilter {
     public static final String CABECERA_CORRELACION = "X-Request-Id";
     /** Clave del MDC (sale como campo "requestId" en los logs JSON). */
     public static final String MDC_CORRELACION = "requestId";
-    /** Atributo de la peticion con el id resuelto (lo lee la bitacora en dispatch async). */
+    /** Atributo de la peticion con el id resuelto (lo lee la bitacora). */
     public static final String ATRIBUTO_CORRELACION = RegistroPeticiones.class.getName() + ".correlacion";
     private static final Pattern CORRELACION_VALIDA = Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
-
-    @Override
-    protected boolean shouldNotFilterAsyncDispatch() {
-        return false;
-    }
 
     @Override
     protected void doFilterInternal(
@@ -62,56 +54,8 @@ public class RegistroPeticiones extends OncePerRequestFilter {
         try {
             cadena.doFilter(peticion, respuesta);
         } finally {
-            if (peticion.isAsyncStarted()) {
-                registrarAlCompletarAsync(peticion, respuesta, inicio, correlacion);
-            } else {
-                registrar(peticion, respuesta, inicio);
-                MDC.remove(MDC_CORRELACION);
-            }
-        }
-    }
-
-    private void registrarAlCompletarAsync(
-            HttpServletRequest peticion, HttpServletResponse respuesta, long inicio, String correlacion) {
-        try {
-            peticion.getAsyncContext().addListener(new AsyncListener() {
-                @Override
-                public void onComplete(AsyncEvent evento) {
-                    registrarConContexto(peticion, respuesta, inicio, correlacion);
-                }
-
-                @Override
-                public void onTimeout(AsyncEvent evento) {
-                    registrarConContexto(peticion, respuesta, inicio, correlacion);
-                }
-
-                @Override
-                public void onError(AsyncEvent evento) {
-                    registrarConContexto(peticion, respuesta, inicio, correlacion);
-                }
-
-                @Override
-                public void onStartAsync(AsyncEvent evento) {
-                    // Sin accion: ya estamos trazando este dispatch.
-                }
-            });
-        } catch (IllegalStateException ex) {
             registrar(peticion, respuesta, inicio);
-        }
-    }
-
-    private void registrarConContexto(
-            HttpServletRequest peticion, HttpServletResponse respuesta, long inicio, String correlacion) {
-        String previo = MDC.get(MDC_CORRELACION);
-        MDC.put(MDC_CORRELACION, correlacion);
-        try {
-            registrar(peticion, respuesta, inicio);
-        } finally {
-            if (previo == null) {
-                MDC.remove(MDC_CORRELACION);
-            } else {
-                MDC.put(MDC_CORRELACION, previo);
-            }
+            MDC.remove(MDC_CORRELACION);
         }
     }
 
@@ -123,7 +67,7 @@ public class RegistroPeticiones extends OncePerRequestFilter {
     private String resolverCorrelacion(HttpServletRequest peticion) {
         Object previo = peticion.getAttribute(ATRIBUTO_CORRELACION);
         if (previo instanceof String ya) {
-            return ya; // dispatch async: se conserva el id del dispatch original
+            return ya; // dispatch de error: se conserva el id de la peticion original
         }
         String entrante = peticion.getHeader(CABECERA_CORRELACION);
         if (entrante != null && CORRELACION_VALIDA.matcher(entrante).matches()) {

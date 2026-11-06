@@ -7,14 +7,14 @@ import { Icon } from '../icon/icon';
   imports: [Icon],
   template: `
     <div class="ui-empty">
-      <span class="ui-empty__icon">
-        <ui-icon [name]="icono()" [size]="28" />
+      <span class="ui-empty__icon" aria-hidden="true">
+        <ui-icon [name]="icono()" [size]="20" />
       </span>
-      <div class="ui-empty__title">{{ titulo() }}</div>
+      <p class="ui-empty__title">{{ titulo() }}</p>
       @if (mensaje()) {
         <p class="ui-empty__text">{{ mensaje() }}</p>
       }
-      <ng-content />
+      <div class="ui-empty__acciones"><ng-content /></div>
     </div>
   `,
 })

@@ -35,35 +35,93 @@ export interface BarraHorizontal {
     </ol>
   `,
   styles: `
-    :host { display: block; }
-    .hbars { display: flex; flex-direction: column; gap: var(--space-3); }
+    @use 'design' as d;
+
+    :host {
+      display: block;
+    }
+
+    .hbars {
+      display: grid;
+      gap: d.space('3');
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
     .hbars__item {
       display: grid;
       grid-template-columns: minmax(0, 12rem) minmax(0, 1fr) 4ch;
       align-items: center;
-      gap: var(--space-3);
-      font-size: var(--fs-sm);
+      gap: d.space('3');
+      @include d.type('body-01');
     }
-    .hbars__label { min-width: 0; color: var(--text); font-weight: var(--fw-medium); overflow-wrap: anywhere; line-height: var(--lh-snug); }
-    .hbars__sub { display: block; font-family: var(--font-mono); font-weight: var(--fw-regular); font-size: var(--fs-2xs); color: var(--text-3); }
-    .hbars__track { height: 10px; border-radius: var(--radius-pill); background: var(--chart-track); overflow: hidden; box-shadow: inset 0 1px 2px rgba(15, 21, 48, 0.08); }
+
+    .hbars__label {
+      min-width: 0;
+      color: d.color('text');
+      overflow-wrap: anywhere;
+    }
+
+    .hbars__sub {
+      display: block;
+      @include d.type('mono-00');
+      color: d.color('text-faint');
+    }
+
+    // Pista y relleno planos de 8 px, sin radio.
+    .hbars__track {
+      height: 0.5rem;
+      background: d.color('progress-track');
+    }
+
     .hbars__fill {
       display: block;
       height: 100%;
-      border-radius: var(--radius-pill);
-      background: var(--chart-grad-h);
-      box-shadow: 0 0 12px -2px rgba(124, 58, 237, 0.55);
+      background: d.color('chart-2');
       transform-origin: left;
-      animation: hbars-grow 600ms var(--ease-out) both;
+
+      @include d.motion-safe {
+        animation: hbars-grow 600ms d.motion('easing') both;
+      }
     }
-    .hbars__item--off .hbars__fill { background: var(--chart-muted); box-shadow: none; }
-    .hbars__item--off .hbars__label { color: var(--text-3); }
-    .hbars__value { text-align: right; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; color: var(--text); }
-    .hbars__item--off .hbars__value { color: var(--text-3); }
-    @keyframes hbars-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-    @media (max-width: 640px) {
-      .hbars__item { grid-template-columns: minmax(0, 1fr) auto; row-gap: var(--space-1); }
-      .hbars__track { grid-column: 1 / -1; grid-row: 2; }
+
+    .hbars__item:hover .hbars__fill {
+      background: d.color('accent');
+    }
+
+    .hbars__item--off .hbars__fill {
+      background: d.color('border-strong');
+    }
+
+    .hbars__item--off .hbars__label,
+    .hbars__item--off .hbars__value {
+      color: d.color('text-faint');
+    }
+
+    .hbars__value {
+      text-align: end;
+      @include d.type('mono-01');
+      @include d.tabular-nums;
+      color: d.color('text-strong');
+    }
+
+    @keyframes hbars-grow {
+      from {
+        transform: scaleX(0);
+      }
+    }
+
+    @include d.bp-down('sm') {
+      .hbars__item {
+        grid-template-columns: minmax(0, 1fr) auto;
+        row-gap: d.space('1');
+      }
+
+      .hbars__track {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
     }
   `,
 })

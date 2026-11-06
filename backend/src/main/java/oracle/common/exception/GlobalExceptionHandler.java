@@ -30,7 +30,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 /**
  * Punto unico donde las excepciones del backend se convierten en respuestas HTTP.
  * Las denegaciones (403 de @PreAuthorize, de las reglas de proteccion o de un
- * trigger 45000) quedan ademas en la bitacora como ACCESO_DENEGADO.
+ * trigger RB403) quedan ademas en la bitacora como ACCESO_DENEGADO.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -154,23 +154,31 @@ public class GlobalExceptionHandler {
 
     /**
      * Errores de la base de datos. Distingue:
-     *  - SQLSTATE 45000: SIGNAL de un trigger de proteccion -> 403 con su mensaje.
-     *  - error 1451 (FK RESTRICT al borrar/actualizar un padre en uso) -> 409 claro.
-     *  - resto de violaciones de integridad (uq_*, FK) -> 409 generico.
+     *  - SQLSTATE RB403: RAISE de un trigger de proteccion (V2/V3) -> 403 con su mensaje.
+     *  - 23503 foreign_key_violation (padre en uso) -> 409 claro.
+     *  - 23505 unique_violation (uq_*_ci) -> 409.
+     *  - 57014 query_canceled (statement_timeout) -> 503.
+     *  - resto de violaciones de integridad (CHECK, NOT NULL) -> 409 generico.
      */
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ApiError> baseDeDatos(DataAccessException ex, HttpServletRequest req) {
         SQLException sql = causaSql(ex);
-        if (sql != null && "45000".equals(sql.getSQLState())) {
-            registrarDenegacion(req, sql.getMessage());
-            return cuerpo(HttpStatus.FORBIDDEN, sql.getMessage(), req);
+        String estado = sql == null ? null : sql.getSQLState();
+        if (SQLSTATE_PROTECCION.equals(estado)) {
+            String mensaje = mensajeServidor(sql);
+            registrarDenegacion(req, mensaje);
+            return cuerpo(HttpStatus.FORBIDDEN, mensaje, req);
         }
-        if (sql != null && sql.getErrorCode() == 1451) {
+        if ("23503".equals(estado)) {
             return cuerpo(HttpStatus.CONFLICT,
                     "El registro está en uso por otros datos y no se puede eliminar.", req);
         }
-        if (sql != null && sql.getErrorCode() == 1062) {
+        if ("23505".equals(estado)) {
             return cuerpo(HttpStatus.CONFLICT, "Ya existe un registro con esos datos.", req);
+        }
+        if ("57014".equals(estado)) {
+            return cuerpo(HttpStatus.SERVICE_UNAVAILABLE,
+                    "La base de datos tardó demasiado en responder. Inténtalo de nuevo.", req);
         }
         if (ex instanceof DataIntegrityViolationException) {
             log.warn("Violacion de integridad: {}", ex.getMessage());
@@ -183,6 +191,22 @@ public class GlobalExceptionHandler {
         }
         log.error("Error de acceso a datos", ex);
         return cuerpo(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno inesperado.", req);
+    }
+
+    /** SQLSTATE propio de los triggers de proteccion (RAISE ... USING ERRCODE = 'RB403'). */
+    public static final String SQLSTATE_PROTECCION = "RB403";
+
+    /**
+     * Mensaje del RAISE sin el prefijo "ERROR: " ni el contexto PL/pgSQL
+     * ("Where: ...") que el driver anade en getMessage().
+     */
+    static String mensajeServidor(SQLException sql) {
+        String m = sql.getMessage() == null ? "" : sql.getMessage();
+        int salto = m.indexOf('\n');
+        if (salto >= 0) {
+            m = m.substring(0, salto);
+        }
+        return m.replaceFirst("^(ERROR|ERREUR|FEHLER):\\s*", "").strip();
     }
 
     private static SQLException causaSql(Throwable ex) {

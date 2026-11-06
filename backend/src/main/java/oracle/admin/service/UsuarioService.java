@@ -34,8 +34,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /**
  * CRUD de usuarios con filtros LIKE. JPA es bloqueante, asi que toda
@@ -46,7 +44,7 @@ import reactor.core.scheduler.Schedulers;
 @Service
 public class UsuarioService {
 
-    /** Usuarios por consulta del resumen (IN (...) que MySQL empuja dentro de la vista). */
+    /** Usuarios por consulta del resumen (= ANY(?) que PostgreSQL empuja dentro de la vista). */
     private static final int LOTE_RESUMEN = 200;
     /** Maximo de ids explicitos aceptados en /usuarios/resumen?ids=. */
     public static final int MAX_IDS_RESUMEN = 500;
@@ -80,31 +78,29 @@ public class UsuarioService {
         this.auditoria = auditoria;
     }
 
-    public Mono<ApiResponse<List<UsuarioResponse>>> listar() {
+    public ApiResponse<List<UsuarioResponse>> listar() {
         Long actor = ActorActual.id();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioService.listar", () -> {
-                        List<UsuarioResponse> lista = usuarioRepository.findAll(Listas.limitado(ORDEN)).stream()
-                                .map(u -> respuesta(u, actor)).toList();
-                        Listas.avisarSiCorto(log, lista.size(), "UsuarioService.listar");
-                        return lista;
-                    }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Usuarios listados.", lista));
+        var resultado = Trazas.medir(log, "UsuarioService.listar", () -> {
+            List<UsuarioResponse> lista = usuarioRepository.findAll(Listas.limitado(ORDEN)).stream()
+                    .map(u -> respuesta(u, actor)).toList();
+            Listas.avisarSiCorto(log, lista.size(), "UsuarioService.listar");
+            return lista;
+        });
+        return ApiResponse.ok("Usuarios listados.", resultado);
     }
 
-    public Mono<ApiResponse<List<UsuarioResponse>>> buscar(UsuarioFiltroRequest filtro) {
+    public ApiResponse<List<UsuarioResponse>> buscar(UsuarioFiltroRequest filtro) {
         Long actor = ActorActual.id();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioService.buscar", () ->
-                        usuarioRepository.buscarConFiltros(
-                                        Filtros.normalizar(filtro.usuario()),
-                                        Filtros.normalizar(filtro.nombre()),
-                                        Filtros.normalizar(filtro.apellido()),
-                                        Filtros.normalizar(filtro.email()),
-                                        filtro.activo(),
-                                        Listas.limitado(ORDEN))
-                                .stream().map(u -> respuesta(u, actor)).toList()))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Usuarios encontrados.", lista));
+        var lista = Trazas.medir(log, "UsuarioService.buscar", () ->
+            usuarioRepository.buscarConFiltros(
+                            Filtros.normalizar(filtro.usuario()),
+                            Filtros.normalizar(filtro.nombre()),
+                            Filtros.normalizar(filtro.apellido()),
+                            Filtros.normalizar(filtro.email()),
+                            filtro.activo(),
+                            Listas.limitado(ORDEN))
+                    .stream().map(u -> respuesta(u, actor)).toList());
+        return ApiResponse.ok("Usuarios encontrados.", lista);
     }
 
     /**
@@ -113,41 +109,39 @@ public class UsuarioService {
      * Listas.MAX_FILAS por id. Se consulta por lotes de 200 ids para que el
      * filtro se empuje dentro de v_permisos_finales.
      */
-    public Mono<ApiResponse<List<UsuarioResumenResponse>>> resumen(List<Long> ids) {
+    public ApiResponse<List<UsuarioResumenResponse>> resumen(List<Long> ids) {
         if (ids != null && ids.size() > MAX_IDS_RESUMEN) {
             throw new PeticionInvalidaException("Puedes pedir el resumen de hasta " + MAX_IDS_RESUMEN + " usuarios.");
         }
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioService.resumen", () -> {
-                    List<Long> objetivo = ids == null || ids.isEmpty()
-                            ? usuarioRepository.ids(PageRequest.of(0, Listas.MAX_FILAS))
-                            : ids.stream().distinct().toList();
-                    List<UsuarioResumenResponse> salida = new ArrayList<>(objetivo.size());
-                    for (int i = 0; i < objetivo.size(); i += LOTE_RESUMEN) {
-                        List<Long> lote = objetivo.subList(i, Math.min(i + LOTE_RESUMEN, objetivo.size()));
-                        Map<Long, List<String>> roles = resolucionRepository.rolesPorUsuario(lote);
-                        Map<Long, List<String>> permisos = resolucionRepository.permitidosPorUsuario(lote);
-                        for (Long id : lote) {
-                            salida.add(new UsuarioResumenResponse(id,
-                                    roles.getOrDefault(id, List.of()), permisos.getOrDefault(id, List.of())));
-                        }
-                    }
-                    return salida;
-                }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Resumen de usuarios.", lista));
+        var lista = Trazas.medir(log, "UsuarioService.resumen", () -> {
+            List<Long> objetivo = ids == null || ids.isEmpty()
+                    ? usuarioRepository.ids(PageRequest.of(0, Listas.MAX_FILAS))
+                    : ids.stream().distinct().toList();
+            List<UsuarioResumenResponse> salida = new ArrayList<>(objetivo.size());
+            for (int i = 0; i < objetivo.size(); i += LOTE_RESUMEN) {
+                List<Long> lote = objetivo.subList(i, Math.min(i + LOTE_RESUMEN, objetivo.size()));
+                Map<Long, List<String>> roles = resolucionRepository.rolesPorUsuario(lote);
+                Map<Long, List<String>> permisos = resolucionRepository.permitidosPorUsuario(lote);
+                for (Long id : lote) {
+                    salida.add(new UsuarioResumenResponse(id,
+                            roles.getOrDefault(id, List.of()), permisos.getOrDefault(id, List.of())));
+                }
+            }
+            return salida;
+        });
+        return ApiResponse.ok("Resumen de usuarios.", lista);
     }
 
-    public Mono<ApiResponse<UsuarioResponse>> obtenerPorId(Long id) {
+    public ApiResponse<UsuarioResponse> obtenerPorId(Long id) {
         Long actor = ActorActual.id();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioService.obtenerPorId", () ->
-                        ApiResponse.ok("Usuario encontrado.", respuesta(obtenerUsuario(id), actor))))
-                .subscribeOn(Schedulers.boundedElastic());
+        return Trazas.medir(log, "UsuarioService.obtenerPorId", () ->
+            ApiResponse.ok("Usuario encontrado.", respuesta(obtenerUsuario(id), actor)));
     }
 
-    public Mono<ApiResponse<UsuarioResponse>> crear(UsuarioCrearRequest peticion) {
+    public ApiResponse<UsuarioResponse> crear(UsuarioCrearRequest peticion) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioService.crear", () -> transacciones.ejecutar(() -> {
+        return Trazas.medir(log, "UsuarioService.crear", () -> transacciones.ejecutar(() -> {
             String login = peticion.usuario().trim();
             String email = peticion.email().trim();
             protecciones.verificarNombreNoReservado(login);
@@ -167,13 +161,13 @@ public class UsuarioService {
             auditoria.exito(ctx, AccionAuditoria.USUARIO_CREADO, EntidadAuditoria.USUARIO, usuario.getId(),
                     Detalle.alta(Instantaneas.usuario(usuario)));
             return ApiResponse.ok("Usuario creado.", respuesta(usuario, actor));
-        }))).subscribeOn(Schedulers.boundedElastic());
+        }));
     }
 
-    public Mono<ApiResponse<UsuarioResponse>> actualizar(Long id, UsuarioActualizarRequest peticion) {
+    public ApiResponse<UsuarioResponse> actualizar(Long id, UsuarioActualizarRequest peticion) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioService.actualizar", () -> transacciones.ejecutar(() -> {
+        return Trazas.medir(log, "UsuarioService.actualizar", () -> transacciones.ejecutar(() -> {
             Usuario usuario = obtenerUsuario(id);
             verificarNoProtegido(usuario);
             guardia.exigirAutoridadSobre(actor, id);
@@ -232,31 +226,30 @@ public class UsuarioService {
                         Detalle.de("origen", "administracion"));
             }
             return ApiResponse.ok("Usuario actualizado.", respuesta(usuario, actor));
-        }))).subscribeOn(Schedulers.boundedElastic());
+        }));
     }
 
-    public Mono<ApiResponse<Void>> eliminar(Long id) {
+    public ApiResponse<Void> eliminar(Long id) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.<Void>fromRunnable(() -> Trazas.medir(log, "UsuarioService.eliminar", () -> transacciones.ejecutar(() -> {
-                    Usuario usuario = obtenerUsuario(id);
-                    verificarNoProtegido(usuario);
-                    guardia.exigirAutoridadSobre(actor, id);
-                    Map<String, Object> antes = Instantaneas.usuario(usuario);
-                    usuarioRepository.delete(usuario);
-                    autorizacionCache.invalidar(id);
-                    auditoria.exito(ctx, AccionAuditoria.USUARIO_ELIMINADO, EntidadAuditoria.USUARIO, id,
-                            Detalle.baja(antes));
-                    return null;
-                })))
-                .subscribeOn(Schedulers.boundedElastic())
-                .then(Mono.fromSupplier(() -> ApiResponse.<Void>ok("Usuario eliminado.", null)));
+        Trazas.medir(log, "UsuarioService.eliminar", () -> transacciones.ejecutar(() -> {
+            Usuario usuario = obtenerUsuario(id);
+            verificarNoProtegido(usuario);
+            guardia.exigirAutoridadSobre(actor, id);
+            Map<String, Object> antes = Instantaneas.usuario(usuario);
+            usuarioRepository.delete(usuario);
+            autorizacionCache.invalidar(id);
+            auditoria.exito(ctx, AccionAuditoria.USUARIO_ELIMINADO, EntidadAuditoria.USUARIO, id,
+                    Detalle.baja(antes));
+            return null;
+        }));
+        return ApiResponse.<Void>ok("Usuario eliminado.", null);
     }
 
-    public Mono<ApiResponse<UsuarioResponse>> cambiarActivo(Long id, CambiarEstadoRequest peticion) {
+    public ApiResponse<UsuarioResponse> cambiarActivo(Long id, CambiarEstadoRequest peticion) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioService.cambiarActivo", () -> transacciones.ejecutar(() -> {
+        return Trazas.medir(log, "UsuarioService.cambiarActivo", () -> transacciones.ejecutar(() -> {
             Usuario usuario = obtenerUsuario(id);
             verificarNoProtegido(usuario);
             guardia.exigirAutoridadSobre(actor, id);
@@ -274,7 +267,7 @@ public class UsuarioService {
                             "motivo", peticion.motivo()));
             String mensaje = peticion.activo() ? "Usuario activado." : "Usuario desactivado.";
             return ApiResponse.ok(mensaje, respuesta(usuario, actor));
-        }))).subscribeOn(Schedulers.boundedElastic());
+        }));
     }
 
     /** Respuesta con protegido = usuario protegido o la propia cuenta del actor. */

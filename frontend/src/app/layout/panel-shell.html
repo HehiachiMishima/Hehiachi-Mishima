@@ -1,174 +1,121 @@
-<div
-  class="shell"
-  [class.shell--open]="menuAbierto()"
-  [class.shell--fija]="escritorio()"
-  [class.shell--compacta]="escritorio() && compacta()"
->
-  <aside id="shell-nav" class="shell__sidebar" aria-label="Barra lateral" [attr.inert]="escritorio() || menuAbierto() ? null : ''">
-    <div class="shell__brand">
-      <button
-        type="button"
-        class="shell__brand-btn"
-        (click)="alternarConmutador()"
-        [attr.aria-expanded]="conmutadorAbierto()"
-        aria-controls="shell-paneles"
-        aria-haspopup="true"
-      >
-        <span class="shell__brand-mark" aria-hidden="true"><ui-icon [name]="panel.icono" [size]="22" /></span>
-        <span class="shell__brand-text">
-          <span class="shell__brand-sub">Panel</span>
-          <span class="shell__brand-title">{{ panel.nombre }}</span>
-          <span class="u-sr-only">, cambiar de panel</span>
-        </span>
-        <span class="shell__brand-chevron" aria-hidden="true"><ui-icon name="chevronRight" [size]="16" /></span>
-      </button>
-      @if (!escritorio()) {
-        <button type="button" class="ui-icon-btn shell__close" (click)="cerrarConEscape()" aria-label="Cerrar menú de navegación">
-          <ui-icon name="close" [size]="20" />
-        </button>
-      }
-    </div>
-    <a
-      class="shell__todos"
-      routerLink="/paneles"
-      (click)="alNavegar()"
-      (mouseenter)="mostrarTip($event, 'Todos los paneles')"
-      (mouseleave)="ocultarTip()"
-      (focus)="mostrarTip($event, 'Todos los paneles')"
-      (blur)="ocultarTip()"
+<header class="topbar">
+  @if (!escritorio()) {
+    <button
+      #botonMenu
+      type="button"
+      class="cell cell--icono menu-toggle"
+      (click)="alternarMenu()"
+      [attr.aria-label]="menuAbierto() ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'"
+      [attr.aria-expanded]="menuAbierto()"
+      aria-controls="shell-nav"
     >
-      <ui-icon name="layers" [size]="16" />
-      <span class="shell__nav-text">Todos los paneles</span>
-    </a>
+      <ui-icon [name]="menuAbierto() ? 'close' : 'menu'" [size]="20" />
+    </button>
+  }
 
-    @if (conmutadorAbierto()) {
-      <ul id="shell-paneles" class="shell__paneles" aria-label="Paneles">
-        @for (p of paneles(); track p.id) {
+  <button type="button" class="cell marca" [cdkMenuTriggerFor]="menuPaneles" aria-haspopup="menu">
+    <span class="marca__mark" aria-hidden="true"><ui-icon [name]="panel.icono" [size]="16" /></span>
+    <span class="marca__texto">
+      <span class="marca__eyebrow">Panel</span>
+      <span class="marca__nombre">{{ panel.nombre }}</span>
+    </span>
+    <ui-icon class="marca__chevron" name="chevronDown" [size]="16" />
+    <span class="u-sr-only">, cambiar de panel</span>
+  </button>
+
+  <app-breadcrumbs class="migas" [items]="migas()" />
+
+  <div class="topbar__fin">
+    <button
+      type="button"
+      class="cell buscar"
+      (click)="abrirPaleta()"
+      aria-haspopup="dialog"
+      [attr.aria-keyshortcuts]="atajoTexto === '⌘K' ? 'Meta+K' : 'Control+K'"
+    >
+      <ui-icon name="search" [size]="16" />
+      <span class="buscar__texto">Ir a un módulo…</span>
+      <kbd class="buscar__kbd" aria-hidden="true">{{ atajoTexto }}</kbd>
+      <span class="u-sr-only">Buscar módulo</span>
+    </button>
+    <button
+      type="button"
+      class="cell cell--icono"
+      (click)="alternarTema($event)"
+      [attr.aria-label]="tema.tema() === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+    >
+      <ui-icon [name]="tema.tema() === 'dark' ? 'sun' : 'moon'" [size]="16" />
+    </button>
+    <app-menu-cuenta />
+  </div>
+</header>
+
+<ng-template #menuPaneles>
+  <div appMenu class="menu-paneles">
+    @for (p of paneles(); track p.id) {
+      <button appMenuItem [selected]="p.id === panel.id" (cdkMenuItemTriggered)="irA(urlPanel(p))">
+        <ui-icon [name]="p.icono" [size]="16" />
+        <span class="menu-paneles__texto">
+          <span>{{ p.nombre }}</span>
+          <span class="menu-paneles__desc">{{ p.descripcion }}</span>
+        </span>
+      </button>
+    }
+    <app-menu-separator />
+    <button appMenuItem (cdkMenuItemTriggered)="irA('/paneles')">
+      <ui-icon name="layers" [size]="16" />
+      Todos los paneles
+    </button>
+  </div>
+</ng-template>
+
+<nav
+  #navegacion
+  id="shell-nav"
+  class="sidebar"
+  [class.is-open]="menuAbierto()"
+  aria-label="Módulos"
+  [attr.inert]="escritorio() || menuAbierto() ? null : ''"
+>
+  @for (grupo of grupos(); track grupo.id) {
+    <div class="grupo">
+      <span class="grupo__label" [id]="'nav-grupo-' + grupo.id">{{ grupo.nombre }}</span>
+      <ul [attr.aria-labelledby]="'nav-grupo-' + grupo.id">
+        @for (modulo of grupo.modulos; track modulo.id) {
           <li>
             <a
-              class="shell__panel-item"
-              [attr.data-tono]="p.tono"
-              [routerLink]="urlPanel(p)"
-              [attr.aria-current]="p.id === panel.id ? 'page' : null"
+              [routerLink]="urlModulo(panel, modulo)"
+              routerLinkActive="is-active"
+              ariaCurrentWhenActive="page"
               (click)="alNavegar()"
             >
-              <span class="shell__panel-mark" aria-hidden="true"><ui-icon [name]="p.icono" [size]="16" /></span>
-              <span class="shell__panel-text">
-                <span class="shell__panel-name">{{ p.nombre }}</span>
-                <span class="shell__panel-desc">{{ p.descripcion }}</span>
-              </span>
+              <ui-icon [name]="modulo.icono" [size]="16" />
+              <span>{{ modulo.nombre }}</span>
             </a>
           </li>
         }
-        <li>
-          <a class="shell__panel-todos" routerLink="/paneles" (click)="alNavegar()">Ver todos los paneles</a>
-        </li>
       </ul>
-    }
-
-    <nav #navegacion class="shell__nav" aria-label="Módulos" (scroll)="ocultarTip()">
-      @for (grupo of grupos(); track grupo.id) {
-        <p class="shell__nav-label" [id]="'nav-grupo-' + grupo.id">{{ grupo.nombre }}</p>
-        <ul class="shell__nav-grupo" [attr.aria-labelledby]="'nav-grupo-' + grupo.id">
-          @for (modulo of grupo.modulos; track modulo.id) {
-            <li>
-              <a
-                class="shell__nav-item"
-                [routerLink]="urlModulo(panel, modulo)"
-                routerLinkActive="shell__nav-item--active"
-                ariaCurrentWhenActive="page"
-                (click)="alNavegar()"
-                (mouseenter)="mostrarTip($event, modulo.nombre)"
-                (mouseleave)="ocultarTip()"
-                (focus)="mostrarTip($event, modulo.nombre)"
-                (blur)="ocultarTip()"
-              >
-                <ui-icon [name]="modulo.icono" [size]="18" />
-                <span class="shell__nav-text">{{ modulo.nombre }}</span>
-              </a>
-            </li>
-          }
-        </ul>
-      }
-    </nav>
-
-    @if (escritorio()) {
-      <div class="shell__foot">
-        <button
-          type="button"
-          class="shell__collapse"
-          (click)="alternarCompacta()"
-          (mouseenter)="mostrarTip($event, 'Expandir barra lateral')"
-          (mouseleave)="ocultarTip()"
-          (focus)="mostrarTip($event, 'Expandir barra lateral')"
-          (blur)="ocultarTip()"
-        >
-          <ui-icon [name]="compacta() ? 'chevronRight' : 'chevronLeft'" [size]="16" />
-          <span class="shell__nav-text">{{ compacta() ? 'Expandir barra lateral' : 'Contraer barra lateral' }}</span>
-        </button>
-      </div>
-    }
-  </aside>
-
-  @if (tip(); as t) {
-    <span class="shell__tip" aria-hidden="true" [style.top.px]="t.y">{{ t.texto }}</span>
+    </div>
   }
 
-  @if (!escritorio()) {
-    <div class="shell__overlay" aria-hidden="true" (click)="cerrarMenu()"></div>
-  }
-
-  <div class="shell__body" [attr.inert]="!escritorio() && menuAbierto() ? '' : null">
-    <header class="shell__topbar">
-      @if (!escritorio()) {
-        <button
-          #botonMenu
-          type="button"
-          class="ui-icon-btn shell__menu-btn"
-          (click)="alternarMenu()"
-          aria-label="Abrir menú de navegación"
-          [attr.aria-expanded]="menuAbierto()"
-          aria-controls="shell-nav"
-        >
-          <ui-icon name="menu" [size]="20" />
-        </button>
-      }
-
-      <nav class="shell__crumbs" aria-label="Ruta de navegación">
-        <a class="shell__crumb" routerLink="/paneles">Paneles</a>
-        <ui-icon class="shell__crumb-sep" name="chevronRight" [size]="14" />
-        <a class="shell__crumb" [routerLink]="inicio()">{{ panel.nombre }}</a>
-        @if (moduloActual(); as modulo) {
-          <ui-icon class="shell__crumb-sep" name="chevronRight" [size]="14" />
-          <span class="shell__crumb-current" aria-current="page">{{ modulo.nombre }}</span>
-        }
-      </nav>
-
-      <div class="shell__topbar-actions">
-        <button type="button" class="shell__search" (click)="abrirPaleta()" aria-haspopup="dialog"
-          [attr.aria-keyshortcuts]="atajoTexto === '⌘K' ? 'Meta+K' : 'Control+K'">
-          <ui-icon name="search" [size]="16" />
-          <span class="shell__search-text">Ir a un módulo…</span>
-          <kbd class="shell__search-kbd" aria-hidden="true">{{ atajoTexto }}</kbd>
-          <span class="u-sr-only">Buscar módulo</span>
-        </button>
-        <button
-          type="button"
-          class="ui-icon-btn"
-          (click)="alternarTema($event)"
-          [attr.aria-label]="tema.tema() === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
-        >
-          <ui-icon [name]="tema.tema() === 'dark' ? 'sun' : 'moon'" [size]="18" />
-        </button>
-        <span class="shell__divider" aria-hidden="true"></span>
-        <app-menu-cuenta />
-      </div>
-    </header>
-
-    <main id="contenido" class="shell__content" tabindex="-1">
-      <router-outlet />
-    </main>
+  <div class="grupo grupo--pie">
+    <ul>
+      <li>
+        <a routerLink="/paneles" (click)="alNavegar()">
+          <ui-icon name="layers" [size]="16" />
+          <span>Todos los paneles</span>
+        </a>
+      </li>
+    </ul>
   </div>
+</nav>
 
-  <app-paleta-modulos [abierta]="paletaAbierta()" (cerrar)="paletaAbierta.set(false)" />
-</div>
+@if (!escritorio() && menuAbierto()) {
+  <div class="velo" aria-hidden="true" (click)="cerrarMenu()"></div>
+}
+
+<main id="contenido" class="contenido" tabindex="-1" [attr.inert]="!escritorio() && menuAbierto() ? '' : null">
+  <router-outlet />
+</main>
+
+<app-paleta-modulos [abierta]="paletaAbierta()" (cerrar)="paletaAbierta.set(false)" />

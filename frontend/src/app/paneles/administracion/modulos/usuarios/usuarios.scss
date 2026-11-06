@@ -1,47 +1,63 @@
+@use 'design' as d;
+
 .celda-skeleton {
   display: inline-block;
-  width: 72px;
-  height: 14px;
-}
-
-.roles-iniciales {
-  margin: 0;
-  padding: 0;
-  border: 0;
+  width: 4.5rem;
 }
 
 .roles-iniciales__lista {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--space-2) var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  gap: 0 d.space('4');
 }
 
 .detalle__aviso {
-  margin-top: var(--space-4);
+  margin-top: d.space('4');
 }
 
 .detalle__accesos {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: d.space('3');
 }
 
 .detalle__titulo {
-  font-size: var(--fs-sm);
-  color: var(--text-2);
+  margin-top: d.space('2');
+  @include d.type('heading-02');
 }
 
 .detalle__lista {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 240px;
+  display: grid;
+  max-height: 15rem;
+  margin: 0;
+  padding: 0;
   overflow-y: auto;
+  list-style: none;
+  border: 1px solid d.color('border');
+
+  li {
+    padding: d.space('1') d.space('3');
+    @include d.type('mono-01');
+
+    & + li {
+      border-top: 1px solid d.color('border');
+    }
+  }
+
+  code {
+    padding: 0;
+    background: none;
+    font-size: inherit;
+  }
 }
 
 .detalle__acciones,
 .detalle__pie {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: d.space('2');
+}
+
+.detalle__acciones {
+  margin-top: d.space('2');
 }

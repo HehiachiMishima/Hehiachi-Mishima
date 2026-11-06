@@ -1,0 +1,75 @@
+@use 'design' as d;
+
+:host {
+  display: flex;
+  align-items: flex-start;
+  gap: d.space('3');
+  padding: d.space('4');
+  color: d.color('text-strong');
+}
+
+.tone-icon {
+  margin-top: 2px;
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+
+  // El enlace del aviso va subrayado y en el color del texto, no en violeta.
+  ::ng-deep a {
+    margin-left: d.space('1');
+    @include d.type('body-01');
+    color: d.color('text-strong');
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+}
+
+.close {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0;
+  background: transparent;
+  color: d.color('text-muted');
+  cursor: pointer;
+  @include d.focus-ring;
+
+  &:hover {
+    background: d.color('surface-hover');
+  }
+}
+
+:host(.notice--accent) {
+  background: d.color('primary-soft');
+
+  .tone-icon {
+    color: d.color('accent');
+  }
+}
+
+:host(.notice--success) {
+  background: d.color('success-soft');
+
+  .tone-icon {
+    color: d.color('success');
+  }
+}
+
+:host(.notice--warning) {
+  background: d.color('warning-soft');
+
+  .tone-icon {
+    color: d.color('warning');
+  }
+}
+
+:host(.notice--danger) {
+  background: d.color('danger-soft');
+
+  .tone-icon {
+    color: d.color('danger');
+  }
+}

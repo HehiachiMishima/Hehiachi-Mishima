@@ -28,14 +28,12 @@ import oracle.common.support.Listas;
 import oracle.common.support.Trazas;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /**
  * CRUD de permisos. Los permisos base (Protecciones.PERMISOS_BASE) estan
  * blindados: no se pueden modificar, eliminar ni ocupar su nombre, igual que
  * los triggers trg_permisos_base_update / trg_permisos_base_delete de la BD.
- * Se valida aqui para responder 403 limpio antes de que MySQL de SQLSTATE 45000.
+ * Se valida aqui para responder 403 limpio antes de que el trigger lance SQLSTATE RB403.
  */
 @Slf4j
 @Service
@@ -58,39 +56,36 @@ public class PermisoService {
         this.auditoria = auditoria;
     }
 
-    public Mono<ApiResponse<List<PermisoResponse>>> listar() {
-        return Mono.fromCallable(() -> Trazas.medir(log, "PermisoService.listar", () -> {
-                        List<PermisoResponse> lista = permisoRepository.findAll(Listas.limitado(ORDEN)).stream()
-                                .map(PermisoResponse::of).toList();
-                        Listas.avisarSiCorto(log, lista.size(), "PermisoService.listar");
-                        return lista;
-                    }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Permisos listados.", lista));
+    public ApiResponse<List<PermisoResponse>> listar() {
+        var resultado = Trazas.medir(log, "PermisoService.listar", () -> {
+            List<PermisoResponse> lista = permisoRepository.findAll(Listas.limitado(ORDEN)).stream()
+                    .map(PermisoResponse::of).toList();
+            Listas.avisarSiCorto(log, lista.size(), "PermisoService.listar");
+            return lista;
+        });
+        return ApiResponse.ok("Permisos listados.", resultado);
     }
 
-    public Mono<ApiResponse<List<PermisoResponse>>> buscar(PermisoFiltroRequest filtro) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "PermisoService.buscar", () ->
-                        permisoRepository.buscarConFiltros(
-                                        Filtros.normalizar(filtro.nombre()),
-                                        Filtros.normalizar(filtro.descripcion()),
-                                        filtro.activo(),
-                                        Listas.limitado(ORDEN))
-                                .stream().map(PermisoResponse::of).toList()))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Permisos encontrados.", lista));
+    public ApiResponse<List<PermisoResponse>> buscar(PermisoFiltroRequest filtro) {
+        var lista = Trazas.medir(log, "PermisoService.buscar", () ->
+            permisoRepository.buscarConFiltros(
+                            Filtros.normalizar(filtro.nombre()),
+                            Filtros.normalizar(filtro.descripcion()),
+                            filtro.activo(),
+                            Listas.limitado(ORDEN))
+                    .stream().map(PermisoResponse::of).toList());
+        return ApiResponse.ok("Permisos encontrados.", lista);
     }
 
-    public Mono<ApiResponse<PermisoResponse>> obtenerPorId(Long id) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "PermisoService.obtenerPorId", () ->
-                        ApiResponse.ok("Permiso encontrado.", PermisoResponse.of(obtenerPermiso(id)))))
-                .subscribeOn(Schedulers.boundedElastic());
+    public ApiResponse<PermisoResponse> obtenerPorId(Long id) {
+        return Trazas.medir(log, "PermisoService.obtenerPorId", () ->
+            ApiResponse.ok("Permiso encontrado.", PermisoResponse.of(obtenerPermiso(id))));
     }
 
-    public Mono<ApiResponse<PermisoResponse>> crear(PermisoCrearRequest peticion) {
+    public ApiResponse<PermisoResponse> crear(PermisoCrearRequest peticion) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "PermisoService.crear", () -> transacciones.ejecutar(() -> {
+        return Trazas.medir(log, "PermisoService.crear", () -> transacciones.ejecutar(() -> {
             String nombre = peticion.nombre().trim();
             verificarNombreNoBase(nombre);
             if (permisoRepository.existsByNombre(nombre)) {
@@ -109,13 +104,13 @@ public class PermisoService {
             auditoria.exito(ctx, AccionAuditoria.PERMISO_CREADO, EntidadAuditoria.PERMISO, permiso.getId(),
                     Detalle.alta(Instantaneas.permiso(permiso)));
             return ApiResponse.ok("Permiso creado.", PermisoResponse.of(permiso));
-        }))).subscribeOn(Schedulers.boundedElastic());
+        }));
     }
 
-    public Mono<ApiResponse<PermisoResponse>> actualizar(Long id, PermisoActualizarRequest peticion) {
+    public ApiResponse<PermisoResponse> actualizar(Long id, PermisoActualizarRequest peticion) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "PermisoService.actualizar", () -> transacciones.ejecutar(() -> {
+        return Trazas.medir(log, "PermisoService.actualizar", () -> transacciones.ejecutar(() -> {
             Permiso permiso = obtenerPermiso(id);
             boolean esBase = Protecciones.esPermisoBase(permiso.getNombre());
             Map<String, Object> antes = Instantaneas.permiso(permiso);
@@ -153,31 +148,30 @@ public class PermisoService {
             auditoria.exito(ctx, AccionAuditoria.PERMISO_ACTUALIZADO, EntidadAuditoria.PERMISO, id,
                     Detalle.cambio(antes, Instantaneas.permiso(permiso)));
             return ApiResponse.ok("Permiso actualizado.", PermisoResponse.of(permiso));
-        }))).subscribeOn(Schedulers.boundedElastic());
+        }));
     }
 
-    public Mono<ApiResponse<Void>> eliminar(Long id) {
+    public ApiResponse<Void> eliminar(Long id) {
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.<Void>fromRunnable(() -> Trazas.medir(log, "PermisoService.eliminar", () -> transacciones.ejecutar(() -> {
-                    Permiso permiso = obtenerPermiso(id);
-                    if (Protecciones.esPermisoBase(permiso.getNombre())) {
-                        throw new OperacionNoPermitidaException("Los permisos base del sistema no se pueden eliminar.");
-                    }
-                    Map<String, Object> antes = Instantaneas.permiso(permiso);
-                    permisoRepository.delete(permiso);
-                    autorizacionCache.invalidarTodo();
-                    auditoria.exito(ctx, AccionAuditoria.PERMISO_ELIMINADO, EntidadAuditoria.PERMISO, id,
-                            Detalle.baja(antes));
-                    return null;
-                })))
-                .subscribeOn(Schedulers.boundedElastic())
-                .then(Mono.fromSupplier(() -> ApiResponse.<Void>ok("Permiso eliminado.", null)));
+        Trazas.medir(log, "PermisoService.eliminar", () -> transacciones.ejecutar(() -> {
+            Permiso permiso = obtenerPermiso(id);
+            if (Protecciones.esPermisoBase(permiso.getNombre())) {
+                throw new OperacionNoPermitidaException("Los permisos base del sistema no se pueden eliminar.");
+            }
+            Map<String, Object> antes = Instantaneas.permiso(permiso);
+            permisoRepository.delete(permiso);
+            autorizacionCache.invalidarTodo();
+            auditoria.exito(ctx, AccionAuditoria.PERMISO_ELIMINADO, EntidadAuditoria.PERMISO, id,
+                    Detalle.baja(antes));
+            return null;
+        }));
+        return ApiResponse.<Void>ok("Permiso eliminado.", null);
     }
 
-    public Mono<ApiResponse<PermisoResponse>> cambiarActivo(Long id, CambiarEstadoRequest peticion) {
+    public ApiResponse<PermisoResponse> cambiarActivo(Long id, CambiarEstadoRequest peticion) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "PermisoService.cambiarActivo", () -> transacciones.ejecutar(() -> {
+        return Trazas.medir(log, "PermisoService.cambiarActivo", () -> transacciones.ejecutar(() -> {
             Permiso permiso = obtenerPermiso(id);
             if (Protecciones.esPermisoBase(permiso.getNombre())) {
                 throw new OperacionNoPermitidaException(
@@ -197,7 +191,7 @@ public class PermisoService {
                             "motivo", peticion.motivo()));
             String mensaje = peticion.activo() ? "Permiso activado." : "Permiso desactivado.";
             return ApiResponse.ok(mensaje, PermisoResponse.of(permiso));
-        }))).subscribeOn(Schedulers.boundedElastic());
+        }));
     }
 
     /** Nadie puede crear ni renombrar un permiso con el nombre de uno base (p. ej. VER_AUDITORIA antes de migrar). */

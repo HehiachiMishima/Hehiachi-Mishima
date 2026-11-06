@@ -1,0 +1,42 @@
+@use 'design' as d;
+
+:host {
+  display: inline-flex;
+  align-items: center;
+  gap: d.space('1');
+  height: d.layout('badge-height');
+  padding: 0 d.space('2');
+  border-radius: d.radius('md');
+  @include d.type('label-00');
+  white-space: nowrap;
+}
+
+:host(.badge--md) {
+  height: 1.75rem;
+  @include d.type('label-01');
+}
+
+:host(.badge--neutral) {
+  background: d.color('neutral-soft');
+  color: d.color('text');
+}
+
+:host(.badge--accent) {
+  background: d.color('primary-soft');
+  color: d.color('accent');
+}
+
+:host(.badge--success) {
+  background: d.color('success-soft');
+  color: d.color('success');
+}
+
+:host(.badge--warning) {
+  background: d.color('warning-soft');
+  color: d.color('warning');
+}
+
+:host(.badge--danger) {
+  background: d.color('danger-soft');
+  color: d.color('danger');
+}

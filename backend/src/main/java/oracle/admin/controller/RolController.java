@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -36,44 +35,44 @@ public class RolController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('VER_ROLES')")
-    public Mono<ApiResponse<List<RolResponse>>> listar() {
+    public ApiResponse<List<RolResponse>> listar() {
         return rolService.listar();
     }
 
     @GetMapping("/buscar")
     @PreAuthorize("hasAuthority('VER_ROLES')")
-    public Mono<ApiResponse<List<RolResponse>>> buscar(@Valid @ModelAttribute RolFiltroRequest filtro) {
+    public ApiResponse<List<RolResponse>> buscar(@Valid @ModelAttribute RolFiltroRequest filtro) {
         return rolService.buscar(filtro);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('VER_ROLES')")
-    public Mono<ApiResponse<RolResponse>> obtener(@PathVariable Long id) {
+    public ApiResponse<RolResponse> obtener(@PathVariable Long id) {
         return rolService.obtenerPorId(id);
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('CREAR_ROLES')")
-    public Mono<ApiResponse<RolResponse>> crear(@Valid @RequestBody RolCrearRequest peticion) {
+    public ApiResponse<RolResponse> crear(@Valid @RequestBody RolCrearRequest peticion) {
         return rolService.crear(peticion);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('MODIFICAR_ROLES')")
-    public Mono<ApiResponse<RolResponse>> actualizar(@PathVariable Long id,
+    public ApiResponse<RolResponse> actualizar(@PathVariable Long id,
             @Valid @RequestBody RolActualizarRequest peticion) {
         return rolService.actualizar(id, peticion);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ELIMINAR_ROLES')")
-    public Mono<ApiResponse<Void>> eliminar(@PathVariable Long id) {
+    public ApiResponse<Void> eliminar(@PathVariable Long id) {
         return rolService.eliminar(id);
     }
 
     @PatchMapping("/{id}/activo")
     @PreAuthorize("hasAuthority('MODIFICAR_ROLES')")
-    public Mono<ApiResponse<RolResponse>> cambiarActivo(@PathVariable Long id,
+    public ApiResponse<RolResponse> cambiarActivo(@PathVariable Long id,
             @Valid @RequestBody CambiarEstadoRequest peticion) {
         return rolService.cambiarActivo(id, peticion);
     }

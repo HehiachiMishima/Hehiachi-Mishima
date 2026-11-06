@@ -1,26 +1,26 @@
-<header class="page-head">
-  <span class="page-head__icon" aria-hidden="true"><ui-icon name="history" [size]="24" /></span>
-  <div class="page-head__main">
-    <span class="page-head__eyebrow">Panel {{ panel.nombre }}</span>
-    <h1 class="page-head__title" tabindex="-1">Auditoría</h1>
-    <p class="page-head__sub">Registro inalterable de inicios de sesión y cambios de acceso.</p>
-    <p class="aviso-protegido auditoria__sello">
-      <ui-icon name="lock" [size]="14" /> Registro de solo lectura: los eventos no se pueden modificar ni eliminar.
-    </p>
-  </div>
-  <button type="button" class="ui-btn ui-btn--secondary" (click)="exportar()" [attr.aria-disabled]="exportando() || total() === 0 || null"
+<app-page-header [eyebrow]="'Panel ' + panel.nombre" heading="Auditoría">
+  <ng-container pageMeta>
+    <span>Registro inalterable de inicios de sesión y cambios de acceso.</span>
+  </ng-container>
+  <ng-container pageActions>
+    <button type="button" appButton variant="secondary" (click)="exportar()" [attr.aria-disabled]="exportando() || total() === 0 || null"
     [attr.aria-busy]="exportando() || null">
     @if (exportando()) {
       <span class="ui-spinner ui-spinner--sm" aria-hidden="true"></span>
     } @else {
-      <ui-icon name="download" [size]="18" />
+      <ui-icon name="download" [size]="16" />
     }
     Exportar CSV
   </button>
-</header>
+  </ng-container>
+</app-page-header>
+
+<app-notice class="auditoria__sello" silent>
+  Registro de solo lectura: los eventos no se pueden modificar ni eliminar.
+</app-notice>
 
 <div class="filtros-toggle">
-  <button type="button" class="ui-btn ui-btn--secondary" aria-controls="aud-filtros"
+  <button type="button" appButton variant="secondary" aria-controls="aud-filtros"
     [attr.aria-expanded]="filtrosAbiertos()" (click)="filtrosAbiertos.update((v) => !v)">
     <ui-icon name="filter" [size]="16" /> {{ filtrosAbiertos() ? 'Ocultar filtros' : 'Filtros' }}
     @if (hayFiltros()) { <span class="toolbar__cuenta" aria-hidden="true">•</span><span class="u-sr-only"> (hay filtros activos)</span> }
@@ -94,7 +94,7 @@
       @for (opcion of resultados; track opcion.id) {
         <button type="button" class="ui-chip" [attr.aria-pressed]="resultado() === opcion.id"
           (click)="fijar({ resultado: resultado() === opcion.id ? null : opcion.id })">
-          <ui-icon [name]="opcion.icono" [size]="14" /> {{ opcion.etiqueta }}
+          <ui-icon [name]="opcion.icono" [size]="16" /> {{ opcion.etiqueta }}
         </button>
       }
     </div>
@@ -104,30 +104,30 @@
 <div class="filtros__resumen">
   <span role="status"><strong>{{ totalTexto() }}</strong> {{ total() === 1 ? 'evento' : 'eventos' }}@if (totalTopado()) { <span class="u-muted">(se muestran como máximo {{ limiteExportacion }}; acota el periodo)</span>}</span>
   @if (actorId()) {
-    <span class="ui-badge ui-badge--brand">Actor: {{ actorFiltrado() }}
-      <button type="button" class="ui-link-btn" (click)="fijar({ actorId: null })" [attr.aria-label]="'Quitar filtro de actor ' + actorFiltrado()">
+    <app-badge tone="accent">Actor: {{ actorFiltrado() }}
+      <button type="button" class="badge-quitar" (click)="fijar({ actorId: null })" [attr.aria-label]="'Quitar filtro de actor ' + actorFiltrado()">
         <ui-icon name="close" [size]="12" /></button>
-    </span>
+    </app-badge>
   }
   @if (relacionadoCon()) {
-    <span class="ui-badge ui-badge--brand">Relacionado con {{ relacionadoCon() }}
-      <button type="button" class="ui-link-btn" (click)="fijar({ relacionadoCon: null })" aria-label="Quitar filtro de registro relacionado">
+    <app-badge tone="accent">Relacionado con {{ relacionadoCon() }}
+      <button type="button" class="badge-quitar" (click)="fijar({ relacionadoCon: null })" aria-label="Quitar filtro de registro relacionado">
         <ui-icon name="close" [size]="12" /></button>
-    </span>
+    </app-badge>
   }
   @if (entidadId()) {
-    <span class="ui-badge ui-badge--brand">{{ etiquetaEntidad(entidad()) }} #{{ entidadId() }}
-      <button type="button" class="ui-link-btn" (click)="fijar({ entidadId: null })" aria-label="Quitar filtro de registro">
+    <app-badge tone="accent">{{ etiquetaEntidad(entidad()) }} #{{ entidadId() }}
+      <button type="button" class="badge-quitar" (click)="fijar({ entidadId: null })" aria-label="Quitar filtro de registro">
         <ui-icon name="close" [size]="12" /></button>
-    </span>
+    </app-badge>
   }
   @if (hayFiltros()) {
-    <button type="button" class="ui-link-btn" (click)="limpiarFiltros()">Limpiar filtros</button>
+    <button appButton variant="tertiary" size="sm" type="button" (click)="limpiarFiltros()">Limpiar filtros</button>
   }
   <span class="auditoria__vistas">
     Vistas:
     @for (vista of vistas; track vista.id) {
-      <button type="button" class="ui-link-btn" (click)="aplicarVista(vista.id)">{{ vista.etiqueta }}</button>
+      <button appButton variant="tertiary" size="sm" type="button" (click)="aplicarVista(vista.id)">{{ vista.etiqueta }}</button>
     }
   </span>
 </div>
@@ -141,17 +141,17 @@
   } @else if (error(); as fallo) {
     <ui-empty icono="alerta" titulo="No se pudo cargar la bitácora" [mensaje]="fallo.mensaje">
       @if (fallo.idCorrelacion) {
-        <p class="ui-hint">Identificador de la petición: <span class="u-mono">{{ fallo.idCorrelacion }}</span></p>
+        <p class="ui-hint">Identificador de la petición: <code>{{ fallo.idCorrelacion }}</code></p>
       }
-      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="recargar()">
+      <button type="button" appButton variant="secondary" size="sm" (click)="recargar()">
         <ui-icon name="refresh" [size]="16" /> Reintentar
       </button>
     </ui-empty>
   } @else if (eventos().length === 0) {
     @if (hayFiltros()) {
       <ui-empty icono="search" titulo="No hay eventos con estos filtros" mensaje="Amplía el periodo o quita algún filtro.">
-        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="ampliar()">Ampliar a 30 días</button>
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" (click)="limpiarFiltros()">Limpiar filtros</button>
+        <button type="button" appButton variant="secondary" size="sm" (click)="ampliar()">Ampliar a 30 días</button>
+        <button type="button" appButton variant="ghost" size="sm" (click)="limpiarFiltros()">Limpiar filtros</button>
       </ui-empty>
     } @else {
       <ui-empty icono="history" titulo="Aún no hay eventos registrados" mensaje="Los inicios de sesión y los cambios de acceso aparecerán aquí." />
@@ -180,9 +180,9 @@
                   <time [attr.datetime]="evento.ocurridoEn" [title]="evento.ocurridoEn | fechaHora: 'completa' : true">{{ hora(evento.ocurridoEn) }}</time>
                 </td>
                 <td class="celda-estado">
-                  <span class="ui-badge" [class]="'ui-badge--' + tono(evento.resultado)">
+                  <app-badge [tone]="$any(tono(evento.resultado))">
                     <ui-icon [name]="iconoResultado(evento.resultado)" [size]="12" /> {{ textoResultado(evento.resultado) }}
-                  </span>
+                  </app-badge>
                 </td>
                 <td class="auditoria__accion">
                   <button type="button" class="ui-link-btn" data-fila-evento (click)="abrir(evento)"
@@ -241,9 +241,9 @@
   @if (detalle(); as e) {
     <div class="auditoria__detalle">
       <p>
-        <span class="ui-badge" [class]="'ui-badge--' + tono(e.resultado)">
+        <app-badge [tone]="$any(tono(e.resultado))">
           <ui-icon [name]="iconoResultado(e.resultado)" [size]="12" /> {{ textoResultado(e.resultado) }}
-        </span>
+        </app-badge>
         <span class="u-muted"> · {{ e.ocurridoEn | fechaHora: 'relativa' : true }}</span>
       </p>
 
@@ -259,7 +259,7 @@
             @if (e.idCorrelacion) {
               <span class="u-mono">{{ e.idCorrelacion }}</span>
               <button type="button" class="ui-icon-btn" (click)="copiar(e.idCorrelacion)" aria-label="Copiar identificador de la petición">
-                <ui-icon name="copy" [size]="14" />
+                <ui-icon name="copy" [size]="16" />
               </button>
               <button type="button" class="ui-link-btn" (click)="verPeticion(e.idCorrelacion)">Ver eventos de esta petición</button>
             } @else {
@@ -272,12 +272,12 @@
       <section aria-labelledby="det-cambios">
         <h3 class="auditoria__subtitulo" id="det-cambios">Antes y después</h3>
         @if (e.detalle?.motivo) {
-          <p class="modal-hint"><strong>Motivo:</strong> {{ e.detalle!.motivo }}</p>
+          <app-notice silent class="auditoria__motivo"><strong>Motivo:</strong> {{ e.detalle!.motivo }}</app-notice>
         }
         @if (e.detalle?.antes || e.detalle?.despues) {
           <label class="check auditoria__todos">
             <input type="checkbox" [checked]="mostrarTodos()" (change)="mostrarTodos.set(!mostrarTodos())" />
-            <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="14" /></span>
+            <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="16" /></span>
             <span>Mostrar todos los campos</span>
           </label>
           @if (diferencias().length) {
@@ -306,7 +306,7 @@
       @if (e.detalle) {
         <details class="auditoria__tecnico">
           <summary>Detalle técnico</summary>
-          <pre class="u-mono">{{ detalleTecnico() }}</pre>
+          <pre>{{ detalleTecnico() }}</pre>
         </details>
       }
     </div>
@@ -315,12 +315,12 @@
   <div modal-footer class="modal-foot auditoria__acciones">
     @if (detalle(); as e) {
       @if (e.entidad && e.entidadId) {
-        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="verHistorialEntidad(e)">
+        <button type="button" appButton variant="secondary" size="sm" (click)="verHistorialEntidad(e)">
           <ui-icon name="history" [size]="16" /> Historial de esta entidad
         </button>
       }
       @if (e.actorId !== null && e.actorId !== 0) {
-        <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="verActor(e)">
+        <button type="button" appButton variant="secondary" size="sm" (click)="verActor(e)">
           <ui-icon name="user" [size]="16" /> Todo lo hecho por este actor
         </button>
       }

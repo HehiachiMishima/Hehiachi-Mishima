@@ -2,7 +2,8 @@ package oracle.auditoria;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,21 +19,24 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Acceso a auditoria_eventos con JdbcTemplate: insercion por lotes (append-only,
- * sin entidad JPA que pueda emitir UPDATE) y lecturas con WHERE dinamico.
- * Orden canonico: ocurrido_en DESC, id DESC (sale del indice sin filesort).
+ * sin entidad JPA que pueda emitir UPDATE; reWriteBatchedInserts la convierte
+ * en un unico INSERT multi-fila) y lecturas con WHERE dinamico.
+ * Orden canonico: ocurrido_en DESC, id DESC (Merge Append ordenado sobre el
+ * indice de cada particion mensual, sin Sort).
  */
 @Repository
 class AuditoriaRepository {
 
     private static final String COLUMNAS = """
             e.id, e.ocurrido_en, e.actor_id, e.actor_usuario, e.accion, e.entidad, e.entidad_id,
-            e.resultado, e.ip, e.user_agent, e.id_correlacion, e.detalle""";
+            e.resultado::text AS resultado, host(e.ip) AS ip, e.user_agent, e.id_correlacion,
+            e.detalle::text AS detalle""";
 
     private static final String INSERT = """
             INSERT INTO auditoria_eventos
               (ocurrido_en, actor_id, actor_usuario, accion, entidad, entidad_id, resultado,
                ip, user_agent, id_correlacion, detalle)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+            VALUES (?, ?, ?, ?, ?, ?, ?::resultado_auditoria, a_inet(?), ?, ?, ?::jsonb)""";
 
     private final JdbcTemplate jdbc;
     private final ObjectMapper json;
@@ -47,7 +51,7 @@ class AuditoriaRepository {
     /** Inserta un lote en una sola ida a la BD. */
     void insertar(List<EventoAuditoria> lote) {
         jdbc.batchUpdate(INSERT, lote, lote.size(), (ps, e) -> {
-            ps.setTimestamp(1, Timestamp.from(e.ocurridoEn()));
+            ps.setObject(1, OffsetDateTime.ofInstant(e.ocurridoEn(), ZoneOffset.UTC));
             if (e.actorId() == null) {
                 ps.setNull(2, Types.BIGINT);
             } else {
@@ -65,14 +69,10 @@ class AuditoriaRepository {
         });
     }
 
-    /**
-     * Pagina por OFFSET con "deferred join": el subquery recorre solo el indice
-     * (id va implicito en cada indice secundario) y despues se leen las filas.
-     */
+    /** Pagina por OFFSET en el orden canonico (las particiones fuera del rango se podan). */
     List<AuditoriaEventoResponse> pagina(CondicionSql condicion, int offset, int limite) {
-        String sql = "SELECT " + COLUMNAS + " FROM auditoria_eventos e JOIN (SELECT id FROM auditoria_eventos "
-                + condicion.where() + " ORDER BY ocurrido_en DESC, id DESC LIMIT ? OFFSET ?) k ON k.id = e.id"
-                + " ORDER BY e.ocurrido_en DESC, e.id DESC";
+        String sql = "SELECT " + COLUMNAS + " FROM auditoria_eventos e " + condicion.where()
+                + " ORDER BY e.ocurrido_en DESC, e.id DESC LIMIT ? OFFSET ?";
         List<Object> args = new ArrayList<>(condicion.args());
         args.add(limite);
         args.add(offset);
@@ -97,8 +97,9 @@ class AuditoriaRepository {
         List<Object> args = new ArrayList<>(condicion.args());
         String where = condicion.where();
         if (ts != null) {
-            where = condicion.y("ocurrido_en <= ? AND (ocurrido_en < ? OR id < ?)");
-            Timestamp t = Timestamp.from(ts);
+            // Comparacion de filas: (ocurrido_en, id) < (ts, id) con poda de particiones por ocurrido_en <= ts.
+            where = condicion.y("ocurrido_en <= ? AND (ocurrido_en, id) < (?, ?)");
+            OffsetDateTime t = OffsetDateTime.ofInstant(ts, ZoneOffset.UTC);
             args.add(t);
             args.add(t);
             args.add(id);
@@ -117,7 +118,7 @@ class AuditoriaRepository {
     private AuditoriaEventoResponse mapear(ResultSet rs, int fila) throws SQLException {
         long actor = rs.getLong("actor_id");
         Long actorId = rs.wasNull() ? null : actor;
-        Timestamp ts = rs.getTimestamp("ocurrido_en");
+        OffsetDateTime ts = rs.getObject("ocurrido_en", OffsetDateTime.class);
         return new AuditoriaEventoResponse(
                 rs.getLong("id"),
                 ts == null ? null : ts.toInstant(),

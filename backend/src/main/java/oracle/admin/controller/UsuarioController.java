@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -38,13 +37,13 @@ public class UsuarioController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('VER_USUARIOS')")
-    public Mono<ApiResponse<List<UsuarioResponse>>> listar() {
+    public ApiResponse<List<UsuarioResponse>> listar() {
         return usuarioService.listar();
     }
 
     @GetMapping("/buscar")
     @PreAuthorize("hasAuthority('VER_USUARIOS')")
-    public Mono<ApiResponse<List<UsuarioResponse>>> buscar(@Valid @ModelAttribute UsuarioFiltroRequest filtro) {
+    public ApiResponse<List<UsuarioResponse>> buscar(@Valid @ModelAttribute UsuarioFiltroRequest filtro) {
         return usuarioService.buscar(filtro);
     }
 
@@ -55,39 +54,39 @@ public class UsuarioController {
      */
     @GetMapping("/resumen")
     @PreAuthorize("hasAuthority('VER_USUARIOS') and hasAuthority('VER_ROLES') and hasAuthority('VER_PERMISOS')")
-    public Mono<ApiResponse<List<UsuarioResumenResponse>>> resumen(
+    public ApiResponse<List<UsuarioResumenResponse>> resumen(
             @RequestParam(name = "ids", required = false) List<Long> ids) {
         return usuarioService.resumen(ids);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('VER_USUARIOS')")
-    public Mono<ApiResponse<UsuarioResponse>> obtener(@PathVariable Long id) {
+    public ApiResponse<UsuarioResponse> obtener(@PathVariable Long id) {
         return usuarioService.obtenerPorId(id);
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('CREAR_USUARIOS')")
-    public Mono<ApiResponse<UsuarioResponse>> crear(@Valid @RequestBody UsuarioCrearRequest peticion) {
+    public ApiResponse<UsuarioResponse> crear(@Valid @RequestBody UsuarioCrearRequest peticion) {
         return usuarioService.crear(peticion);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('MODIFICAR_USUARIOS')")
-    public Mono<ApiResponse<UsuarioResponse>> actualizar(@PathVariable Long id,
+    public ApiResponse<UsuarioResponse> actualizar(@PathVariable Long id,
             @Valid @RequestBody UsuarioActualizarRequest peticion) {
         return usuarioService.actualizar(id, peticion);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ELIMINAR_USUARIOS')")
-    public Mono<ApiResponse<Void>> eliminar(@PathVariable Long id) {
+    public ApiResponse<Void> eliminar(@PathVariable Long id) {
         return usuarioService.eliminar(id);
     }
 
     @PatchMapping("/{id}/activo")
     @PreAuthorize("hasAuthority('MODIFICAR_USUARIOS')")
-    public Mono<ApiResponse<UsuarioResponse>> cambiarActivo(@PathVariable Long id,
+    public ApiResponse<UsuarioResponse> cambiarActivo(@PathVariable Long id,
             @Valid @RequestBody CambiarEstadoRequest peticion) {
         return usuarioService.cambiarActivo(id, peticion);
     }

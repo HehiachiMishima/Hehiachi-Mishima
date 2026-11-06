@@ -8,11 +8,12 @@ import { Carga } from '../../../core/services/carga';
 import { Notificaciones } from '../../../core/services/notificaciones';
 import { enfocarPrimerInvalido } from '../../../shared/forms/errores-formulario';
 import { Icon } from '../../../shared/ui/icon/icon';
-import { LightPillar } from '../../../shared/ui/light-pillar/light-pillar';
+import { Button } from '../../../shared/ui/button/button';
+import { Notice } from '../../../shared/ui/notice/notice';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, Icon, LightPillar],
+  imports: [ReactiveFormsModule, Icon, Button, Notice],
   templateUrl: './login.html',
   styleUrl: './login.scss',
 })
@@ -27,8 +28,6 @@ export class Login {
   readonly cargando = signal(false);
   readonly error = signal<string | null>(null);
   readonly verContrasena = signal(false);
-  /** Pausa de la animación de fondo (WCAG 2.2.2), recordada por navegador. */
-  readonly animacionPausada = signal(this.leerPausa());
 
   readonly formulario = this.fb.nonNullable.group({
     usuario: ['', [Validators.required]],
@@ -42,15 +41,6 @@ export class Login {
 
   toggleContrasena(): void {
     this.verContrasena.update((valor) => !valor);
-  }
-
-  alternarAnimacion(): void {
-    this.animacionPausada.update((valor) => !valor);
-    try {
-      localStorage.setItem(CONFIG.almacenamiento.animacionPausada, String(this.animacionPausada()));
-    } catch {
-      /* almacenamiento no disponible */
-    }
   }
 
   enviar(): void {
@@ -84,13 +74,5 @@ export class Login {
         this.error.set(mensajeDeError(err));
       },
     });
-  }
-
-  private leerPausa(): boolean {
-    try {
-      return localStorage.getItem(CONFIG.almacenamiento.animacionPausada) === 'true';
-    } catch {
-      return false;
-    }
   }
 }

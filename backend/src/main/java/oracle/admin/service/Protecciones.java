@@ -10,18 +10,18 @@ import org.springframework.stereotype.Component;
 
 /**
  * Reglas de proteccion espejo de los triggers de la base de datos.
- * Validar aqui = fallar con 403 limpio antes de que MySQL senale SQLSTATE 45000.
+ * Validar aqui = fallar con 403 limpio antes de que PostgreSQL lance SQLSTATE RB403.
  *
  * Usuarios protegidos (sin update, delete ni cambios de rol/permisos desde la
  * administracion), por configuracion:
  * <ul>
  *   <li>{@link #USUARIO_RAIZ} (@hehiachi): protegido TAMBIEN en la BD
- *       (protection.admin.sql); ni siquiera puede cambiar su contrasena.</li>
+ *       (trigger usuarios_proteger_raiz, migracion V2); ni siquiera puede cambiar su contrasena.</li>
  *   <li>el usuario semilla (app.seed.usuario, p. ej. @admin) y los de
  *       app.seguridad.usuarios-protegidos: protegidos solo en la aplicacion.</li>
  * </ul>
  * Las comparaciones no distinguen mayusculas, igual que la collation
- * utf8mb4_unicode_ci de MySQL y los triggers.
+ * los indices unicos lower(...) de PostgreSQL y los triggers.
  */
 @Component
 public class Protecciones {
@@ -29,7 +29,7 @@ public class Protecciones {
     /**
      * Permisos base: inmutables. No se pueden modificar (ni siquiera su campo
      * 'activo') ni eliminar, ni ocupar su nombre. Espejo de
-     * trg_permisos_base_update / _delete (14 de gestion + PANEL_ADMIN +
+     * app.es_permiso_base() en V2__protecciones.sql (14 de gestion + PANEL_ADMIN +
      * DASHBOARD_ADMIN + VER_AUDITORIA).
      */
     public static final Set<String> PERMISOS_BASE = Set.of(
@@ -41,7 +41,7 @@ public class Protecciones {
     /** Rol que solo recibe permisos: no se modifica ni se elimina. */
     public static final String ROL_ADMINISTRADOR = "ADMINISTRADOR";
 
-    /** Usuario protegido por los triggers de protection.admin.sql. */
+    /** Usuario protegido por los triggers de la migracion V2. */
     public static final String USUARIO_RAIZ = "@hehiachi";
 
     private final Set<String> usuariosProtegidos;

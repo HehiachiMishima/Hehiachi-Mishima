@@ -1,0 +1,101 @@
+// Escala del estilo "consola plana": esquinas rectas, sin sombras en superficies,
+// tipografía grotesca con tracking positivo y etiquetas en monoespaciada.
+
+$space: (
+  '0': 0,
+  '1': 0.25rem,
+  '2': 0.5rem,
+  '3': 0.75rem,
+  '4': 1rem,
+  '5': 1.25rem,
+  '6': 1.5rem,
+  '8': 2rem,
+  '10': 2.5rem,
+  '12': 3rem,
+  '16': 4rem,
+);
+
+// Geist / Geist Mono (OFL, @fontsource-variable/geist y /geist-mono). Sustituyen a fuentes
+// comerciales de aspecto similar; si tienes licencia de otra grotesca, cámbiala solo aquí.
+$font-family: (
+  'display': ('Geist Variable', 'Geist', ui-sans-serif, system-ui, sans-serif),
+  'sans': ('Geist Variable', 'Geist', ui-sans-serif, system-ui, sans-serif),
+  'mono': ('Geist Mono Variable', 'Geist Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace),
+);
+
+$font-size: (
+  'xs': 0.75rem,    // 12 — badges, cabeceras de tabla
+  'label': 0.8125rem, // 13 — etiquetas en mono (eyebrow, secciones del menú)
+  'sm': 0.875rem,   // 14 — botones, inputs, metadatos
+  'md': 1rem,       // 16 — cuerpo, ítems de menú, labels de formulario
+  'lg': 1.25rem,    // 20 — títulos de sección
+  'xl': 1.5rem,     // 24
+  '2xl': clamp(1.75rem, 1.5rem + 0.75vw, 2rem), // 28 → 32 — título de página
+);
+
+$font-weight: (
+  'regular': 400,
+  'medium': 500,
+  'semibold': 600,
+  'bold': 700,
+);
+
+$line-height: (
+  'tight': 1.125,   // títulos grandes (32/36)
+  'snug': 1.4,      // títulos de sección (20/28)
+  'normal': 1.5,
+);
+
+// Tracking: el cuerpo lleva un poco de aire (+1 %), los títulos grandes se aprietan,
+// las etiquetas en mayúsculas mono se abren.
+$tracking: (
+  'tight': -0.01em,
+  'normal': 0.01em,
+  'wide': 0.05em,
+);
+
+// Esquinas rectas: md y lg valen 0 a propósito. Así cualquier componente del sistema base
+// que use d.radius('md') o d.radius('lg') queda recto sin cambiar su código.
+$radius: (
+  'sm': 4px,        // solo detalles: atajos de teclado, tooltips
+  'md': 0,
+  'lg': 0,
+  'full': 9999px,   // avatares, interruptores
+);
+
+// Superficies planas: delimitadas por bordes, no por sombras. Las sombras solo existen
+// en lo que flota sobre la página (menús, popovers, modales).
+$shadow: (
+  'sm': none,
+  'md': (0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)),
+  'lg': (0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)),
+  'menu': (0 4px 3px rgba(0, 0, 0, 0.07), 0 2px 2px rgba(0, 0, 0, 0.06)),   // menús y listas desplegables
+);
+
+$z: (
+  'sticky': 10,
+  'overlay': 30,
+  'drawer': 40,
+  'toast': 50,
+);
+
+$motion: (
+  'fast': 200ms,
+  'normal': 200ms,
+  'easing': ease-out,
+);
+
+// Medidas del layout de consola.
+$layout: (
+  'topbar-height': 3.5rem,     // 56
+  'sidebar-width': 18.375rem,  // 294
+  'control-height': 2.5rem,    // 40 — botones e inputs
+  'nav-item-height': 2.25rem,  // 36
+  'badge-height': 1.5rem,      // 24
+  'control-height-sm': 2rem,   // 32 — botón compacto
+  'menu-item-height': 2.25rem, // 36
+  'row-height': 3rem,          // 48 — fila de tabla y de acordeón
+  'content-max': 120rem,       // 1920
+);
+
+$touch-target: 44px;

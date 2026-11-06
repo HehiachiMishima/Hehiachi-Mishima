@@ -1,0 +1,47 @@
+// Escala tipográfica completa (36 estilos), medida del panel de referencia.
+// Úsala con el mixin: @include d.type('heading-05');
+// Familias: 'display' (títulos grandes), 'sans' (todo lo demás), 'mono' (etiquetas y datos técnicos).
+//
+// Cada estilo: (familia, tamaño, peso, interlineado, tracking, mayúsculas)
+
+$type: (
+  // Títulos
+  'heading-06': ('display', 2rem, 500, 2.25rem, -0.32px, false),       // 32/36 título de página principal
+  'heading-05': ('display', 1.75rem, 500, 2rem, -0.28px, false),       // 28/32 título de detalle de un registro
+  'heading-04': ('display', 1.5rem, 500, 1.75rem, 0, false),           // 24/28 sección de página
+  'heading-03': ('sans', 1.25rem, 600, 1.75rem, 0, false),             // 20/28 título de tarjeta o panel
+  'heading-02': ('sans', 1rem, 600, 1.5rem, 0, false),                 // 16/24 título de elemento
+  'heading-01': ('sans', 0.875rem, 600, 1.25rem, 0.28px, false),       // 14/20 título compacto
+  // Cuerpo (párrafos y valores)
+  'body-03': ('sans', 1.25rem, 400, 1.75rem, 0.2px, false),
+  'body-03-medium': ('sans', 1.25rem, 500, 1.75rem, 0.2px, false),
+  'body-02': ('sans', 1rem, 400, 1.5rem, 0.16px, false),               // 16/24 por defecto
+  'body-02-medium': ('sans', 1rem, 500, 1.5rem, 0.16px, false),
+  'body-02-semi-bold': ('sans', 1rem, 600, 1.5rem, 0.16px, false),
+  'body-01': ('sans', 0.875rem, 400, 1.25rem, 0.14px, false),          // 14/20 metadatos
+  'body-01-medium': ('sans', 0.875rem, 500, 1.25rem, 0.14px, false),
+  'body-01-semi-bold': ('sans', 0.875rem, 600, 1.25rem, 0.14px, false),
+  'body-00': ('sans', 0.8125rem, 400, 1.125rem, 0.13px, false),        // 13/18
+  'body-00-medium': ('sans', 0.8125rem, 500, 1.125rem, 0.13px, false),
+  'body-00-semi-bold': ('sans', 0.8125rem, 600, 1.125rem, 0.13px, false),
+  // Interfaz (controles: botones, menús, inputs)
+  'interface-02': ('sans', 1rem, 400, 1.5rem, 0.16px, false),          // ítem de menú lateral
+  'interface-01': ('sans', 0.875rem, 400, 1.25rem, 0.14px, false),     // botón, input, opción de menú
+  'interface-00': ('sans', 0.8125rem, 400, 1.125rem, 0.13px, false),   // botón compacto, barra superior
+  // Etiquetas y ayudas
+  'label-01': ('sans', 0.875rem, 500, 1.25rem, 0.07px, false),         // badge mediano
+  'label-00': ('sans', 0.75rem, 500, 1rem, 0.06px, false),             // badge, contador
+  'helper-text-01': ('sans', 0.875rem, 400, 1.25rem, 0.07px, false),   // ayuda bajo un campo
+  'helper-text-00': ('sans', 0.75rem, 400, 1rem, 0.06px, false),
+  // Monoespaciada
+  'mono-02': ('mono', 1rem, 400, 1.5rem, 0.65px, false),               // cifras destacadas
+  'mono-02-caps': ('mono', 1rem, 400, 1.5rem, 0.8px, true),
+  'mono-01': ('mono', 0.8125rem, 400, 1.25rem, 0, false),              // ids, claves, valores técnicos
+  'mono-01-caps': ('mono', 0.8125rem, 400, 1.25rem, 0.65px, true),     // eyebrow, grupos del menú
+  'mono-00': ('mono', 0.75rem, 400, 1rem, 0, false),                   // logs, ejes de gráficos
+  'mono-00-caps': ('mono', 0.75rem, 400, 1rem, 0.24px, true),          // cabecera de tabla, claves
+  // Avatares (iniciales)
+  'avatar-small': ('sans', 0.75rem, 400, 1rem, 0.06px, false),
+  'avatar-medium': ('sans', 0.8125rem, 400, 1.125rem, 0.13px, false),
+  'avatar-large': ('sans', 1rem, 400, 1.5rem, 0.16px, false),
+);

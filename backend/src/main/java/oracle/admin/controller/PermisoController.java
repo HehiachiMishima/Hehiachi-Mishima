@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -36,44 +35,44 @@ public class PermisoController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('VER_PERMISOS')")
-    public Mono<ApiResponse<List<PermisoResponse>>> listar() {
+    public ApiResponse<List<PermisoResponse>> listar() {
         return permisoService.listar();
     }
 
     @GetMapping("/buscar")
     @PreAuthorize("hasAuthority('VER_PERMISOS')")
-    public Mono<ApiResponse<List<PermisoResponse>>> buscar(@Valid @ModelAttribute PermisoFiltroRequest filtro) {
+    public ApiResponse<List<PermisoResponse>> buscar(@Valid @ModelAttribute PermisoFiltroRequest filtro) {
         return permisoService.buscar(filtro);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('VER_PERMISOS')")
-    public Mono<ApiResponse<PermisoResponse>> obtener(@PathVariable Long id) {
+    public ApiResponse<PermisoResponse> obtener(@PathVariable Long id) {
         return permisoService.obtenerPorId(id);
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('CREAR_PERMISOS')")
-    public Mono<ApiResponse<PermisoResponse>> crear(@Valid @RequestBody PermisoCrearRequest peticion) {
+    public ApiResponse<PermisoResponse> crear(@Valid @RequestBody PermisoCrearRequest peticion) {
         return permisoService.crear(peticion);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('MODIFICAR_PERMISOS')")
-    public Mono<ApiResponse<PermisoResponse>> actualizar(@PathVariable Long id,
+    public ApiResponse<PermisoResponse> actualizar(@PathVariable Long id,
             @Valid @RequestBody PermisoActualizarRequest peticion) {
         return permisoService.actualizar(id, peticion);
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('ELIMINAR_PERMISOS')")
-    public Mono<ApiResponse<Void>> eliminar(@PathVariable Long id) {
+    public ApiResponse<Void> eliminar(@PathVariable Long id) {
         return permisoService.eliminar(id);
     }
 
     @PatchMapping("/{id}/activo")
     @PreAuthorize("hasAuthority('MODIFICAR_PERMISOS')")
-    public Mono<ApiResponse<PermisoResponse>> cambiarActivo(@PathVariable Long id,
+    public ApiResponse<PermisoResponse> cambiarActivo(@PathVariable Long id,
             @Valid @RequestBody CambiarEstadoRequest peticion) {
         return permisoService.cambiarActivo(id, peticion);
     }

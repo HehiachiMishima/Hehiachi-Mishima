@@ -28,8 +28,6 @@ import oracle.common.support.ActorActual;
 import oracle.common.support.Listas;
 import oracle.common.support.Trazas;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /**
  * Asignacion usuario-rol (usuarios_roles): dar y quitar roles. Solo sobre
@@ -69,93 +67,89 @@ public class UsuarioRolService {
     }
 
     /** Asignar un rol al usuario (unico por par). */
-    public Mono<ApiResponse<UsuarioRolResponse>> asignar(Long usuarioId, UsuarioRolAsignarRequest peticion) {
+    public ApiResponse<UsuarioRolResponse> asignar(Long usuarioId, UsuarioRolAsignarRequest peticion) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioRolService.asignar", () -> transacciones.ejecutar(() -> {
-                            Usuario usuario = obtenerUsuario(usuarioId);
-                            verificarNoProtegido(usuario);
-                            Protecciones.verificarNoAutoGestion(usuarioId, actor);
-                            Rol rol = obtenerRol(peticion.rolId());
-                            guardia.exigirAutoridadSobre(actor, usuarioId);
-                            guardia.exigirAdministradorSiRolAdmin(actor, rol.getNombre());
-                            guardia.exigirPoseerPermisosDeRol(actor, rol.getId());
+        return Trazas.medir(log, "UsuarioRolService.asignar", () -> transacciones.ejecutar(() -> {
+            Usuario usuario = obtenerUsuario(usuarioId);
+            verificarNoProtegido(usuario);
+            Protecciones.verificarNoAutoGestion(usuarioId, actor);
+            Rol rol = obtenerRol(peticion.rolId());
+            guardia.exigirAutoridadSobre(actor, usuarioId);
+            guardia.exigirAdministradorSiRolAdmin(actor, rol.getNombre());
+            guardia.exigirPoseerPermisosDeRol(actor, rol.getId());
 
-                            if (usuarioRolRepository.existsByUsuarioIdAndRolId(usuarioId, rol.getId())) {
-                                throw new ConflictoException("El usuario '" + usuario.getUsuario()
-                                        + "' ya tiene el rol '" + rol.getNombre() + "'.");
-                            }
+            if (usuarioRolRepository.existsByUsuarioIdAndRolId(usuarioId, rol.getId())) {
+                throw new ConflictoException("El usuario '" + usuario.getUsuario()
+                        + "' ya tiene el rol '" + rol.getNombre() + "'.");
+            }
 
-                            UsuarioRol asignacion = new UsuarioRol();
-                            asignacion.setUsuario(usuario);
-                            asignacion.setRol(rol);
-                            asignacion.setCreadoPor(actor);
-                            asignacion.setCreadoEn(LocalDateTime.now());
-                            usuarioRolRepository.save(asignacion);
-                            autorizacionCache.invalidar(usuarioId);
+            UsuarioRol asignacion = new UsuarioRol();
+            asignacion.setUsuario(usuario);
+            asignacion.setRol(rol);
+            asignacion.setCreadoPor(actor);
+            asignacion.setCreadoEn(LocalDateTime.now());
+            usuarioRolRepository.save(asignacion);
+            autorizacionCache.invalidar(usuarioId);
 
-                            auditoria.exito(ctx, AccionAuditoria.ROL_ASIGNADO, EntidadAuditoria.USUARIO_ROL,
-                                    usuarioId + ":" + rol.getId(),
-                                    Detalle.de("usuario", usuario.getUsuario(), "rol", rol.getNombre()));
-                            return ApiResponse.ok("Rol asignado.", UsuarioRolResponse.of(asignacion));
-                        })))
-                .subscribeOn(Schedulers.boundedElastic());
+            auditoria.exito(ctx, AccionAuditoria.ROL_ASIGNADO, EntidadAuditoria.USUARIO_ROL,
+                    usuarioId + ":" + rol.getId(),
+                    Detalle.de("usuario", usuario.getUsuario(), "rol", rol.getNombre()));
+            return ApiResponse.ok("Rol asignado.", UsuarioRolResponse.of(asignacion));
+        }));
     }
 
     /** Quitar un rol al usuario. */
-    public Mono<ApiResponse<Void>> quitar(Long usuarioId, Long rolId) {
+    public ApiResponse<Void> quitar(Long usuarioId, Long rolId) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.<Void>fromRunnable(() -> Trazas.medir(log, "UsuarioRolService.quitar", () -> transacciones.ejecutar(() -> {
-                            Usuario usuario = obtenerUsuario(usuarioId);
-                            Protecciones.verificarNoAutoGestion(usuarioId, actor);
-                            verificarNoProtegido(usuario);
-                            Rol rol = obtenerRol(rolId);
-                            guardia.exigirAutoridadSobre(actor, usuarioId);
-                            guardia.exigirAdministradorSiRolAdmin(actor, rol.getNombre());
-                            if (!usuarioRolRepository.existsByUsuarioIdAndRolId(usuarioId, rolId)) {
-                                throw new RecursoNoEncontradoException("El usuario '" + usuario.getUsuario()
-                                        + "' no tiene el rol '" + rol.getNombre() + "'.");
-                            }
-                            usuarioRolRepository.eliminarPar(usuarioId, rolId);
-                            autorizacionCache.invalidar(usuarioId);
-                            auditoria.exito(ctx, AccionAuditoria.ROL_REVOCADO, EntidadAuditoria.USUARIO_ROL,
-                                    usuarioId + ":" + rolId,
-                                    Detalle.de("usuario", usuario.getUsuario(), "rol", rol.getNombre()));
-                            return null;
-                        })))
-                .subscribeOn(Schedulers.boundedElastic())
-                .then(Mono.fromSupplier(() -> ApiResponse.<Void>ok("Rol quitado.", null)));
+        Trazas.medir(log, "UsuarioRolService.quitar", () -> transacciones.ejecutar(() -> {
+            Usuario usuario = obtenerUsuario(usuarioId);
+            Protecciones.verificarNoAutoGestion(usuarioId, actor);
+            verificarNoProtegido(usuario);
+            Rol rol = obtenerRol(rolId);
+            guardia.exigirAutoridadSobre(actor, usuarioId);
+            guardia.exigirAdministradorSiRolAdmin(actor, rol.getNombre());
+            if (!usuarioRolRepository.existsByUsuarioIdAndRolId(usuarioId, rolId)) {
+                throw new RecursoNoEncontradoException("El usuario '" + usuario.getUsuario()
+                        + "' no tiene el rol '" + rol.getNombre() + "'.");
+            }
+            usuarioRolRepository.eliminarPar(usuarioId, rolId);
+            autorizacionCache.invalidar(usuarioId);
+            auditoria.exito(ctx, AccionAuditoria.ROL_REVOCADO, EntidadAuditoria.USUARIO_ROL,
+                    usuarioId + ":" + rolId,
+                    Detalle.de("usuario", usuario.getUsuario(), "rol", rol.getNombre()));
+            return null;
+        }));
+        return ApiResponse.<Void>ok("Rol quitado.", null);
     }
 
     /** Roles del usuario. */
-    public Mono<ApiResponse<List<RolResponse>>> listarPorUsuario(Long usuarioId) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioRolService.listarPorUsuario", () -> {
-                            obtenerUsuario(usuarioId);
-                            return usuarioRolRepository.rolesDeUsuario(usuarioId).stream()
-                                    .map(RolResponse::of)
-                                    .toList();
-                        }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Roles del usuario.", lista));
+    public ApiResponse<List<RolResponse>> listarPorUsuario(Long usuarioId) {
+        var lista = Trazas.medir(log, "UsuarioRolService.listarPorUsuario", () -> {
+            obtenerUsuario(usuarioId);
+            return usuarioRolRepository.rolesDeUsuario(usuarioId).stream()
+                    .map(RolResponse::of)
+                    .toList();
+        });
+        return ApiResponse.ok("Roles del usuario.", lista);
     }
 
     /** Usuarios que tienen un rol (impacto antes de desactivarlo o quitarle permisos). */
-    public Mono<ApiResponse<List<UsuarioResponse>>> listarPorRol(Long rolId) {
+    public ApiResponse<List<UsuarioResponse>> listarPorRol(Long rolId) {
         Long actor = ActorActual.id();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioRolService.listarPorRol", () -> {
-                    if (!rolRepository.existsById(rolId)) {
-                        throw new RecursoNoEncontradoException("No existe el rol con id " + rolId + ".");
-                    }
-                    List<UsuarioResponse> lista = usuarioRolRepository.usuariosDeRol(rolId, Listas.limitado()).stream()
-                            .map(u -> UsuarioResponse.of(u,
-                                    protecciones.esUsuarioProtegido(u.getUsuario()) || u.getId().equals(actor)))
-                            .toList();
-                    Listas.avisarSiCorto(log, lista.size(), "UsuarioRolService.listarPorRol");
-                    return lista;
-                }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Usuarios con el rol.", lista));
+        var resultado = Trazas.medir(log, "UsuarioRolService.listarPorRol", () -> {
+            if (!rolRepository.existsById(rolId)) {
+                throw new RecursoNoEncontradoException("No existe el rol con id " + rolId + ".");
+            }
+            List<UsuarioResponse> lista = usuarioRolRepository.usuariosDeRol(rolId, Listas.limitado()).stream()
+                    .map(u -> UsuarioResponse.of(u,
+                            protecciones.esUsuarioProtegido(u.getUsuario()) || u.getId().equals(actor)))
+                    .toList();
+            Listas.avisarSiCorto(log, lista.size(), "UsuarioRolService.listarPorRol");
+            return lista;
+        });
+        return ApiResponse.ok("Usuarios con el rol.", resultado);
     }
 
     private Usuario obtenerUsuario(Long id) {

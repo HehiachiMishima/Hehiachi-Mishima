@@ -1,31 +1,28 @@
 <div class="login">
   <main id="contenido" class="login__panel" tabindex="-1">
-    <div class="login__card">
+    <div class="login__form-col">
+      <p class="login__marca">
+        <img src="logoImg.png" alt="" width="20" height="20" />
+        Hehiachi Mishima
+      </p>
+
       <header class="login__header">
-        <p class="login__product" aria-hidden="true">
-          <img src="logoImg.png" alt="" width="24" height="24" /> Hehiachi Mishima
-        </p>
         <h1>Iniciar sesión</h1>
         <p>Ingresa tus credenciales para continuar.</p>
       </header>
 
       @if (error()) {
-        <div class="login__alert" id="login-error" role="alert">
-          <ui-icon name="alertTriangle" [size]="18" />
-          <span>{{ error() }}</span>
-        </div>
+        <app-notice tone="danger" id="login-error">{{ error() }}</app-notice>
       }
 
       <form class="login__form" [formGroup]="formulario" (ngSubmit)="enviar()" novalidate>
         <div class="ui-field">
           <label class="ui-label" for="usuario">Usuario o correo electrónico</label>
           <div class="login__control">
-            <ui-icon name="user" [size]="18" class="login__control-icon" />
+            <ui-icon name="user" [size]="16" class="login__control-icon" />
             <input
               id="usuario"
               type="text"
-              class="ui-input"
-              [class.ui-input--invalid]="campoInvalido('usuario')"
               formControlName="usuario"
               autocomplete="username"
               placeholder="tu.usuario"
@@ -43,12 +40,10 @@
         <div class="ui-field">
           <label class="ui-label" for="contrasena">Contraseña</label>
           <div class="login__control">
-            <ui-icon name="permisos" [size]="18" class="login__control-icon" />
+            <ui-icon name="lock" [size]="16" class="login__control-icon" />
             <input
               id="contrasena"
               [type]="verContrasena() ? 'text' : 'password'"
-              class="ui-input"
-              [class.ui-input--invalid]="campoInvalido('contrasena')"
               formControlName="contrasena"
               autocomplete="current-password"
               placeholder="••••••••"
@@ -58,12 +53,12 @@
             />
             <button
               type="button"
-              class="login__toggle"
+              class="ui-icon-btn login__toggle"
               (click)="toggleContrasena()"
               aria-label="Mostrar contraseña"
               [attr.aria-pressed]="verContrasena()"
             >
-              <ui-icon [name]="verContrasena() ? 'eyeOff' : 'eye'" [size]="18" />
+              <ui-icon [name]="verContrasena() ? 'eyeOff' : 'eye'" [size]="16" />
             </button>
           </div>
           @if (campoInvalido('contrasena')) {
@@ -72,63 +67,47 @@
         </div>
 
         <button
+          appButton
           type="submit"
-          class="ui-btn ui-btn--primary ui-btn--lg ui-btn--block"
+          class="login__submit"
           [attr.aria-disabled]="cargando() || null"
           [attr.aria-describedby]="error() ? 'login-error' : null"
         >
           @if (cargando()) {
-            <span class="ui-spinner ui-spinner--sm login__spinner" aria-hidden="true"></span>
+            <span class="ui-spinner ui-spinner--sm" aria-hidden="true"></span>
             Verificando…
           } @else {
             Ingresar
-            <ui-icon name="login" [size]="18" />
+            <ui-icon name="login" [size]="16" />
           }
         </button>
       </form>
 
       <p class="login__nota">
-        <ui-icon name="lock" [size]="14" />
+        <ui-icon name="lock" [size]="16" />
         Acceso restringido y auditado: cada inicio de sesión queda registrado.
       </p>
     </div>
   </main>
 
-  <section class="login__brand" aria-label="Presentación">
-    <ui-light-pillar
-      aria-hidden="true"
-      [paused]="animacionPausada()"
-      topColor="#6366f1"
-      bottomColor="#e879f9"
-      [intensity]="0.75"
-      [rotationSpeed]="0.18"
-      [clickPulse]="false"
-      [interactive]="false"
-      [noiseIntensity]="0.3"
-      [pillarRotation]="18"
-      quality="medium"
-    />
-    <div class="login__brand-inner">
-      <span class="login__brand-mark"><img src="logoImg.png" alt="" width="28" height="28" /></span>
-      <p class="login__eyebrow">Control de accesos</p>
-      <p class="login__brand-title">Hehiachi Mishima</p>
-      <p class="login__brand-text">
-        Plataforma de control de accesos. Administra identidades, roles y permisos desde un solo lugar.
-      </p>
-      <ul class="login__features">
-        <li><ui-icon name="check" [size]="16" /> Control de acceso basado en permisos</li>
-        <li><ui-icon name="check" [size]="16" /> Gestión de usuarios y roles</li>
-        <li><ui-icon name="check" [size]="16" /> Trazabilidad completa de cada cambio</li>
-      </ul>
+  <section class="login__info" aria-labelledby="login-info-titulo">
+    <div class="login__info-inner">
+      <span class="login__eyebrow">Control de accesos</span>
+      <h2 id="login-info-titulo">Identidades, roles y permisos desde un solo lugar.</h2>
+      <dl class="login__kv">
+        <div>
+          <dt>Acceso</dt>
+          <dd>Basado en permisos, por rol y por usuario</dd>
+        </div>
+        <div>
+          <dt>Gestión</dt>
+          <dd>Usuarios, roles y catálogo de permisos</dd>
+        </div>
+        <div>
+          <dt>Trazabilidad</dt>
+          <dd>Bitácora inmutable de cada cambio</dd>
+        </div>
+      </dl>
     </div>
-    <button
-      type="button"
-      class="login__motion"
-      [attr.aria-pressed]="animacionPausada()"
-      (click)="alternarAnimacion()"
-    >
-      <ui-icon [name]="animacionPausada() ? 'play' : 'pause'" [size]="14" />
-      {{ animacionPausada() ? 'Reanudar animación' : 'Pausar animación' }}
-    </button>
   </section>
 </div>

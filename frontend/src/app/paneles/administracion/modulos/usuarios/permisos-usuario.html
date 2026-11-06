@@ -4,14 +4,14 @@
     concretos; una denegación siempre prevalece. <strong>Heredar</strong> elimina el ajuste individual.
   </p>
   @if (bloqueo(); as motivo) {
-    <p class="modal-hint" id="pu-bloqueo"><ui-icon name="lock" [size]="14" /> {{ motivo }}</p>
+    <app-notice tone="warning" id="pu-bloqueo" class="pu-bloqueo">{{ motivo }}</app-notice>
   }
 
   @if (cargando()) {
     <div class="loading" role="status"><span class="ui-spinner" aria-hidden="true"></span> Cargando permisos…</div>
   } @else if (error()) {
     <ui-empty icono="alerta" titulo="No se pudieron cargar los permisos" mensaje="Inténtalo de nuevo.">
-      <button type="button" class="ui-btn ui-btn--secondary ui-btn--sm" (click)="cargar()">
+      <button type="button" appButton variant="secondary" size="sm" (click)="cargar()">
         <ui-icon name="refresh" [size]="16" /> Reintentar
       </button>
     </ui-empty>
@@ -20,31 +20,20 @@
   } @else {
     <div class="perm-panel">
       <div class="perm-toolbar" role="search">
-        <div class="ui-search perm-toolbar__grow">
-          <ui-icon name="search" [size]="18" />
-          <input
-            type="search"
-            class="ui-input"
-            aria-label="Filtrar permisos del usuario"
-            placeholder="Buscar permiso…"
-            [value]="busqueda()"
-            (input)="busqueda.set($any($event.target).value)"
-          />
-        </div>
+        <app-search-field
+          label="Filtrar permisos del usuario"
+          placeholder="Buscar permiso…"
+          [value]="busqueda()"
+          (valueChange)="busqueda.set($event)"
+        />
       </div>
 
-      <div class="ui-chips" role="group" aria-label="Mostrar">
-        @for (opcion of filtros; track opcion.id) {
-          <button type="button" class="ui-chip" [attr.aria-pressed]="filtro() === opcion.id" (click)="filtro.set(opcion.id)">
-            {{ opcion.etiqueta }}
-          </button>
-        }
-      </div>
+      <app-segmented label="Mostrar" [options]="opcionesFiltro()" [(value)]="filtro" />
 
       <div class="perm-summary" role="status">
-        <span class="ui-badge ui-badge--brand">{{ totalPermitidos() }} permitidos</span>
-        <span class="ui-badge ui-badge--success">{{ totalConcedidos() }} concedidos individualmente</span>
-        <span class="ui-badge ui-badge--danger">{{ totalDenegados() }} denegados individualmente</span>
+        <app-badge tone="accent">{{ totalPermitidos() }} permitidos</app-badge>
+        <app-badge tone="success">{{ totalConcedidos() }} concedidos individualmente</app-badge>
+        <app-badge tone="danger">{{ totalDenegados() }} denegados individualmente</app-badge>
         <span>· {{ visibles().length }} en la lista</span>
       </div>
 
@@ -88,6 +77,6 @@
     </div>
   }
   <div modal-footer class="modal-foot">
-    <button type="button" class="ui-btn ui-btn--primary" (click)="cerrarModal()">Cerrar</button>
+    <button type="button" appButton (click)="cerrarModal()">Cerrar</button>
   </div>
 </ui-modal>

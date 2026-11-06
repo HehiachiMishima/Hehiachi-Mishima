@@ -26,8 +26,6 @@ import oracle.common.security.AutorizacionCache;
 import oracle.common.support.ActorActual;
 import oracle.common.support.Trazas;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /**
  * Overrides individuales (usuarios_permisos): otorgado=true es un grant y
@@ -68,114 +66,109 @@ public class UsuarioPermisoService {
     }
 
     /** Crear o actualizar el override del permiso para el usuario. */
-    public Mono<ApiResponse<UsuarioPermisoResponse>> otorgar(Long usuarioId, UsuarioPermisoOverrideRequest peticion) {
+    public ApiResponse<UsuarioPermisoResponse> otorgar(Long usuarioId, UsuarioPermisoOverrideRequest peticion) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioPermisoService.otorgar", () -> transacciones.ejecutar(() -> {
-                    Usuario usuario = obtenerUsuario(usuarioId);
-                    verificarNoProtegido(usuario);
-                    Protecciones.verificarNoAutoGestion(usuarioId, actor);
-                    Permiso permiso = permisoRepository.findById(peticion.permisoId())
-                            .orElseThrow(() -> new RecursoNoEncontradoException(
-                                    "No existe el permiso con id " + peticion.permisoId() + "."));
-                    guardia.exigirAutoridadSobre(actor, usuarioId);
-                    guardia.exigirPoseer(actor, List.of(permiso.getNombre()));
+        return Trazas.medir(log, "UsuarioPermisoService.otorgar", () -> transacciones.ejecutar(() -> {
+            Usuario usuario = obtenerUsuario(usuarioId);
+            verificarNoProtegido(usuario);
+            Protecciones.verificarNoAutoGestion(usuarioId, actor);
+            Permiso permiso = permisoRepository.findById(peticion.permisoId())
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
+                            "No existe el permiso con id " + peticion.permisoId() + "."));
+            guardia.exigirAutoridadSobre(actor, usuarioId);
+            guardia.exigirPoseer(actor, List.of(permiso.getNombre()));
 
-                    boolean otorgado = peticion.otorgado();
-                    UsuarioPermiso override = usuarioPermisoRepository
-                            .findByUsuarioIdAndPermisoId(usuarioId, permiso.getId())
-                            .orElse(null);
-                    Map<String, Object> antes = override == null ? null : Detalle.de("otorgado", override.getOtorgado());
-                    LocalDateTime ahora = LocalDateTime.now();
+            boolean otorgado = peticion.otorgado();
+            UsuarioPermiso override = usuarioPermisoRepository
+                    .findByUsuarioIdAndPermisoId(usuarioId, permiso.getId())
+                    .orElse(null);
+            Map<String, Object> antes = override == null ? null : Detalle.de("otorgado", override.getOtorgado());
+            LocalDateTime ahora = LocalDateTime.now();
 
-                    String mensaje;
-                    if (override == null) {
-                        override = new UsuarioPermiso();
-                        override.setUsuario(usuario);
-                        override.setPermiso(permiso);
-                        override.setCreadoPor(actor);
-                        override.setCreadoEn(ahora);
-                        mensaje = otorgado ? "Permiso concedido al usuario." : "Permiso denegado al usuario.";
-                    } else {
-                        mensaje = otorgado
-                                ? "Ajuste actualizado: el permiso queda concedido."
-                                : "Ajuste actualizado: el permiso queda denegado.";
-                    }
-                    override.setOtorgado(otorgado);
-                    override.setActualizadoPor(actor);
-                    override.setActualizadoEn(ahora);
-                    usuarioPermisoRepository.save(override);
-                    autorizacionCache.invalidar(usuarioId);
+            String mensaje;
+            if (override == null) {
+                override = new UsuarioPermiso();
+                override.setUsuario(usuario);
+                override.setPermiso(permiso);
+                override.setCreadoPor(actor);
+                override.setCreadoEn(ahora);
+                mensaje = otorgado ? "Permiso concedido al usuario." : "Permiso denegado al usuario.";
+            } else {
+                mensaje = otorgado
+                        ? "Ajuste actualizado: el permiso queda concedido."
+                        : "Ajuste actualizado: el permiso queda denegado.";
+            }
+            override.setOtorgado(otorgado);
+            override.setActualizadoPor(actor);
+            override.setActualizadoEn(ahora);
+            usuarioPermisoRepository.save(override);
+            autorizacionCache.invalidar(usuarioId);
 
-                    Map<String, Object> despues = Detalle.de("usuario", usuario.getUsuario(),
-                            "permiso", permiso.getNombre(), "otorgado", otorgado);
-                    auditoria.exito(ctx, AccionAuditoria.OVERRIDE_ESTABLECIDO, EntidadAuditoria.USUARIO_PERMISO,
-                            usuarioId + ":" + permiso.getId(), Detalle.cambio(antes, despues));
-                    return ApiResponse.ok(mensaje, UsuarioPermisoResponse.of(override));
-                })))
-                .subscribeOn(Schedulers.boundedElastic());
+            Map<String, Object> despues = Detalle.de("usuario", usuario.getUsuario(),
+                    "permiso", permiso.getNombre(), "otorgado", otorgado);
+            auditoria.exito(ctx, AccionAuditoria.OVERRIDE_ESTABLECIDO, EntidadAuditoria.USUARIO_PERMISO,
+                    usuarioId + ":" + permiso.getId(), Detalle.cambio(antes, despues));
+            return ApiResponse.ok(mensaje, UsuarioPermisoResponse.of(override));
+        }));
     }
 
     /** Eliminar el override y volver al calculo por rol. */
-    public Mono<ApiResponse<Void>> eliminar(Long usuarioId, Long permisoId) {
+    public ApiResponse<Void> eliminar(Long usuarioId, Long permisoId) {
         Long actor = ActorActual.id();
         ContextoAuditoria ctx = ContextoAuditoria.actual();
-        return Mono.<Void>fromRunnable(() -> Trazas.medir(log, "UsuarioPermisoService.eliminar", () -> transacciones.ejecutar(() -> {
-                    Usuario usuario = obtenerUsuario(usuarioId);
-                    verificarNoProtegido(usuario);
-                    Protecciones.verificarNoAutoGestion(usuarioId, actor);
-                    UsuarioPermiso override = usuarioPermisoRepository.findByUsuarioIdAndPermisoId(usuarioId, permisoId)
-                            .orElseThrow(() -> new RecursoNoEncontradoException(
-                                    "El usuario no tiene un ajuste individual para el permiso con id " + permisoId + "."));
-                    String nombrePermiso = override.getPermiso().getNombre();
-                    guardia.exigirAutoridadSobre(actor, usuarioId);
-                    guardia.exigirPoseer(actor, List.of(nombrePermiso));
-                    Map<String, Object> antes = Detalle.de("usuario", usuario.getUsuario(),
-                            "permiso", nombrePermiso, "otorgado", override.getOtorgado());
-                    usuarioPermisoRepository.eliminarPar(usuarioId, permisoId);
-                    autorizacionCache.invalidar(usuarioId);
-                    auditoria.exito(ctx, AccionAuditoria.OVERRIDE_ELIMINADO, EntidadAuditoria.USUARIO_PERMISO,
-                            usuarioId + ":" + permisoId, Detalle.baja(antes));
-                    return null;
-                })))
-                .subscribeOn(Schedulers.boundedElastic())
-                .then(Mono.fromSupplier(() -> ApiResponse.<Void>ok("Ajuste individual eliminado.", null)));
+        Trazas.medir(log, "UsuarioPermisoService.eliminar", () -> transacciones.ejecutar(() -> {
+            Usuario usuario = obtenerUsuario(usuarioId);
+            verificarNoProtegido(usuario);
+            Protecciones.verificarNoAutoGestion(usuarioId, actor);
+            UsuarioPermiso override = usuarioPermisoRepository.findByUsuarioIdAndPermisoId(usuarioId, permisoId)
+                    .orElseThrow(() -> new RecursoNoEncontradoException(
+                            "El usuario no tiene un ajuste individual para el permiso con id " + permisoId + "."));
+            String nombrePermiso = override.getPermiso().getNombre();
+            guardia.exigirAutoridadSobre(actor, usuarioId);
+            guardia.exigirPoseer(actor, List.of(nombrePermiso));
+            Map<String, Object> antes = Detalle.de("usuario", usuario.getUsuario(),
+                    "permiso", nombrePermiso, "otorgado", override.getOtorgado());
+            usuarioPermisoRepository.eliminarPar(usuarioId, permisoId);
+            autorizacionCache.invalidar(usuarioId);
+            auditoria.exito(ctx, AccionAuditoria.OVERRIDE_ELIMINADO, EntidadAuditoria.USUARIO_PERMISO,
+                    usuarioId + ":" + permisoId, Detalle.baja(antes));
+            return null;
+        }));
+        return ApiResponse.<Void>ok("Ajuste individual eliminado.", null);
     }
 
     /** Overrides del usuario (grant y deny). */
-    public Mono<ApiResponse<List<UsuarioPermisoResponse>>> listarPorUsuario(Long usuarioId) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioPermisoService.listarPorUsuario", () -> {
-                    obtenerUsuario(usuarioId);
-                    return usuarioPermisoRepository.deUsuario(usuarioId).stream()
-                            .map(UsuarioPermisoResponse::of)
-                            .toList();
-                }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Ajustes individuales del usuario.", lista));
+    public ApiResponse<List<UsuarioPermisoResponse>> listarPorUsuario(Long usuarioId) {
+        var lista = Trazas.medir(log, "UsuarioPermisoService.listarPorUsuario", () -> {
+            obtenerUsuario(usuarioId);
+            return usuarioPermisoRepository.deUsuario(usuarioId).stream()
+                    .map(UsuarioPermisoResponse::of)
+                    .toList();
+        });
+        return ApiResponse.ok("Ajustes individuales del usuario.", lista);
     }
 
     /** Solo los overrides deny (otorgado=FALSE). */
-    public Mono<ApiResponse<List<UsuarioPermisoResponse>>> listarDenegados(Long usuarioId) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioPermisoService.listarDenegados", () -> {
-                    obtenerUsuario(usuarioId);
-                    return usuarioPermisoRepository.deUsuarioPorTipo(usuarioId, Boolean.FALSE).stream()
-                            .map(UsuarioPermisoResponse::of)
-                            .toList();
-                }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Permisos denegados al usuario.", lista));
+    public ApiResponse<List<UsuarioPermisoResponse>> listarDenegados(Long usuarioId) {
+        var lista = Trazas.medir(log, "UsuarioPermisoService.listarDenegados", () -> {
+            obtenerUsuario(usuarioId);
+            return usuarioPermisoRepository.deUsuarioPorTipo(usuarioId, Boolean.FALSE).stream()
+                    .map(UsuarioPermisoResponse::of)
+                    .toList();
+        });
+        return ApiResponse.ok("Permisos denegados al usuario.", lista);
     }
 
     /** Permisos (entidad) sobre los que el usuario tiene un override. */
-    public Mono<ApiResponse<List<PermisoResponse>>> permisosConOverride(Long usuarioId) {
-        return Mono.fromCallable(() -> Trazas.medir(log, "UsuarioPermisoService.permisosConOverride", () -> {
-                    obtenerUsuario(usuarioId);
-                    return usuarioPermisoRepository.deUsuario(usuarioId).stream()
-                            .map(up -> PermisoResponse.of(up.getPermiso()))
-                            .toList();
-                }))
-                .subscribeOn(Schedulers.boundedElastic())
-                .map(lista -> ApiResponse.ok("Permisos con ajuste individual del usuario.", lista));
+    public ApiResponse<List<PermisoResponse>> permisosConOverride(Long usuarioId) {
+        var lista = Trazas.medir(log, "UsuarioPermisoService.permisosConOverride", () -> {
+            obtenerUsuario(usuarioId);
+            return usuarioPermisoRepository.deUsuario(usuarioId).stream()
+                    .map(up -> PermisoResponse.of(up.getPermiso()))
+                    .toList();
+        });
+        return ApiResponse.ok("Permisos con ajuste individual del usuario.", lista);
     }
 
     private Usuario obtenerUsuario(Long id) {

@@ -32,7 +32,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Base de las pruebas de la API: arranca la aplicacion completa en un puerto
  * aleatorio (filtros, seguridad, dispatch async de Mono, Tomcat real) contra el
- * MySQL 8.4 de {@link BaseDatosPrueba}, y ofrece un cliente HTTP minimo.
+ * PostgreSQL 17 de {@link BaseDatosPrueba}, y ofrece un cliente HTTP minimo.
  *
  * Todas las clases que heredan comparten la MISMA configuracion, de modo que
  * Spring reutiliza un unico contexto. Cada prueba crea sus propios datos con

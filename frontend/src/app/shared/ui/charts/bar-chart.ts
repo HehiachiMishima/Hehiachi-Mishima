@@ -31,63 +31,69 @@ export interface BarraDato {
     </div>
   `,
   styles: `
-    :host { display: block; }
+    @use 'design' as d;
 
+    :host {
+      display: block;
+    }
+
+    // Marco plano: rejilla de 1 px, ejes en mono, barras sin radio.
     .bars {
       display: flex;
       align-items: stretch;
-      gap: var(--space-2);
-      padding-top: var(--space-2);
+      gap: d.space('2');
+      padding-top: d.space('2');
+      @include d.type('mono-00');
+      color: d.color('text-muted');
     }
 
     .bars__col {
-      flex: 1;
-      min-width: 0;
       display: flex;
+      flex: 1;
       flex-direction: column;
       align-items: center;
-      gap: var(--space-2);
+      gap: d.space('2');
+      min-width: 0;
     }
 
     .bars__value {
-      font-size: var(--fs-sm);
-      font-weight: var(--fw-semibold);
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
+      @include d.tabular-nums;
+      color: d.color('text-strong');
     }
 
     .bars__track {
-      flex: 1;
-      width: 100%;
-      max-width: 40px;
       display: flex;
+      flex: 1;
       align-items: flex-end;
-      border-bottom: 1px solid var(--border-strong);
+      width: 100%;
+      max-width: 2.5rem;
+      border-bottom: 1px solid d.color('chart-grid');
     }
 
     .bars__fill {
       width: 100%;
-      border-radius: var(--radius-xs) var(--radius-xs) 0 0;
       transform-origin: bottom;
-      animation: bar-grow 700ms var(--ease-out) both;
+      transition: filter d.motion('fast') d.motion('easing');
+
+      @include d.motion-safe {
+        animation: bar-grow 600ms d.motion('easing') both;
+      }
     }
 
-    .bars__col:hover .bars__fill { filter: brightness(1.12) saturate(1.1); }
+    .bars__col:hover .bars__fill {
+      filter: brightness(0.85);
+    }
 
     .bars__label {
-      font-size: var(--fs-xs);
-      font-weight: var(--fw-medium);
-      color: var(--text-3);
-      text-align: center;
       max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      text-align: center;
+      @include d.truncate;
     }
 
     @keyframes bar-grow {
-      from { transform: scaleY(0); }
-      to { transform: scaleY(1); }
+      from {
+        transform: scaleY(0);
+      }
     }
   `,
 })

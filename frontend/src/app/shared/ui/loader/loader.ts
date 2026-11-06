@@ -9,60 +9,77 @@ import { Carga } from '../../../core/services/carga';
     @if (carga.visible()) {
       <div class="loader" aria-hidden="true">
         <div class="loader__box">
-          <span class="loader__ring"></span>
+          <span class="loader__barra"></span>
           <p class="loader__text">{{ carga.texto() }}</p>
         </div>
       </div>
     }
   `,
   styles: `
-    :host { display: contents; }
+    @use 'design' as d;
+
+    :host {
+      display: contents;
+    }
 
     .loader {
       position: fixed;
       inset: 0;
-      z-index: var(--z-loader);
+      z-index: d.z('toast');
       display: grid;
       place-items: center;
-      background: color-mix(in srgb, var(--bg) 78%, transparent);
-      backdrop-filter: blur(8px);
-      animation: loader-fade var(--transition) both;
+      background: d.color('overlay');
+
+      @include d.motion-safe {
+        animation: loader-fade d.motion('normal') d.motion('easing') both;
+      }
     }
 
     .loader__box {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--space-5);
-      padding: var(--space-8) var(--space-10);
-      animation: loader-pop var(--transition-slow) both;
+      display: grid;
+      gap: d.space('3');
+      width: min(20rem, calc(100vw - #{d.space('8')}));
+      padding: d.space('6');
+      background: d.color('surface');
+      border: 1px solid d.color('border');
+      box-shadow: d.shadow('lg');
     }
 
-    .loader__ring {
-      width: 96px;
-      height: 96px;
-      border-radius: 50%;
-      border: 3px solid transparent;
-      border-top-color: var(--brand);
-      border-right-color: color-mix(in srgb, var(--brand) 35%, transparent);
-      animation: ui-spin 0.9s linear infinite;
+    // Progreso indeterminado de 2 px, sin radio.
+    .loader__barra {
+      position: relative;
+      height: 2px;
+      overflow: hidden;
+      background: d.color('progress-track');
+
+      &::after {
+        content: '';
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 40%;
+        background: d.color('progress-fill');
+        animation: loader-avance 1.1s ease-in-out infinite;
+      }
     }
 
     .loader__text {
-      font-size: var(--fs-md);
-      font-weight: 600;
-      color: var(--text-2);
+      @include d.type('body-01');
+      color: d.color('text');
     }
 
     @keyframes loader-fade {
-      from { opacity: 0; }
-      to { opacity: 1; }
+      from {
+        opacity: 0;
+      }
     }
 
-    @keyframes loader-pop {
-      from { opacity: 0; transform: translateY(8px) scale(0.96); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
+    @keyframes loader-avance {
+      from {
+        transform: translateX(-100%);
+      }
+      to {
+        transform: translateX(250%);
+      }
     }
   `,
 })

@@ -11,12 +11,13 @@ import { Icon } from '../../../../shared/ui/icon/icon';
 import { Modal } from '../../../../shared/ui/modal/modal';
 import { RequisitosContrasena } from '../../../../shared/ui/requisitos/requisitos-contrasena';
 import { formatearLogin } from '../../../../shared/util/formato';
+import { Button } from '../../../../shared/ui/button/button';
 
 /** Restablece la contraseña de otro usuario: acción de seguridad explícita y confirmada. */
 @Component({
   selector: 'app-restablecer-contrasena',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, Modal, Icon, RequisitosContrasena],
+  imports: [ReactiveFormsModule, Modal, Icon, RequisitosContrasena, Button],
   template: `
     <ui-modal [abierto]="!!usuario()" titulo="Restablecer contraseña" [subtitulo]="subtitulo()" (cerrar)="cerrar.emit()">
       <p class="modal-hint">
@@ -45,14 +46,14 @@ import { formatearLogin } from '../../../../shared/util/formato';
             <span class="ui-error" id="rc-confirmar-error">Las contraseñas no coinciden.</span>
           }
         </div>
-        <button type="button" class="ui-btn ui-btn--ghost ui-btn--sm" [attr.aria-pressed]="visible()" (click)="visible.update((v) => !v)">
+        <button type="button" appButton variant="ghost" size="sm" [attr.aria-pressed]="visible()" (click)="visible.update((v) => !v)">
           <ui-icon [name]="visible() ? 'eyeOff' : 'eye'" [size]="16" />
           Mostrar contraseñas
         </button>
       </form>
       <div modal-footer class="modal-foot">
-        <button type="button" class="ui-btn ui-btn--ghost" (click)="cerrar.emit()">Cancelar</button>
-        <button type="submit" form="form-restablecer" class="ui-btn ui-btn--danger" [attr.aria-disabled]="guardando() || null">
+        <button type="button" appButton variant="ghost" (click)="cerrar.emit()">Cancelar</button>
+        <button type="submit" form="form-restablecer" appButton variant="danger" [attr.aria-disabled]="guardando() || null">
           @if (guardando()) { <span class="ui-spinner ui-spinner--sm" aria-hidden="true"></span> }
           Restablecer contraseña
         </button>

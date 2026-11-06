@@ -1,365 +1,137 @@
-@use 'breakpoints' as bp;
+@use 'design' as d;
 
-/**
- * Login ejecutivo: formulario en tarjeta de cristal sobre la aurora global y panel de marca
- * a la izquierda (solo ≥1024 px) con degradado nocturno índigo → violeta,
- * resplandores de color y la columna de luz WebGL atenuada y pausable.
- * En el DOM el formulario va primero (orden de lectura y de tabulación).
- */
+// Login plano: formulario a la izquierda sobre la página y, en escritorio, un panel
+// informativo gris a la derecha. En el DOM el formulario va primero (lectura y tabulación).
+
 .login {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: 100dvh;
+  background: d.color('bg');
 
-  @include bp.up(lg) {
-    grid-template-columns: minmax(440px, 1fr) minmax(0, 1fr);
+  @include d.bp('lg') {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
-/* ===================== Panel de marca ===================== */
-.login__brand {
-  --focus: var(--noche-focus);
-
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  display: none;
-  flex-direction: column;
-  justify-content: center;
-  padding: var(--space-16) clamp(var(--space-10), 5vw, var(--space-16));
-  background:
-    radial-gradient(520px 420px at 0% 0%, rgba(99, 102, 241, 0.55), transparent 65%),
-    radial-gradient(480px 420px at 100% 100%, rgba(192, 38, 211, 0.45), transparent 65%),
-    radial-gradient(360px 300px at 85% 10%, rgba(34, 211, 238, 0.28), transparent 70%),
-    linear-gradient(150deg, #0b1022 0%, #1e1b4b 48%, #3b0f5c 100%);
-  color: var(--noche-fg);
-
-  @include bp.up(lg) {
-    display: flex;
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  /* Rejilla fina que da textura y profundidad. */
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-    background-size: 44px 44px;
-    mask-image: radial-gradient(ellipse 80% 70% at 30% 40%, #000 30%, transparent 80%);
-  }
-
-  /* Velo que mantiene el texto legible sobre la luz. */
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background: linear-gradient(90deg, rgba(11, 16, 34, 0.72) 0%, rgba(11, 16, 34, 0.35) 55%, transparent 100%);
-  }
-
-  ui-light-pillar {
-    opacity: 0.55;
-    mix-blend-mode: screen;
-  }
-}
-
-.login__brand-inner {
-  position: relative;
-  z-index: 1;
-  max-width: 460px;
-}
-
-.login__brand-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  margin-bottom: var(--space-8);
-  padding: 6px;
-  border-radius: var(--radius-lg);
-  background: #ffffff;
-  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.08), 0 16px 40px -10px rgba(99, 102, 241, 0.8);
-
-  img { width: 100%; height: 100%; object-fit: contain; }
-}
-
-.login__eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 4px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.07);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-bold);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-caps);
-  color: #e0e7ff;
-
-  &::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #22d3ee;
-    box-shadow: 0 0 10px 2px rgba(34, 211, 238, 0.8);
-  }
-}
-
-.login__brand-title {
-  margin-top: var(--space-4);
-  font-family: var(--font-display);
-  font-weight: var(--fw-heavy);
-  line-height: 1.08;
-  font-size: clamp(2.25rem, 3.2vw, 3.25rem);
-  letter-spacing: -0.035em;
-  color: #ffffff;
-  background: linear-gradient(90deg, #ffffff 0%, #e0e7ff 45%, #f5d0fe 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.login__brand-text {
-  margin-top: var(--space-4);
-  font-size: var(--fs-base);
-  line-height: 1.65;
-  color: var(--noche-fg);
-}
-
-.login__features {
-  margin-top: var(--space-8);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-
-  li {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    border-radius: var(--radius-lg);
-    background: rgba(255, 255, 255, 0.05);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
-    font-size: var(--fs-md);
-    font-weight: var(--fw-medium);
-    color: #e6e9f7;
-  }
-
-  ui-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: var(--radius-sm);
-    background: var(--grad-accent);
-    color: #ffffff;
-    box-shadow: 0 6px 14px -6px rgba(124, 58, 237, 0.9);
-    flex: none;
-  }
-}
-
-.login__motion {
-  position: absolute;
-  left: clamp(var(--space-10), 5vw, var(--space-16));
-  bottom: var(--space-6);
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--control-h-sm);
-  padding: 0 var(--space-3);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: var(--radius-pill);
-  background: rgba(11, 16, 34, 0.55);
-  color: var(--noche-fg);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-medium);
-  cursor: pointer;
-  transition: color var(--transition-fast), background var(--transition-fast);
-
-  &:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.1);
-  }
-}
-
-/* ===================== Formulario ===================== */
 .login__panel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: calc(var(--space-8) + var(--safe-top)) max(var(--space-4), var(--safe-right))
-    calc(var(--space-8) + var(--safe-bottom)) max(var(--space-4), var(--safe-left));
+  display: grid;
+  place-items: center;
+  padding: d.space('8') d.space('4');
 
-  @include bp.up(lg) {
-    grid-column: 2;
-    grid-row: 1;
-    padding: var(--space-12);
+  @include d.bp('md') {
+    padding: d.space('12');
   }
-
-  &:focus { outline: none; }
 }
 
-.login__card {
+.login__form-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: d.space('6');
   width: 100%;
-  position: relative;
-  max-width: 420px;
-  padding: var(--space-10) var(--space-8) var(--space-8);
-  background: var(--glass-sheen), var(--surface-modal);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-2xl);
-  box-shadow: 0 0 0 1px var(--glass-ring), var(--shadow-lg), var(--glass-highlight);
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
-  overflow: hidden;
-  animation: ui-rise var(--transition-slow) both;
-
-  /* Filete de aurora superior. */
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto;
-    height: 4px;
-    background: var(--grad-aurora);
-  }
-
-  @include bp.down(sm) {
-    padding: var(--space-8) var(--space-5) var(--space-6);
-  }
+  max-width: 25rem;
 }
 
-.login__product {
-  display: flex;
+.login__marca {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-6);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-  color: var(--text);
-
-  img {
-    width: 32px;
-    height: 32px;
-    padding: 3px;
-    border-radius: var(--radius);
-    background: #ffffff;
-    box-shadow: 0 6px 14px -6px rgba(79, 70, 229, 0.6), 0 0 0 1px rgba(79, 70, 229, 0.18);
-  }
-
-  @include bp.up(lg) {
-    display: none;
-  }
+  gap: d.space('2');
+  @include d.eyebrow;
+  color: d.color('text-strong');
 }
 
 .login__header {
-  h1 {
-    font-size: var(--fs-2xl);
-    font-weight: var(--fw-heavy);
-    letter-spacing: var(--tracking-display);
+  display: grid;
+  gap: d.space('2');
+  padding-bottom: d.space('6');
+  border-bottom: 1px solid d.color('border');
+
+  p {
+    color: d.color('text-muted');
   }
-
-  p:not(.login__product) {
-    margin-top: var(--space-1);
-    color: var(--text-2);
-    font-size: var(--fs-md);
-  }
-}
-
-.login__alert {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin-top: var(--space-5);
-  padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
-  border-radius: var(--radius);
-  background: var(--danger-soft);
-  color: var(--danger);
-  font-size: var(--fs-md);
-  font-weight: var(--fw-medium);
-  animation: ui-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
-
-  ui-icon { flex: none; margin-top: 1px; }
 }
 
 .login__form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  margin-top: var(--space-6);
-
-  .ui-btn { margin-top: var(--space-2); }
+  display: grid;
+  gap: d.space('5');
 }
 
 .login__control {
   position: relative;
-  display: flex;
-  align-items: center;
 
-  ui-icon.login__control-icon {
-    position: absolute;
-    left: var(--space-3);
-    color: var(--text-3);
-    pointer-events: none;
+  input {
+    padding-left: 2.25rem;
   }
 
-  .ui-input {
-    min-height: var(--control-h-lg);
-    padding-left: 38px;
-    padding-right: 44px;
+  input[type='password'],
+  input#contrasena {
+    padding-right: d.layout('control-height');
   }
+}
+
+.login__control-icon {
+  position: absolute;
+  top: 50%;
+  left: d.space('3');
+  transform: translateY(-50%);
+  color: d.color('text-faint');
+  pointer-events: none;
 }
 
 .login__toggle {
   position: absolute;
-  right: var(--space-1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--icon-btn);
-  height: var(--icon-btn);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-3);
-  cursor: pointer;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  top: 50%;
+  right: d.space('1');
+  transform: translateY(-50%);
 
-  &:hover {
-    color: var(--text);
-    background: var(--surface-3);
+  ui-icon {
+    color: d.color('text-muted');
   }
 }
 
-.login__spinner {
-  border-color: color-mix(in srgb, var(--brand-contrast) 40%, transparent);
-  border-top-color: var(--brand-contrast);
+.login__submit {
+  width: 100%;
+  margin-top: d.space('2');
 }
 
 .login__nota {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
-  margin-top: var(--space-6);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-snug);
-  color: var(--text-3);
+  gap: d.space('2');
+  @include d.type('body-01');
+  color: d.color('text-muted');
 
-  ui-icon { flex: none; margin-top: 1px; }
+  ui-icon {
+    margin-top: 2px;
+    color: d.color('text-faint');
+  }
+}
+
+// ---------- Panel informativo (solo escritorio) ----------
+.login__info {
+  display: none;
+  padding: d.space('12');
+  background: d.color('surface-muted');
+  border-left: 1px solid d.color('border');
+
+  @include d.bp('lg') {
+    display: grid;
+    align-content: center;
+  }
+}
+
+.login__info-inner {
+  display: grid;
+  gap: d.space('4');
+  max-width: 30rem;
+}
+
+.login__eyebrow {
+  @include d.eyebrow;
+}
+
+.login__kv {
+  @include d.kv-list;
+  margin-top: d.space('4');
+  border-top: 1px solid d.color('border');
 }
