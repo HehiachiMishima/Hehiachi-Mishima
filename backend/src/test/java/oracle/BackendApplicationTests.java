@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * El contexto completo arranca contra el PostgreSQL efimero (Testcontainers);
- * Flyway aplica las migraciones y el usuario semilla queda creado.
+ * schema.sql se aplica al crear el contenedor y el usuario semilla queda creado.
  */
 class BackendApplicationTests extends ApiPrueba {
 

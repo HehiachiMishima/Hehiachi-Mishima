@@ -13,15 +13,16 @@ import org.springframework.stereotype.Component;
  * Validar aqui = fallar con 403 limpio antes de que PostgreSQL lance SQLSTATE RB403.
  *
  * Usuarios protegidos (sin update, delete ni cambios de rol/permisos desde la
- * administracion), por configuracion:
+ * administracion):
  * <ul>
- *   <li>{@link #USUARIO_RAIZ} (@hehiachi): protegido TAMBIEN en la BD
- *       (trigger usuarios_proteger_raiz, migracion V2); ni siquiera puede cambiar su contrasena.</li>
- *   <li>el usuario semilla (app.seed.usuario, p. ej. @admin) y los de
- *       app.seguridad.usuarios-protegidos: protegidos solo en la aplicacion.</li>
+ *   <li>{@link #USUARIO_RAIZ} (@hehiachi): ademas, la aplicacion no le deja
+ *       cambiar su propia contrasena (solo la cambia el DBA).</li>
+ *   <li>el usuario semilla (app.seed.usuario) y los de
+ *       app.seguridad.usuarios-protegidos.</li>
  * </ul>
- * Las comparaciones no distinguen mayusculas, igual que la collation
- * los indices unicos lower(...) de PostgreSQL y los triggers.
+ * En la BD, seguridad.es_usuario_protegido() protege por nombre a @admin y
+ * @hehiachi (schema.sql). Si el usuario semilla no se llama @admin, solo lo
+ * protege la aplicacion. Las comparaciones no distinguen mayusculas.
  */
 @Component
 public class Protecciones {
@@ -29,7 +30,7 @@ public class Protecciones {
     /**
      * Permisos base: inmutables. No se pueden modificar (ni siquiera su campo
      * 'activo') ni eliminar, ni ocupar su nombre. Espejo de
-     * app.es_permiso_base() en V2__protecciones.sql (14 de gestion + PANEL_ADMIN +
+     * seguridad.es_permiso_base() de schema.sql (14 de gestion + PANEL_ADMIN +
      * DASHBOARD_ADMIN + VER_AUDITORIA).
      */
     public static final Set<String> PERMISOS_BASE = Set.of(
@@ -41,7 +42,7 @@ public class Protecciones {
     /** Rol que solo recibe permisos: no se modifica ni se elimina. */
     public static final String ROL_ADMINISTRADOR = "ADMINISTRADOR";
 
-    /** Usuario protegido por los triggers de la migracion V2. */
+    /** Usuario raiz: protegido tambien en la BD (trigger trg_usuarios_proteger). */
     public static final String USUARIO_RAIZ = "@hehiachi";
 
     private final Set<String> usuariosProtegidos;

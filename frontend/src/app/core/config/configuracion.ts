@@ -8,7 +8,6 @@ export const CONFIG = {
   almacenamiento: {
     sesion: 'oracle.sesion',
     tema: 'oracle.tema',
-    animacionPausada: 'oracle.animacion-pausada',
   },
   rutas: {
     login: '/login',

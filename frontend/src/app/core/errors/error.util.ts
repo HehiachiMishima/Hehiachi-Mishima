@@ -46,8 +46,3 @@ export function camposDeError(err: unknown): Record<string, string> {
 export function idCorrelacionDe(err: unknown): string | null {
   return err instanceof HttpErrorResponse ? err.headers?.get('X-Request-Id') ?? null : null;
 }
-
-/** true si el backend respondió 403 (acceso denegado u operación no permitida). */
-export function esAccesoDenegado(err: unknown): boolean {
-  return err instanceof HttpErrorResponse && err.status === 403;
-}

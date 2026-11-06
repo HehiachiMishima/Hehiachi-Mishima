@@ -21,8 +21,8 @@ import tools.jackson.databind.ObjectMapper;
  * Acceso a auditoria_eventos con JdbcTemplate: insercion por lotes (append-only,
  * sin entidad JPA que pueda emitir UPDATE; reWriteBatchedInserts la convierte
  * en un unico INSERT multi-fila) y lecturas con WHERE dinamico.
- * Orden canonico: ocurrido_en DESC, id DESC (Merge Append ordenado sobre el
- * indice de cada particion mensual, sin Sort).
+ * Orden canonico: ocurrido_en DESC, id DESC (sale de idx_auditoria_ocurrido,
+ * sin Sort).
  */
 @Repository
 class AuditoriaRepository {
@@ -69,7 +69,7 @@ class AuditoriaRepository {
         });
     }
 
-    /** Pagina por OFFSET en el orden canonico (las particiones fuera del rango se podan). */
+    /** Pagina por OFFSET en el orden canonico. */
     List<AuditoriaEventoResponse> pagina(CondicionSql condicion, int offset, int limite) {
         String sql = "SELECT " + COLUMNAS + " FROM auditoria_eventos e " + condicion.where()
                 + " ORDER BY e.ocurrido_en DESC, e.id DESC LIMIT ? OFFSET ?";
@@ -97,7 +97,7 @@ class AuditoriaRepository {
         List<Object> args = new ArrayList<>(condicion.args());
         String where = condicion.where();
         if (ts != null) {
-            // Comparacion de filas: (ocurrido_en, id) < (ts, id) con poda de particiones por ocurrido_en <= ts.
+            // Comparacion de filas (ocurrido_en, id) < (ts, id); ocurrido_en <= ts acota el rango del indice.
             where = condicion.y("ocurrido_en <= ? AND (ocurrido_en, id) < (?, ?)");
             OffsetDateTime t = OffsetDateTime.ofInstant(ts, ZoneOffset.UTC);
             args.add(t);

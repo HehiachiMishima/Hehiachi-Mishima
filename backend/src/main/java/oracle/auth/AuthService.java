@@ -135,7 +135,7 @@ public class AuthService {
             }
             if (Protecciones.esUsuarioRaiz(usuario.getUsuario())) {
                 throw new OperacionNoPermitidaException("La contraseña de " + Protecciones.USUARIO_RAIZ
-                        + " está protegida en la base de datos y no se puede cambiar desde la aplicación.");
+                        + " no se puede cambiar desde la aplicación.");
             }
             if (!passwordEncoder.matches(peticion.contrasenaActual(), usuario.getContrasena())) {
                 auditoria.registrar(ctx, AccionAuditoria.CONTRASENA_CAMBIADA, EntidadAuditoria.USUARIO,

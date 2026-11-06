@@ -17,8 +17,13 @@ import { ToastHost } from './shared/ui/toast/toast-host';
 export class App {
   protected readonly anunciador = inject(Anunciador);
   protected readonly carga = inject(Carga);
-  private readonly tema = inject(TemaService);
-  private readonly vigilante = inject(SesionVigilante);
+
+  constructor() {
+    // Se instancian al arrancar por sus efectos: aplicar el tema guardado y
+    // vigilar el vencimiento de la sesión. No se usan desde la plantilla.
+    inject(TemaService);
+    inject(SesionVigilante);
+  }
 
   /** Lleva el foco al contenido principal sin alterar la URL del router. */
   saltarAlContenido(evento: Event): void {

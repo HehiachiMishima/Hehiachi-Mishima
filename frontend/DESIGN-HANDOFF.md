@@ -42,8 +42,8 @@ Especificación de implementación del rediseño visual y estructural del fronte
 | Menú | `[appMenu]`, `[appMenuItem]`, `app-menu-separator` | skill (CDK Menu) | Menús ⋯ por fila, cuenta, conmutador de panel. |
 | Búsqueda | `app-search-field` | skill | `label` obligatorio (oculto), `[value]` + `(valueChange)`. |
 | Segmentado | `app-segmented` | skill | Filtros excluyentes (radiogroup). |
-| Pestañas de ruta | `app-tabs` | skill | Disponible; el detalle de usuario usa pestañas en página (`.ui-tabs`) con el mismo estilo. |
-| Interruptor | `app-toggle` | skill | Disponible; los `role="switch"` existentes (`.switch`) adoptan sus medidas. |
+| Pestañas en página | `.ui-tabs` (CSS global) | skill | El detalle de usuario usa pestañas en página con las medidas del skill. |
+| Interruptor | `.switch` (CSS global) | skill | Los `role="switch"` existentes usan las medidas del skill. |
 | Avatar | `app-avatar` | skill | Iniciales, `size` sm 20 / md 28 / lg 36. |
 | Migas | `app-breadcrumbs` | adaptado | Recibe `[items]` derivados del registro de paneles (no de `data.breadcrumb`, porque las rutas se generan desde `registro.ts`). |
 | Modal | `ui-modal` | existente, restilizado | Trampa de foco propia; panel `surface`, borde `border`, `shadow('lg')`, fondo `color(overlay)`. Variante `lateral` = panel de detalle a la derecha. |
@@ -333,7 +333,7 @@ Listado filtrable y paginado de cuentas con detalle lateral, alta/edición, acti
 - Pie: `ghost` "Cancelar" + `primary` "Crear usuario"/"Guardar cambios" (restablecer: `danger`).
 
 ### 5.4 Roles del usuario / Permisos individuales
-- Lista con borde compartido (filas 56 px, `border`), nombre `body-01-medium`, descripción `body-00` `text-muted`; a la derecha el interruptor (medidas de `app-toggle`: pista 36×20, `toggle-on` verde).
+- Lista con borde compartido (filas 56 px, `border`), nombre `body-01-medium`, descripción `body-00` `text-muted`; a la derecha el interruptor (`.switch`: pista 36×20, `toggle-on` verde).
 - Permisos individuales: `app-search-field`, `app-segmented` (Todos / Con ajuste / Permitidos / Bloqueados), resumen con badges (accent permitidos, success concedidos, danger denegados), y por fila un segmentado de 3 opciones (Heredar · Conceder · Denegar) con el seleccionado en `primary-soft`/`accent` (Conceder en `success-soft`/`success`, Denegar en `danger-soft`/`danger`).
 - Bloqueo: `app-notice tone="warning"`.
 
@@ -457,7 +457,7 @@ Ver §3.
 | Acción | Archivo(s) |
 |---|---|
 | Reemplazar | `src/styles/` → sistema del skill (`_design.scss`, `main.scss`, `tokens/`, `themes/`, `mixins/`, `base/`) + `components/_ui.scss` (vocabulario global `ui-*`, `grid-form`, `check`, `switch`, tablas, modales, toasts…) |
-| Agregar | `src/app/shared/ui/{button,badge,page-header,notice,menu,tabs,search-field,toggle,avatar,segmented,breadcrumbs}` |
+| Agregar | `src/app/shared/ui/{button,badge,page-header,notice,menu,search-field,avatar,segmented,breadcrumbs}` |
 | Reescribir | `layout/panel-shell.*`, `layout/portal/*`, `layout/sin-acceso`, `features/auth/login/*`, `features/cuenta/menu-cuenta.ts`, plantillas de los módulos |
 | Eliminar | `shared/ui/light-pillar/`, `public/fonts/` (Inter, Plus Jakarta, JetBrains Mono), `public/img_fondo.jpg`, `public/logo_hacker.png` (sin uso) |
 | Sin cambios | `core/**` (servicios, modelos, guards, interceptores), `paneles/registro.ts`, `app.routes.ts`, directiva `has-permiso` |

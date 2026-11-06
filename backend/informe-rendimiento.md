@@ -8,7 +8,7 @@
 | Commit | 57e8607 + cambios sin commitear de la migración |
 | Entorno | local, macOS, 6 CPU; PostgreSQL 17 en Testcontainers (fsync=off); 200 peticiones simultáneas por escenario (`CargaTest`) |
 | Backend | Spring Boot 4.1.2, Hibernate 7, HikariCP (pool fijo 20), driver PostgreSQL (BOM de Boot), JDK 25, virtual threads sí |
-| Base de datos | PostgreSQL 17, max_connections 300 (pruebas), sin PgBouncer; esquema `app` gestionado por Flyway (V1–V3) |
+| Base de datos | PostgreSQL 17, max_connections 300 (pruebas), sin PgBouncer; medido con el esquema `app` de entonces (bitácora particionada). Hoy el esquema es `backend/schema.sql` (comun/seguridad/bitacora, sin particiones): repetir las mediciones de bitácora antes de comparar |
 | Frontend | Angular 22, builder application (esbuild), RxJS 7.8 |
 | Umbrales | LCP ≤ 2,5 s · INP ≤ 200 ms · CLS ≤ 0,1 · p95 API ≤ 200 ms · bundle inicial ≤ 500 KB · `hikaricp.connections.pending` = 0 · `hikaricp.connections.timeout` = 0 |
 | Fuera de alcance | Seguridad, SEO, accesibilidad, costes cloud |

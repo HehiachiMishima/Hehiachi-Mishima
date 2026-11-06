@@ -17,7 +17,10 @@ CREATE SCHEMA comun;
 COMMENT ON SCHEMA comun IS 'Colación, funciones y triggers compartidos.';
 
 -- Igualdad sin mayúsculas ni tildes (ICU, nivel 1). No determinista: sirve
--- para =, IN, UNIQUE, GROUP BY y ORDER BY; no se usa con LIKE.
+-- para =, IN, UNIQUE, GROUP BY y ORDER BY, pero PostgreSQL no admite LIKE ni
+-- ILIKE sobre ella. Por eso NO se pone en las columnas (el backend busca con
+-- ILIKE): se usa en los índices únicos (usuario COLLATE comun.ci) y en las
+-- funciones de protección, que la aplican de forma explícita.
 CREATE COLLATION comun.ci (provider = icu, locale = 'und-u-ks-level1', deterministic = false);
 
 -- Mantiene actualizado_en en cada UPDATE salvo que quien escribe ya lo haya
@@ -35,14 +38,15 @@ BEGIN
 END;
 $$;
 
--- Error de protección: el backend responde 403 con este mensaje.
+-- Error de protección: el backend responde 403 con este mensaje
+-- (GlobalExceptionHandler.SQLSTATE_PROTECCION = 'RB403').
 CREATE FUNCTION comun.proteger(mensaje text)
 RETURNS void
 LANGUAGE plpgsql
 SET search_path = ''
 AS $$
 BEGIN
-    RAISE EXCEPTION USING ERRCODE = 'AT403', MESSAGE = mensaje;
+    RAISE EXCEPTION USING ERRCODE = 'RB403', MESSAGE = mensaje;
 END;
 $$;
 
@@ -80,38 +84,43 @@ RETURN nombre COLLATE comun.ci IN (
 -- ------------------------------------------------------------
 CREATE TABLE seguridad.usuarios (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    usuario         VARCHAR(50)  COLLATE comun.ci NOT NULL,
+    usuario         VARCHAR(50)  NOT NULL,
     contrasena      VARCHAR(100) NOT NULL,
     nombre          VARCHAR(100) NOT NULL,
     apellido        VARCHAR(100) NOT NULL,
-    email           VARCHAR(100) COLLATE comun.ci NOT NULL,
+    email           VARCHAR(100) NOT NULL,
     telefono        VARCHAR(20),
     activo          BOOLEAN      NOT NULL DEFAULT TRUE,
     credenciales_desde TIMESTAMPTZ NOT NULL DEFAULT now(),
+    credenciales_version INTEGER NOT NULL DEFAULT 0,
     intentos_fallidos INTEGER    NOT NULL DEFAULT 0,
     bloqueado_hasta TIMESTAMPTZ,
     creado_por      BIGINT,
     actualizado_por BIGINT       NOT NULL,
     creado_en       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     actualizado_en  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    CONSTRAINT uq_usuarios_usuario UNIQUE (usuario),
-    CONSTRAINT uq_usuarios_email UNIQUE (email),
     CONSTRAINT ck_usuarios_usuario CHECK (btrim(usuario) <> ''),
+    CONSTRAINT ck_usuarios_version CHECK (credenciales_version >= 0),
     CONSTRAINT ck_usuarios_intentos CHECK (intentos_fallidos >= 0)
 );
+-- Únicos sin distinguir mayúsculas ni tildes (la collation va en el índice).
+CREATE UNIQUE INDEX uq_usuarios_usuario ON seguridad.usuarios ((usuario COLLATE comun.ci));
+CREATE UNIQUE INDEX uq_usuarios_email ON seguridad.usuarios ((email COLLATE comun.ci));
 CREATE INDEX idx_usuarios_activo_nombre ON seguridad.usuarios (activo, apellido, nombre);
 CREATE INDEX idx_usuarios_nombre ON seguridad.usuarios (apellido, nombre);
 CREATE INDEX idx_usuarios_creado_en ON seguridad.usuarios (creado_en);
--- Búsqueda "contiene" por nombre y apellido (columnas deterministas: admiten LIKE).
-CREATE INDEX idx_usuarios_nombre_trgm ON seguridad.usuarios
-    USING gin (nombre public.gin_trgm_ops, apellido public.gin_trgm_ops);
+-- Búsqueda "contiene" (ILIKE '%x%') en los cuatro campos del filtro de usuarios.
+CREATE INDEX idx_usuarios_busqueda_trgm ON seguridad.usuarios
+    USING gin (usuario public.gin_trgm_ops, nombre public.gin_trgm_ops,
+               apellido public.gin_trgm_ops, email public.gin_trgm_ops);
 -- Solo las cuentas con bloqueo temporal (fracción mínima de la tabla).
 CREATE INDEX idx_usuarios_bloqueados ON seguridad.usuarios (bloqueado_hasta) WHERE bloqueado_hasta IS NOT NULL;
 COMMENT ON TABLE seguridad.usuarios IS 'Usuarios del sistema. @admin y @hehiachi están protegidos por nombre.';
-COMMENT ON COLUMN seguridad.usuarios.usuario IS 'Login único, sin distinguir mayúsculas ni tildes.';
+COMMENT ON COLUMN seguridad.usuarios.usuario IS 'Login único, sin distinguir mayúsculas ni tildes (uq_usuarios_usuario).';
 COMMENT ON COLUMN seguridad.usuarios.contrasena IS 'Hash bcrypt.';
 COMMENT ON COLUMN seguridad.usuarios.activo IS 'TRUE = puede iniciar sesión; FALSE = bloqueado.';
 COMMENT ON COLUMN seguridad.usuarios.credenciales_desde IS 'Último cambio de contraseña: los tokens emitidos antes dejan de valer (lo fija un trigger).';
+COMMENT ON COLUMN seguridad.usuarios.credenciales_version IS 'Claim "ver" del JWT: el backend lo sube al cambiar contraseña o desactivar y revoca los tokens anteriores.';
 COMMENT ON COLUMN seguridad.usuarios.intentos_fallidos IS 'Logins fallidos consecutivos; vuelve a 0 tras un login correcto.';
 COMMENT ON COLUMN seguridad.usuarios.bloqueado_hasta IS 'Bloqueo temporal por fuerza bruta (1, 2, 4... min). NULL = sin bloqueo.';
 COMMENT ON COLUMN seguridad.usuarios.creado_por IS 'Usuario que lo creó; NULL en el primero, 0 = sistema.';
@@ -121,18 +130,18 @@ COMMENT ON COLUMN seguridad.usuarios.creado_por IS 'Usuario que lo creó; NULL e
 -- ------------------------------------------------------------
 CREATE TABLE seguridad.roles (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    nombre          VARCHAR(50)  COLLATE comun.ci NOT NULL,
+    nombre          VARCHAR(50)  NOT NULL,
     descripcion     VARCHAR(200),
     activo          BOOLEAN      NOT NULL DEFAULT TRUE,
     creado_por      BIGINT       NOT NULL,
     actualizado_por BIGINT       NOT NULL,
     creado_en       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     actualizado_en  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    CONSTRAINT uq_roles_nombre UNIQUE (nombre),
     CONSTRAINT ck_roles_nombre CHECK (btrim(nombre) <> '')
 );
+CREATE UNIQUE INDEX uq_roles_nombre ON seguridad.roles ((nombre COLLATE comun.ci));
 CREATE INDEX idx_roles_activo ON seguridad.roles (activo);
-CREATE INDEX idx_roles_descripcion_trgm ON seguridad.roles USING gin (descripcion public.gin_trgm_ops);
+CREATE INDEX idx_roles_busqueda_trgm ON seguridad.roles USING gin (nombre public.gin_trgm_ops, descripcion public.gin_trgm_ops);
 COMMENT ON TABLE seguridad.roles IS 'Roles. ADMINISTRADOR está protegido: solo se le agregan permisos.';
 
 -- ------------------------------------------------------------
@@ -140,18 +149,20 @@ COMMENT ON TABLE seguridad.roles IS 'Roles. ADMINISTRADOR está protegido: solo 
 -- ------------------------------------------------------------
 CREATE TABLE seguridad.permisos (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    nombre          VARCHAR(50)  COLLATE comun.ci NOT NULL,
+    nombre          VARCHAR(50)  NOT NULL,
     descripcion     VARCHAR(200),
     activo          BOOLEAN      NOT NULL DEFAULT TRUE,
     creado_por      BIGINT       NOT NULL,
     actualizado_por BIGINT       NOT NULL,
     creado_en       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     actualizado_en  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    CONSTRAINT uq_permisos_nombre UNIQUE (nombre),
     CONSTRAINT ck_permisos_nombre CHECK (btrim(nombre) <> '')
 );
+CREATE UNIQUE INDEX uq_permisos_nombre ON seguridad.permisos ((nombre COLLATE comun.ci));
 CREATE INDEX idx_permisos_activo ON seguridad.permisos (activo);
-CREATE INDEX idx_permisos_descripcion_trgm ON seguridad.permisos USING gin (descripcion public.gin_trgm_ops);
+-- Cobertura de paneles del dashboard (nombre LIKE 'PANEL\_%' en permisos activos).
+CREATE INDEX idx_permisos_paneles ON seguridad.permisos (nombre varchar_pattern_ops) WHERE activo;
+CREATE INDEX idx_permisos_busqueda_trgm ON seguridad.permisos USING gin (nombre public.gin_trgm_ops, descripcion public.gin_trgm_ops);
 COMMENT ON TABLE seguridad.permisos IS 'Catálogo de permisos. Los permisos base son inmutables.';
 
 -- ------------------------------------------------------------
@@ -224,23 +235,40 @@ COMMENT ON COLUMN seguridad.sesiones_refresh.familia_expira_en IS 'Máximo de la
 -- ------------------------------------------------------------
 -- Vistas de resolución (respetan activo de rol y de permiso)
 -- ------------------------------------------------------------
+-- Una fila ROL por permiso (con los roles activos que lo conceden en un
+-- array) y una fila OVERRIDE si existe.
 CREATE VIEW seguridad.v_permisos_efectivos AS
-SELECT ur.usuario_id, rp.permiso_id, TRUE AS otorgado, 'ROL'::text AS origen
+SELECT ur.usuario_id, rp.permiso_id, TRUE AS otorgado, 'ROL'::text AS origen,
+       array_agg(r.nombre::text ORDER BY r.nombre) AS roles
 FROM seguridad.usuarios_roles ur
 JOIN seguridad.roles r ON r.id = ur.rol_id AND r.activo
 JOIN seguridad.roles_permisos rp ON rp.rol_id = ur.rol_id
 JOIN seguridad.permisos p ON p.id = rp.permiso_id AND p.activo
+GROUP BY ur.usuario_id, rp.permiso_id
 UNION ALL
-SELECT up.usuario_id, up.permiso_id, up.otorgado, 'OVERRIDE'::text AS origen
+SELECT up.usuario_id, up.permiso_id, up.otorgado, 'OVERRIDE'::text AS origen, NULL::text[] AS roles
 FROM seguridad.usuarios_permisos up
 JOIN seguridad.permisos p ON p.id = up.permiso_id AND p.activo;
-COMMENT ON VIEW seguridad.v_permisos_efectivos IS 'Cada concesión de un usuario: por rol (TRUE) o por override.';
+COMMENT ON VIEW seguridad.v_permisos_efectivos IS 'Cada concesión de un usuario: por rol (TRUE, con sus roles) o por override.';
 
 CREATE VIEW seguridad.v_permisos_finales AS
 SELECT usuario_id, permiso_id, bool_and(otorgado) AS permitido
 FROM seguridad.v_permisos_efectivos
 GROUP BY usuario_id, permiso_id;
 COMMENT ON VIEW seguridad.v_permisos_finales IS 'Permiso final por usuario: basta una denegación para negarlo.';
+
+-- Nombres de los permisos efectivos de un usuario (login, sesión y JWT).
+CREATE FUNCTION seguridad.permisos_de(p_usuario_id bigint)
+RETURNS TABLE (permiso_id bigint, nombre text)
+LANGUAGE sql STABLE
+SET search_path = ''
+AS $$
+    SELECT p.id, p.nombre
+    FROM seguridad.v_permisos_finales f
+    JOIN seguridad.permisos p ON p.id = f.permiso_id
+    WHERE f.usuario_id = p_usuario_id AND f.permitido
+    ORDER BY p.nombre
+$$;
 
 -- ------------------------------------------------------------
 -- Triggers de seguridad
@@ -350,7 +378,7 @@ BEFORE UPDATE ON seguridad.usuarios
 FOR EACH ROW EXECUTE FUNCTION seguridad.renovar_credenciales();
 
 -- Usuarios protegidos: no se eliminan y solo puede cambiar su contraseña
--- (y con ella la auditoría y credenciales_desde) y sus contadores de bloqueo
+-- (y con ella credenciales_desde/_version y el sello) y sus contadores de bloqueo
 -- (si no, un login fallido suyo rompería la autenticación); nada más.
 CREATE FUNCTION seguridad.proteger_usuario()
 RETURNS trigger
@@ -359,12 +387,16 @@ SET search_path = ''
 AS $$
 DECLARE
     -- Lo único que puede cambiar: contraseña, contadores de bloqueo y su sello.
-    v_libres text[] := ARRAY['contrasena', 'credenciales_desde', 'intentos_fallidos', 'bloqueado_hasta',
-                             'actualizado_por', 'actualizado_en'];
+    -- credenciales_version solo puede subir junto con un cambio de contraseña.
+    v_libres text[] := ARRAY['contrasena', 'credenciales_desde',
+                             'intentos_fallidos', 'bloqueado_hasta', 'actualizado_por', 'actualizado_en'];
 BEGIN
     IF seguridad.es_usuario_protegido(OLD.usuario) THEN
         IF TG_OP = 'DELETE' THEN
             PERFORM comun.proteger(format('No se puede eliminar al usuario %s.', OLD.usuario));
+        END IF;
+        IF NEW.contrasena IS DISTINCT FROM OLD.contrasena THEN
+            v_libres := v_libres || 'credenciales_version';
         END IF;
         IF (to_jsonb(NEW) - v_libres) IS DISTINCT FROM (to_jsonb(OLD) - v_libres) THEN
             PERFORM comun.proteger(format('No se puede modificar al usuario %s.', OLD.usuario));
@@ -467,6 +499,29 @@ COMMENT ON SCHEMA bitacora IS 'Bitácora de auditoría: solo INSERT y SELECT.';
 -- Idempotente: este script NO borra la bitácora al re-ejecutarse (los
 -- eventos se conservan); solo crea lo que falte y refresca funciones y triggers.
 
+-- Resultado del evento (el backend escribe y filtra con ?::resultado_auditoria).
+DO $$
+BEGIN
+    IF to_regtype('bitacora.resultado_auditoria') IS NULL THEN
+        CREATE TYPE bitacora.resultado_auditoria AS ENUM ('EXITO', 'FALLO', 'DENEGADO');
+    END IF;
+END;
+$$;
+
+-- Texto a inet sin fallar: la IP viene de cabeceras del cliente y un valor
+-- inválido nunca debe romper el INSERT (se guarda NULL).
+CREATE OR REPLACE FUNCTION bitacora.a_inet(p_valor text)
+RETURNS inet
+LANGUAGE plpgsql IMMUTABLE
+SET search_path = ''
+AS $$
+BEGIN
+    RETURN p_valor::inet;
+EXCEPTION WHEN others THEN
+    RETURN NULL;
+END;
+$$;
+
 CREATE TABLE IF NOT EXISTS bitacora.auditoria_eventos (
     id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     ocurrido_en     TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -475,16 +530,37 @@ CREATE TABLE IF NOT EXISTS bitacora.auditoria_eventos (
     accion          VARCHAR(40)  NOT NULL,
     entidad         VARCHAR(30),
     entidad_id      VARCHAR(64),
-    resultado       VARCHAR(10)  NOT NULL,
-    ip              VARCHAR(45),
+    resultado       bitacora.resultado_auditoria NOT NULL,
+    ip              INET,
     user_agent      VARCHAR(255),
     id_correlacion  VARCHAR(64),
     detalle         JSONB,
     CONSTRAINT ck_auditoria_accion CHECK (accion ~ '^[A-Z_]+$'),
     CONSTRAINT ck_auditoria_entidad CHECK (entidad ~ '^[A-Z_]+$'),
-    CONSTRAINT ck_auditoria_resultado CHECK (resultado IN ('EXITO', 'FALLO', 'DENEGADO')),
     CONSTRAINT ck_auditoria_detalle CHECK (detalle IS NULL OR jsonb_typeof(detalle) = 'object')
 );
+-- Bitácoras creadas con la versión anterior de este script (resultado e ip
+-- como VARCHAR): se convierten conservando los eventos.
+DO $$
+BEGIN
+    IF (SELECT atttypid FROM pg_attribute
+        WHERE attrelid = 'bitacora.auditoria_eventos'::regclass AND attname = 'resultado')
+       <> 'bitacora.resultado_auditoria'::regtype THEN
+        DROP INDEX IF EXISTS bitacora.idx_auditoria_incidencias;
+        ALTER TABLE bitacora.auditoria_eventos DROP CONSTRAINT IF EXISTS ck_auditoria_resultado;
+        ALTER TABLE bitacora.auditoria_eventos
+            ALTER COLUMN resultado TYPE bitacora.resultado_auditoria
+            USING resultado::text::bitacora.resultado_auditoria;
+    END IF;
+    IF (SELECT atttypid FROM pg_attribute
+        WHERE attrelid = 'bitacora.auditoria_eventos'::regclass AND attname = 'ip')
+       <> 'inet'::regtype THEN
+        ALTER TABLE bitacora.auditoria_eventos
+            ALTER COLUMN ip TYPE inet USING bitacora.a_inet(ip);
+    END IF;
+END;
+$$;
+
 -- Orden canónico de lectura: ocurrido_en DESC, id DESC (sin Sort).
 CREATE INDEX IF NOT EXISTS idx_auditoria_ocurrido ON bitacora.auditoria_eventos (ocurrido_en DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_auditoria_actor ON bitacora.auditoria_eventos (actor_id, ocurrido_en DESC);
@@ -527,6 +603,9 @@ CREATE OR REPLACE TRIGGER trg_auditoria_sin_truncate
 BEFORE TRUNCATE ON bitacora.auditoria_eventos
 FOR EACH STATEMENT EXECUTE FUNCTION bitacora.solo_insercion();
 
+-- Restos de versiones anteriores de este script.
+DROP FUNCTION IF EXISTS bitacora.asegurar_particiones_bitacora(integer);
+
 -- ############################################################
 -- 4. Datos iniciales
 -- ############################################################
@@ -559,5 +638,5 @@ FROM (VALUES
     ('DASHBOARD_ADMIN',    'Permite ver el dashboard de administradores.'),
     ('VER_AUDITORIA',      'Permite consultar y exportar la bitácora de auditoría.')
 ) AS v (nombre, descripcion);
-
 COMMIT;
+

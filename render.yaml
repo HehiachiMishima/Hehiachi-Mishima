@@ -9,8 +9,9 @@
 #   1. Sube el repo a GitHub (rama indicada en "branch").
 #   2. Render: New + > Blueprint > selecciona el repositorio.
 #   3. Completa los valores "sync: false" (administrador semilla...).
-#   4. Nada mas: Flyway crea el esquema "app" en el primer arranque
-#      (backend/src/main/resources/db/migration).
+#   4. ANTES del primer arranque, aplica el esquema en la BD creada:
+#        psql "<External Database URL>" -v ON_ERROR_STOP=1 -f backend/schema.sql
+#      (OJO: re-ejecutarlo borra y recrea seguridad y comun).
 # ============================================================
 
 services:
