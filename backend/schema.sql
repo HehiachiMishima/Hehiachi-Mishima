@@ -77,7 +77,7 @@ RETURN nombre COLLATE comun.ci IN (
     'ASIGNAR_ROLES', 'VER_ROLES', 'CREAR_ROLES', 'MODIFICAR_ROLES', 'ELIMINAR_ROLES',
     'ASIGNAR_PERMISOS', 'VER_PERMISOS', 'CREAR_PERMISOS', 'MODIFICAR_PERMISOS', 'ELIMINAR_PERMISOS',
     'VER_USUARIOS', 'CREAR_USUARIOS', 'MODIFICAR_USUARIOS', 'ELIMINAR_USUARIOS',
-    'PANEL_ADMIN', 'DASHBOARD_ADMIN', 'VER_AUDITORIA');
+    'PANEL_ADMIN', 'DASHBOARD_ADMIN', 'VER_AUDITORIA', 'VER_MONITOREO');
 
 -- ------------------------------------------------------------
 -- usuarios
@@ -603,6 +603,38 @@ CREATE OR REPLACE TRIGGER trg_auditoria_sin_truncate
 BEFORE TRUNCATE ON bitacora.auditoria_eventos
 FOR EACH STATEMENT EXECUTE FUNCTION bitacora.solo_insercion();
 
+-- ------------------------------------------------------------
+-- peticiones: traza HTTP de la API (quién llamó qué, estado y duración)
+-- ------------------------------------------------------------
+-- A diferencia de auditoria_eventos, admite DELETE para la purga por
+-- retención (TrazaPeticiones.purgar, app.monitoreo.retencion-dias). Nunca
+-- guarda query string, cuerpo ni cabeceras de autorización.
+CREATE TABLE IF NOT EXISTS bitacora.peticiones (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ocurrido_en     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    actor_id        BIGINT,
+    actor_usuario   VARCHAR(100),
+    metodo          VARCHAR(10)  NOT NULL,
+    ruta            VARCHAR(200) NOT NULL,
+    uri             VARCHAR(500) NOT NULL,
+    estado          SMALLINT     NOT NULL,
+    duracion_ms     INTEGER      NOT NULL,
+    ip              inet,
+    user_agent      VARCHAR(255),
+    id_correlacion  VARCHAR(64),
+    CONSTRAINT ck_peticiones_estado CHECK (estado BETWEEN 100 AND 599),
+    CONSTRAINT ck_peticiones_duracion CHECK (duracion_ms >= 0)
+);
+CREATE INDEX IF NOT EXISTS idx_peticiones_ocurrido ON bitacora.peticiones (ocurrido_en DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_peticiones_actor ON bitacora.peticiones (actor_id, ocurrido_en DESC);
+CREATE INDEX IF NOT EXISTS idx_peticiones_ruta ON bitacora.peticiones (ruta, ocurrido_en DESC);
+CREATE INDEX IF NOT EXISTS idx_peticiones_errores ON bitacora.peticiones (estado, ocurrido_en DESC) WHERE estado >= 400;
+CREATE INDEX IF NOT EXISTS idx_peticiones_lentas ON bitacora.peticiones (duracion_ms DESC, ocurrido_en DESC) WHERE duracion_ms >= 1000;
+CREATE INDEX IF NOT EXISTS idx_peticiones_correlacion ON bitacora.peticiones (id_correlacion) WHERE id_correlacion IS NOT NULL;
+COMMENT ON TABLE bitacora.peticiones IS 'Traza de peticiones HTTP de la API. Se purga por retención.';
+COMMENT ON COLUMN bitacora.peticiones.ruta IS 'Plantilla de la ruta (p. ej. /api/usuarios/{id}); "(sin coincidencia)" si no hubo handler.';
+COMMENT ON COLUMN bitacora.peticiones.uri IS 'Ruta real sin query string.';
+
 -- Restos de versiones anteriores de este script.
 DROP FUNCTION IF EXISTS bitacora.asegurar_particiones_bitacora(integer);
 
@@ -636,7 +668,8 @@ FROM (VALUES
     ('ELIMINAR_USUARIOS',  'Permite eliminar usuarios no protegidos.'),
     ('PANEL_ADMIN',        'Permite el ingreso al panel administrador.'),
     ('DASHBOARD_ADMIN',    'Permite ver el dashboard de administradores.'),
-    ('VER_AUDITORIA',      'Permite consultar y exportar la bitácora de auditoría.')
+    ('VER_AUDITORIA',      'Permite consultar y exportar la bitácora de auditoría.'),
+    ('VER_MONITOREO',      'Permite ver el monitoreo del sistema y la traza de peticiones por usuario.')
 ) AS v (nombre, descripcion);
 COMMIT;
 

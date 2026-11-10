@@ -21,7 +21,7 @@ class ProteccionesTest extends ApiPrueba {
             "ASIGNAR_ROLES", "VER_ROLES", "CREAR_ROLES", "MODIFICAR_ROLES", "ELIMINAR_ROLES",
             "ASIGNAR_PERMISOS", "VER_PERMISOS", "CREAR_PERMISOS", "MODIFICAR_PERMISOS", "ELIMINAR_PERMISOS",
             "VER_USUARIOS", "CREAR_USUARIOS", "MODIFICAR_USUARIOS", "ELIMINAR_USUARIOS",
-            "PANEL_ADMIN", "DASHBOARD_ADMIN", "VER_AUDITORIA");
+            "PANEL_ADMIN", "DASHBOARD_ADMIN", "VER_AUDITORIA", "VER_MONITOREO");
 
     private static String sqlState(Throwable t) {
         for (Throwable c = t; c != null; c = c.getCause()) {

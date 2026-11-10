@@ -55,6 +55,11 @@ export class UsuariosApi {
     return this.api.patch<Usuario>(`/usuarios/${id}/activo`, motivo ? { activo, motivo } : { activo });
   }
 
+  /** Cierra todas las sesiones abiertas (revoca sus tokens). `motivo` va a la auditoría. */
+  cerrarSesiones(id: number, motivo?: string): Observable<void> {
+    return this.api.post<void>(`/usuarios/${id}/sesiones/cerrar`, motivo ? { motivo } : {});
+  }
+
   roles(id: number): Observable<Rol[]> {
     return this.api.get<Rol[]>(`/usuarios/${id}/roles`);
   }

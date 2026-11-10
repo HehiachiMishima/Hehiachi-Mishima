@@ -12,6 +12,7 @@ export const ACCIONES_AUDITORIA: Record<string, string> = {
   USUARIO_ACTUALIZADO: 'Usuario actualizado',
   USUARIO_ELIMINADO: 'Usuario eliminado',
   USUARIO_ESTADO_CAMBIADO: 'Estado de usuario cambiado',
+  SESIONES_CERRADAS: 'Sesiones cerradas',
   ROL_CREADO: 'Rol creado',
   ROL_ACTUALIZADO: 'Rol actualizado',
   ROL_ELIMINADO: 'Rol eliminado',
@@ -32,7 +33,7 @@ export const ACCIONES_AUDITORIA: Record<string, string> = {
 
 export const GRUPOS_ACCIONES: { nombre: string; acciones: string[] }[] = [
   { nombre: 'Sesión', acciones: ['LOGIN_EXITOSO', 'LOGIN_FALLIDO', 'CONTRASENA_CAMBIADA'] },
-  { nombre: 'Usuarios', acciones: ['USUARIO_CREADO', 'USUARIO_ACTUALIZADO', 'USUARIO_ELIMINADO', 'USUARIO_ESTADO_CAMBIADO'] },
+  { nombre: 'Usuarios', acciones: ['USUARIO_CREADO', 'USUARIO_ACTUALIZADO', 'USUARIO_ELIMINADO', 'USUARIO_ESTADO_CAMBIADO', 'SESIONES_CERRADAS'] },
   { nombre: 'Roles', acciones: ['ROL_CREADO', 'ROL_ACTUALIZADO', 'ROL_ELIMINADO', 'ROL_ESTADO_CAMBIADO'] },
   {
     nombre: 'Permisos',

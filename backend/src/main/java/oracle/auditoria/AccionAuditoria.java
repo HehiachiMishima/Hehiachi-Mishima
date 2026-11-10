@@ -10,6 +10,8 @@ public enum AccionAuditoria {
     USUARIO_ACTUALIZADO,
     USUARIO_ELIMINADO,
     USUARIO_ESTADO_CAMBIADO,
+    /** Cierre forzado de todas las sesiones abiertas de un usuario (revoca sus tokens). */
+    SESIONES_CERRADAS,
     ROL_CREADO,
     ROL_ACTUALIZADO,
     ROL_ELIMINADO,

@@ -2,6 +2,7 @@ package oracle.admin.controller;
 
 import jakarta.validation.Valid;
 import oracle.admin.request.CambiarEstadoRequest;
+import oracle.admin.request.CerrarSesionesRequest;
 import oracle.admin.request.UsuarioActualizarRequest;
 import oracle.admin.request.UsuarioCrearRequest;
 import oracle.admin.request.UsuarioFiltroRequest;
@@ -82,6 +83,17 @@ public class UsuarioController {
     @PreAuthorize("hasAuthority('ELIMINAR_USUARIOS')")
     public ApiResponse<Void> eliminar(@PathVariable Long id) {
         return usuarioService.eliminar(id);
+    }
+
+    /**
+     * Cierra todas las sesiones abiertas del usuario: invalida sus tokens al
+     * instante (siguiente peticion = 401). motivo (opcional) va a la bitacora.
+     */
+    @PostMapping("/{id}/sesiones/cerrar")
+    @PreAuthorize("hasAuthority('MODIFICAR_USUARIOS')")
+    public ApiResponse<Void> cerrarSesiones(@PathVariable Long id,
+            @Valid @RequestBody(required = false) CerrarSesionesRequest peticion) {
+        return usuarioService.cerrarSesiones(id, peticion == null ? null : peticion.motivo());
     }
 
     @PatchMapping("/{id}/activo")

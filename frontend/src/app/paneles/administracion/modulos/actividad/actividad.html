@@ -1,0 +1,277 @@
+<app-page-header [eyebrow]="'Panel ' + panel.nombre" heading="Actividad">
+  <ng-container pageMeta>
+    <span>Traza de cada petición a la API: quién, qué, desde dónde, con qué resultado y cuánto tardó.</span>
+  </ng-container>
+  <ng-container pageActions>
+    <button type="button" appButton variant="secondary" size="sm" (click)="recargar()" [attr.aria-disabled]="cargando() || null">
+      <ui-icon name="refresh" [size]="16" /> Actualizar
+    </button>
+  </ng-container>
+</app-page-header>
+
+<div class="filtros-toggle">
+  <button type="button" appButton variant="secondary" aria-controls="act-filtros"
+    [attr.aria-expanded]="filtrosAbiertos()" (click)="filtrosAbiertos.update((v) => !v)">
+    <ui-icon name="filter" [size]="16" /> {{ filtrosAbiertos() ? 'Ocultar filtros' : 'Filtros' }}
+  </button>
+</div>
+
+<section id="act-filtros" class="filtros" [class.filtros--abierto]="filtrosAbiertos()" role="search" aria-label="Filtros de la actividad">
+  <div class="ui-field">
+    <label class="ui-label" for="act-rango">Periodo <span class="u-muted">({{ zona }})</span></label>
+    <select id="act-rango" class="ui-select" (change)="fijar({ rango: $any($event.target).value })">
+      @for (opcion of rangos; track opcion.id) {
+        <option [value]="opcion.id" [selected]="opcion.id === rango()">{{ opcion.etiqueta }}</option>
+      }
+    </select>
+  </div>
+  <div class="ui-field">
+    <label class="ui-label" for="act-usuario">Usuario</label>
+    <input id="act-usuario" class="ui-input" list="act-usuarios" placeholder="@usuario" [value]="actorFiltrado()"
+      autocomplete="off" (change)="filtrarActor($any($event.target).value)" />
+    <datalist id="act-usuarios">
+      @for (u of usuariosDirectorio(); track u.id) {
+        <option [value]="u.usuario.startsWith('@') ? u.usuario : '@' + u.usuario">{{ u.nombre }} {{ u.apellido }}</option>
+      }
+    </datalist>
+  </div>
+  <div class="ui-field">
+    <label class="ui-label" for="act-metodo">Operación</label>
+    <select id="act-metodo" class="ui-select" (change)="fijar({ metodo: $any($event.target).value })">
+      <option value="" [selected]="!metodo()">Todas</option>
+      @for (m of metodos; track m) {
+        <option [value]="m" [selected]="m === metodo()">{{ m }}</option>
+      }
+    </select>
+  </div>
+  <div class="ui-field">
+    <label class="ui-label" for="act-estado">Resultado</label>
+    <select id="act-estado" class="ui-select" (change)="fijar({ estado: $any($event.target).value })">
+      @for (e of estados; track e.id) {
+        <option [value]="e.id" [selected]="e.id === estado()">{{ e.etiqueta }}</option>
+      }
+    </select>
+  </div>
+  <div class="ui-field">
+    <label class="ui-label" for="act-correlacion">Id de petición</label>
+    <input id="act-correlacion" type="search" class="ui-input u-mono" placeholder="X-Request-Id" [value]="textoCorrelacion()"
+      (input)="buscarCorrelacion($any($event.target).value)" />
+  </div>
+  <label class="check actividad__lentas">
+    <input type="checkbox" [checked]="!!lentas()" (change)="fijar({ lentas: $any($event.target).checked })" />
+    <span class="check__box" aria-hidden="true"><ui-icon name="check" [size]="16" /></span>
+    <span>Solo lentas (≥ 1 s)</span>
+  </label>
+</section>
+
+<div class="filtros__resumen">
+  <span role="status"><strong>{{ totalTexto() }}</strong> {{ total() === 1 ? 'petición' : 'peticiones' }}</span>
+  @if (actorId()) {
+    <app-badge tone="accent">Usuario: {{ actorFiltrado() }}
+      <button type="button" class="badge-quitar" (click)="fijar({ actorId: null })" [attr.aria-label]="'Quitar filtro de usuario ' + actorFiltrado()">
+        <ui-icon name="close" [size]="12" /></button>
+    </app-badge>
+  }
+  @if (ruta()) {
+    <app-badge tone="accent"><span class="u-mono">{{ ruta() }}</span>
+      <button type="button" class="badge-quitar" (click)="fijar({ ruta: null })" aria-label="Quitar filtro de endpoint">
+        <ui-icon name="close" [size]="12" /></button>
+    </app-badge>
+  }
+  @if (hayFiltros()) {
+    <button appButton variant="tertiary" size="sm" type="button" (click)="limpiarFiltros()">Limpiar filtros</button>
+  }
+</div>
+
+@if (actorId()) {
+  <section class="usuario" aria-labelledby="titulo-usuario" [attr.aria-busy]="cargandoActividad() || null">
+    <header class="usuario__cabecera">
+      <div>
+        <p class="usuario__eyebrow">Resumen del usuario</p>
+        <h2 id="titulo-usuario">{{ actorFiltrado() }}</h2>
+      </div>
+      <div class="usuario__acciones">
+        @if (puedeAuditoria()) {
+          <a appButton variant="secondary" size="sm" [routerLink]="rutaAuditoria" [queryParams]="{ actorId: actorId(), rango: '30d' }">
+            <ui-icon name="history" [size]="16" /> Cambios en auditoría
+          </a>
+        }
+        @if (puedeCerrarSesiones()) {
+          <button appButton variant="secondary" size="sm" type="button" (click)="confirmarCierre.set(true)">
+            <ui-icon name="logout" [size]="16" /> Cerrar sesiones
+          </button>
+        }
+      </div>
+    </header>
+
+    @if (actividad(); as a) {
+      <div class="metricas">
+        <article class="metrica">
+          <h3 class="metrica__label">Peticiones</h3>
+          <span class="metrica__valor">{{ numero(a.peticiones) }}</span>
+          <span class="metrica__detalle">en {{ a.dias === 1 ? 'las últimas 24 h' : 'los últimos ' + a.dias + ' días' }}</span>
+        </article>
+        <article class="metrica">
+          <div class="metrica__cabecera">
+            <h3 class="metrica__label">Con error</h3>
+            @if (erroresUsuario() >= 10) { <app-badge tone="warning">Revisar</app-badge> }
+          </div>
+          <span class="metrica__valor">{{ erroresUsuario() }} %</span>
+          <span class="metrica__detalle">{{ numero(a.errores) }} peticiones rechazadas o fallidas</span>
+        </article>
+        <article class="metrica">
+          <h3 class="metrica__label">Última actividad</h3>
+          <span class="metrica__valor metrica__valor--texto">{{ a.ultima ? (a.ultima | fechaHora: 'relativa' : true) : '—' }}</span>
+          <span class="metrica__detalle">{{ a.ultima ? (a.ultima | fechaHora: 'completa' : true) : 'Sin peticiones en el periodo' }}</span>
+        </article>
+        <article class="metrica">
+          <div class="metrica__cabecera">
+            <h3 class="metrica__label">Direcciones IP</h3>
+            @if (a.ips.length > 3) { <app-badge tone="warning">Varias</app-badge> }
+          </div>
+          <span class="metrica__valor">{{ a.ips.length }}</span>
+          <span class="metrica__detalle">{{ a.ips[0]?.etiqueta ?? '—' }}{{ a.ips.length > 1 ? ' y otras' : '' }}</span>
+        </article>
+      </div>
+
+      @if (a.peticiones) {
+        <div class="graficos">
+          <article class="grafico">
+            <h3>Endpoints más usados</h3>
+            <ui-barras-h [datos]="rutasUsuario()" titulo="Endpoints más usados por el usuario" />
+          </article>
+          <article class="grafico">
+            <h3>Desde dónde se conecta</h3>
+            <ui-barras-h [datos]="ipsUsuario()" titulo="Direcciones IP del usuario" />
+          </article>
+          @if (diasUsuario().length > 1) {
+            <article class="grafico">
+              <h3>Peticiones por día (UTC)</h3>
+              <ui-serie tipo="barras" titulo="Peticiones por día" [puntos]="diasUsuario()" [componentes]="[{ nombre: 'Peticiones', color: 'var(--color-chart-2)' }]" [altura]="140" />
+            </article>
+          }
+        </div>
+      }
+    } @else if (cargandoActividad()) {
+      <span class="ui-skeleton usuario__skeleton"></span><span class="u-sr-only">Cargando resumen del usuario</span>
+    }
+  </section>
+}
+
+<div class="table-card" [attr.aria-busy]="cargando() || null">
+  @if (cargando() && peticiones().length === 0) {
+    <div class="skeleton-filas">
+      <span class="u-sr-only">Cargando peticiones…</span>
+      @for (fila of [1, 2, 3, 4, 5, 6, 7, 8]; track fila) { <span class="ui-skeleton"></span> }
+    </div>
+  } @else if (error(); as fallo) {
+    <ui-empty icono="alerta" titulo="No se pudo cargar la actividad" [mensaje]="fallo.mensaje">
+      @if (fallo.idCorrelacion) {
+        <p class="ui-hint">Identificador de la petición: <code>{{ fallo.idCorrelacion }}</code></p>
+      }
+      <button type="button" appButton variant="secondary" size="sm" (click)="recargar()">
+        <ui-icon name="refresh" [size]="16" /> Reintentar
+      </button>
+    </ui-empty>
+  } @else if (peticiones().length === 0) {
+    @if (hayFiltros()) {
+      <ui-empty icono="search" titulo="No hay peticiones con estos filtros" mensaje="Amplía el periodo o quita algún filtro.">
+        <button type="button" appButton variant="secondary" size="sm" (click)="fijar({ rango: '30d' })">Ampliar a 30 días</button>
+        <button type="button" appButton variant="ghost" size="sm" (click)="limpiarFiltros()">Limpiar filtros</button>
+      </ui-empty>
+    } @else {
+      <ui-empty icono="activity" titulo="Aún no hay peticiones registradas" mensaje="Cada llamada a la API aparecerá aquí con su usuario, resultado y duración." />
+    }
+  } @else {
+    <div class="ui-table-wrap">
+      <table class="ui-table ui-table--compacta ui-table--tarjetas actividad__tabla" aria-label="Peticiones a la API">
+        <thead>
+          <tr>
+            <th scope="col">Hora</th>
+            <th scope="col">Resultado</th>
+            <th scope="col">Operación</th>
+            <th scope="col">Usuario</th>
+            <th scope="col" class="num">Duración</th>
+            <th scope="col" class="col-p3">IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of peticiones(); track p.id) {
+            <tr [class.fila-activa]="p.id === seleccion()?.id">
+              <td class="u-mono actividad__hora">
+                <time [attr.datetime]="p.ocurridoEn" [title]="p.ocurridoEn | fechaHora: 'completa' : true">{{ hora(p.ocurridoEn) }}</time>
+              </td>
+              <td class="celda-estado"><app-badge [tone]="tono(p.estado)">{{ p.estado }}</app-badge></td>
+              <td class="actividad__operacion">
+                <button type="button" class="ui-link-btn actividad__ruta" (click)="seleccion.set(seleccion()?.id === p.id ? null : p)"
+                  [attr.aria-expanded]="seleccion()?.id === p.id" [title]="p.uri">
+                  <span class="metodo" [attr.data-metodo]="p.metodo">{{ p.metodo }}</span>
+                  <span class="u-mono">{{ p.uri }}</span>
+                </button>
+              </td>
+              <td data-label="Usuario">
+                @if (p.actorId) {
+                  <button type="button" class="ui-link-btn" (click)="fijar({ actorId: p.actorId })" [attr.aria-label]="'Filtrar por ' + formatearLogin(p.actorUsuario)">
+                    {{ formatearLogin(p.actorUsuario) || 'Usuario #' + p.actorId }}
+                  </button>
+                } @else {
+                  <span class="u-muted">Anónimo</span>
+                }
+              </td>
+              <td class="num" data-label="Duración" [class.lento]="p.duracionMs >= 1000">{{ numero(p.duracionMs) }} ms</td>
+              <td class="u-mono col-p3" data-label="IP">{{ p.ip || '—' }}</td>
+            </tr>
+            @if (seleccion()?.id === p.id) {
+              <tr class="actividad__detalle">
+                <td colspan="6">
+                  <dl class="kv">
+                    <div><dt>Endpoint</dt><dd class="u-mono">{{ p.metodo }} {{ p.ruta }}</dd></div>
+                    <div><dt>Ruta real</dt><dd class="u-mono">{{ p.uri }}</dd></div>
+                    <div><dt>Fecha</dt><dd>{{ p.ocurridoEn | fechaHora: 'completa' : true }}</dd></div>
+                    <div><dt>Cliente</dt><dd [title]="p.userAgent || ''">{{ navegador(p.userAgent) }}</dd></div>
+                    <div>
+                      <dt>Petición</dt>
+                      <dd>
+                        @if (p.idCorrelacion) {
+                          <span class="u-mono">{{ p.idCorrelacion }}</span>
+                          <button type="button" class="ui-icon-btn" (click)="copiar(p.idCorrelacion)" aria-label="Copiar identificador de la petición">
+                            <ui-icon name="copy" [size]="16" />
+                          </button>
+                          @if (puedeAuditoria()) {
+                            <a class="actividad__enlace" [routerLink]="rutaAuditoria" [queryParams]="{ q: p.idCorrelacion, rango: '30d' }">Eventos de auditoría de esta petición</a>
+                          }
+                        } @else { — }
+                      </dd>
+                    </div>
+                  </dl>
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <ui-paginador
+      [pagina]="pagina()"
+      [total]="total()"
+      [porPagina]="tamano()"
+      [opciones]="opcionesTamano"
+      (paginaCambia)="irAPagina($event)"
+      (porPaginaCambia)="cambiarTamano($event)"
+    />
+  }
+</div>
+
+<ui-confirmacion
+  [abierto]="confirmarCierre()"
+  titulo="Cerrar sesiones"
+  [pregunta]="'¿Cerrar todas las sesiones de ' + actorFiltrado() + '?'"
+  descripcion="Sus tokens dejarán de funcionar al instante y tendrá que iniciar sesión de nuevo. Su cuenta, roles y permisos no cambian. Quedará registrado en la auditoría."
+  etiqueta="Cerrar sesiones"
+  icono="logout"
+  [procesando]="cerrando()"
+  [conMotivo]="true"
+  (confirmar)="cerrarSesiones($event)"
+  (cancelar)="confirmarCierre.set(false)"
+/>

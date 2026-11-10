@@ -216,6 +216,13 @@
       (cdkMenuItemTriggered)="abrirRestablecer(usuario)">
       <ui-icon name="key" [size]="16" /> Restablecer contraseña
     </button>
+    <button *hasPermiso="permisos.VER_MONITOREO" appMenuItem (cdkMenuItemTriggered)="verActividad(usuario)">
+      <ui-icon name="activity" [size]="16" /> Ver actividad
+    </button>
+    <button *hasPermiso="permisos.MODIFICAR_USUARIOS" appMenuItem [disabled]="!!bloqueoAccesos(usuario)"
+      (cdkMenuItemTriggered)="confirmarCierreSesiones(usuario)">
+      <ui-icon name="logout" [size]="16" /> Cerrar sesiones
+    </button>
     <button *hasPermiso="permisos.MODIFICAR_USUARIOS" appMenuItem [disabled]="!!bloqueoAccesos(usuario)"
       (cdkMenuItemTriggered)="alternarActivo(usuario)">
       <ui-icon [name]="usuario.activo ? 'userX' : 'userCheck'" [size]="16" /> {{ usuario.activo ? 'Desactivar' : 'Activar' }}
@@ -307,6 +314,13 @@
 
   <div modal-footer class="modal-foot detalle__pie">
     @if (detalle(); as u) {
+      <button *hasPermiso="permisos.VER_MONITOREO" type="button" appButton variant="secondary" size="sm" (click)="verActividad(u)">
+        <ui-icon name="activity" [size]="16" /> Ver actividad
+      </button>
+      <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" appButton variant="secondary" size="sm"
+        [attr.aria-disabled]="!!bloqueoAccesos(u) || null" [title]="bloqueoAccesos(u) ?? ''" (click)="confirmarCierreSesiones(u)">
+        <ui-icon name="logout" [size]="16" /> Cerrar sesiones
+      </button>
       <button *hasPermiso="permisos.MODIFICAR_USUARIOS" type="button" appButton variant="secondary" size="sm"
         [attr.aria-disabled]="!!bloqueoEdicion(u) || null" [title]="bloqueoEdicion(u) ?? ''" (click)="abrirEditar(u)">
         <ui-icon name="edit" [size]="16" /> Editar
@@ -467,6 +481,19 @@
   [conMotivo]="true"
   (confirmar)="confirmarDesactivar($event)"
   (cancelar)="aDesactivar.set(null)"
+/>
+
+<ui-confirmacion
+  [abierto]="!!aCerrarSesiones()"
+  titulo="Cerrar sesiones"
+  [pregunta]="'¿Cerrar todas las sesiones de ' + (aCerrarSesiones()?.nombre ?? '') + ' ' + (aCerrarSesiones()?.apellido ?? '') + ' (' + formatearLogin(aCerrarSesiones()?.usuario) + ')?'"
+  descripcion="Sus sesiones abiertas dejarán de funcionar al instante y tendrá que iniciar sesión de nuevo. La cuenta, sus roles y permisos no cambian. Quedará registrado en la auditoría."
+  etiqueta="Cerrar sesiones"
+  icono="logout"
+  [procesando]="cerrandoSesiones()"
+  [conMotivo]="true"
+  (confirmar)="cerrarSesiones($event)"
+  (cancelar)="aCerrarSesiones.set(null)"
 />
 
 <ui-confirmacion

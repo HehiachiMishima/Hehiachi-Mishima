@@ -130,6 +130,7 @@ class MatrizAutorizacionTest extends ApiPrueba {
             case "RolCrearRequest" -> m("nombre", unico("RMX").toUpperCase());
             case "PermisoCrearRequest" -> m("nombre", unico("PMX").toUpperCase());
             case "CambiarEstadoRequest" -> m("activo", true);
+            case "CerrarSesionesRequest" -> m("motivo", "prueba");
             case "RolPermisoAsignarRequest" -> m("permisoId", Long.valueOf(ID_INEXISTENTE));
             case "UsuarioRolAsignarRequest" -> m("rolId", Long.valueOf(ID_INEXISTENTE));
             case "UsuarioPermisoOverrideRequest" -> m("permisoId", Long.valueOf(ID_INEXISTENTE), "otorgado", true);

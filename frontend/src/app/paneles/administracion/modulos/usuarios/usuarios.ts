@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject, input, linkedSignal, signal, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { Router } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { catchError, concatMap, finalize, from, of, toArray } from 'rxjs';
 import { PERMISOS } from '../../../../core/config/permisos';
@@ -23,6 +24,7 @@ import { EmptyState } from '../../../../shared/ui/empty-state/empty-state';
 import { Historial } from '../../../../shared/ui/historial/historial';
 import { Icon } from '../../../../shared/ui/icon/icon';
 import { PANEL_ACTUAL } from '../../../panel-actual';
+import { urlModuloPorId } from '../../../registro';
 import { Modal } from '../../../../shared/ui/modal/modal';
 import { Paginador } from '../../../../shared/ui/paginador/paginador';
 import { RequisitosContrasena } from '../../../../shared/ui/requisitos/requisitos-contrasena';
@@ -77,6 +79,7 @@ export class Usuarios {
   private readonly sesion = inject(SesionStore);
   private readonly directorio = inject(DirectorioUsuarios);
   private readonly estadoUrl = crearEstadoUrl();
+  private readonly router = inject(Router);
 
   readonly permisos = PERMISOS;
   readonly formatearLogin = formatearLogin;
@@ -488,6 +491,38 @@ export class Usuarios {
           this.notificaciones.info(activo ? 'Usuario activado' : 'Usuario desactivado', formatearLogin(actualizado.usuario));
         },
         error: (err: unknown) => this.notificaciones.errorHttp('No se pudo cambiar el estado', err),
+      });
+  }
+
+  // --- Sesiones y actividad ---
+  readonly aCerrarSesiones = signal<Usuario | null>(null);
+  readonly cerrandoSesiones = signal(false);
+
+  verActividad(usuario: Usuario): void {
+    void this.router.navigate([urlModuloPorId('actividad')], { queryParams: { actorId: usuario.id, rango: '7d' } });
+  }
+
+  confirmarCierreSesiones(usuario: Usuario): void {
+    if (!this.bloqueoAccesos(usuario)) {
+      this.aCerrarSesiones.set(usuario);
+    }
+  }
+
+  cerrarSesiones(motivo: string): void {
+    const usuario = this.aCerrarSesiones();
+    if (!usuario || this.cerrandoSesiones()) {
+      return;
+    }
+    this.cerrandoSesiones.set(true);
+    this.usuariosApi
+      .cerrarSesiones(usuario.id, motivo || undefined)
+      .pipe(finalize(() => this.cerrandoSesiones.set(false)))
+      .subscribe({
+        next: () => {
+          this.aCerrarSesiones.set(null);
+          this.notificaciones.exito('Sesiones cerradas', `${formatearLogin(usuario.usuario)} deberá iniciar sesión de nuevo.`);
+        },
+        error: (err: unknown) => this.notificaciones.errorHttp('No se pudieron cerrar las sesiones', err),
       });
   }
 

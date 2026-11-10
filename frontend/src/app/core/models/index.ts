@@ -5,3 +5,4 @@ export * from './rol.model';
 export * from './permiso.model';
 export * from './analitica.model';
 export * from './auditoria.model';
+export * from './monitoreo.model';

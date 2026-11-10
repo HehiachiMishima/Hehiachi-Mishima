@@ -30,6 +30,7 @@ import oracle.common.support.Auditoria;
 import oracle.common.support.Filtros;
 import oracle.common.support.Listas;
 import oracle.common.support.Trazas;
+import oracle.monitoreo.MonitorPeticiones;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -58,6 +59,7 @@ public class UsuarioService {
     private final Protecciones protecciones;
     private final GuardiaPrivilegios guardia;
     private final RegistroAuditoria auditoria;
+    private final MonitorPeticiones monitor;
 
     public UsuarioService(
             UsuarioRepository usuarioRepository,
@@ -67,7 +69,8 @@ public class UsuarioService {
             ResolucionRepository resolucionRepository,
             Protecciones protecciones,
             GuardiaPrivilegios guardia,
-            RegistroAuditoria auditoria) {
+            RegistroAuditoria auditoria,
+            MonitorPeticiones monitor) {
         this.usuarioRepository = usuarioRepository;
         this.autorizacionCache = autorizacionCache;
         this.passwordEncoder = passwordEncoder;
@@ -76,6 +79,7 @@ public class UsuarioService {
         this.protecciones = protecciones;
         this.guardia = guardia;
         this.auditoria = auditoria;
+        this.monitor = monitor;
     }
 
     public ApiResponse<List<UsuarioResponse>> listar() {
@@ -268,6 +272,30 @@ public class UsuarioService {
             String mensaje = peticion.activo() ? "Usuario activado." : "Usuario desactivado.";
             return ApiResponse.ok(mensaje, respuesta(usuario, actor));
         }));
+    }
+
+    /**
+     * Cierra todas las sesiones del usuario: sube la version de credenciales
+     * (los JWT emitidos dejan de valer) e invalida la cache de autorizacion.
+     * Mismas reglas que desactivar: no protegidos, no uno mismo, sin escalada.
+     */
+    public ApiResponse<Void> cerrarSesiones(Long id, String motivo) {
+        Long actor = ActorActual.id();
+        ContextoAuditoria ctx = ContextoAuditoria.actual();
+        Trazas.medir(log, "UsuarioService.cerrarSesiones", () -> transacciones.ejecutar(() -> {
+            Usuario usuario = obtenerUsuario(id);
+            verificarNoProtegido(usuario);
+            guardia.exigirAutoridadSobre(actor, id);
+            usuario.revocarCredenciales();
+            Auditoria.alActualizar(usuario, actor);
+            usuarioRepository.save(usuario);
+            autorizacionCache.invalidar(id);
+            auditoria.exito(ctx, AccionAuditoria.SESIONES_CERRADAS, EntidadAuditoria.USUARIO, id,
+                    motivo == null || motivo.isBlank() ? null : Detalle.motivo(motivo.trim()));
+            return null;
+        }));
+        monitor.olvidar(id);
+        return ApiResponse.<Void>ok("Sesiones cerradas. El usuario deberá iniciar sesión de nuevo.", null);
     }
 
     /** Respuesta con protegido = usuario protegido o la propia cuenta del actor. */

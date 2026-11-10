@@ -31,13 +31,13 @@ public class Protecciones {
      * Permisos base: inmutables. No se pueden modificar (ni siquiera su campo
      * 'activo') ni eliminar, ni ocupar su nombre. Espejo de
      * seguridad.es_permiso_base() de schema.sql (14 de gestion + PANEL_ADMIN +
-     * DASHBOARD_ADMIN + VER_AUDITORIA).
+     * DASHBOARD_ADMIN + VER_AUDITORIA + VER_MONITOREO).
      */
     public static final Set<String> PERMISOS_BASE = Set.of(
             "ASIGNAR_ROLES", "VER_ROLES", "CREAR_ROLES", "MODIFICAR_ROLES", "ELIMINAR_ROLES",
             "ASIGNAR_PERMISOS", "VER_PERMISOS", "CREAR_PERMISOS", "MODIFICAR_PERMISOS", "ELIMINAR_PERMISOS",
             "VER_USUARIOS", "CREAR_USUARIOS", "MODIFICAR_USUARIOS", "ELIMINAR_USUARIOS",
-            "PANEL_ADMIN", "DASHBOARD_ADMIN", "VER_AUDITORIA");
+            "PANEL_ADMIN", "DASHBOARD_ADMIN", "VER_AUDITORIA", "VER_MONITOREO");
 
     /** Rol que solo recibe permisos: no se modifica ni se elimina. */
     public static final String ROL_ADMINISTRADOR = "ADMINISTRADOR";

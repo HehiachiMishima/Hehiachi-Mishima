@@ -1,0 +1,244 @@
+<app-page-header [eyebrow]="'Panel ' + panel.nombre" heading="Monitoreo">
+  <ng-container pageMeta>
+    <span>Cómo responde la API en vivo: tráfico, latencias, errores y salud de la infraestructura.</span>
+    @if (hace()) {
+      <span role="status">Actualizado {{ hace() }}@if (pausado()) { · en pausa }</span>
+    }
+  </ng-container>
+  <ng-container pageActions>
+    <app-segmented label="Ventana de tiempo" [options]="opcionesVentana" [value]="ventana()" (valueChange)="cambiarVentana($event)" />
+    <button appButton variant="secondary" size="sm" type="button" (click)="alternarPausa()" [attr.aria-pressed]="pausado()">
+      <ui-icon [name]="pausado() ? 'play' : 'pause'" [size]="16" /> {{ pausado() ? 'Reanudar' : 'Pausar' }}
+    </button>
+    <button appButton variant="secondary" size="sm" type="button" (click)="cargar()" [attr.aria-disabled]="cargando() || null">
+      <ui-icon name="refresh" [size]="16" /> Actualizar
+    </button>
+  </ng-container>
+</app-page-header>
+
+@if (error() && !resumen()) {
+  <section class="seccion">
+    <app-notice tone="danger">
+      No se pudo obtener el estado del sistema.
+      <button appButton variant="secondary" size="sm" type="button" class="reintentar" (click)="cargar()">
+        <ui-icon name="refresh" [size]="16" /> Reintentar
+      </button>
+    </app-notice>
+  </section>
+} @else {
+  <!-- Semáforo -->
+  <section class="seccion" aria-labelledby="titulo-estado" [attr.aria-busy]="cargando() || null">
+    <h2 id="titulo-estado" class="u-sr-only">Estado general</h2>
+    @if (resumen(); as r) {
+      <div class="estado" [attr.data-tono]="estado()!.tono">
+        <div class="estado__principal">
+          <span class="estado__punto" aria-hidden="true"></span>
+          <div>
+            <p class="estado__eyebrow">Estado del sistema</p>
+            <p class="estado__titulo">{{ estado()!.titulo }}</p>
+          </div>
+          <app-badge [tone]="estado()!.tono">{{ r.sistema.alertas.length }} {{ r.sistema.alertas.length === 1 ? 'alerta' : 'alertas' }}</app-badge>
+        </div>
+        <p class="estado__texto">{{ estado()!.texto }}</p>
+        @if (r.sistema.alertas.length) {
+          <ul class="estado__alertas">
+            @for (alerta of r.sistema.alertas; track alerta) {
+              <li><ui-icon name="alertTriangle" [size]="16" /> {{ alerta }}</li>
+            }
+          </ul>
+        }
+        @if (error()) {
+          <p class="estado__aviso"><ui-icon name="alerta" [size]="16" /> El último refresco falló; se muestran los datos anteriores.</p>
+        }
+      </div>
+    } @else {
+      <div class="estado"><span class="ui-skeleton estado__skeleton"></span><span class="u-sr-only">Cargando estado</span></div>
+    }
+  </section>
+
+  <!-- Tráfico -->
+  <section class="seccion" aria-labelledby="titulo-trafico">
+    <h2 id="titulo-trafico">Tráfico · últimos {{ ventana() === '60' ? '60' : ventana() }} min</h2>
+    <div class="metricas">
+      @if (!resumen()) {
+        @for (fila of [1, 2, 3, 4, 5, 6]; track fila) {
+          <article class="metrica"><span class="ui-skeleton metrica__skeleton"></span><span class="ui-skeleton metrica__skeleton metrica__skeleton--cifra"></span></article>
+        }
+      } @else {
+        @for (c of trafico(); track c.id) {
+          <article class="metrica" [attr.data-celda]="c.id">
+            <div class="metrica__cabecera">
+              <h3 class="metrica__label"><ui-icon [name]="c.icono" [size]="16" /> {{ c.etiqueta }}</h3>
+              @if (c.badge; as b) { <app-badge [tone]="b.tono">{{ b.texto }}</app-badge> }
+            </div>
+            <span class="metrica__valor">{{ c.valor }}</span>
+            <span class="metrica__detalle">{{ c.detalle }}</span>
+          </article>
+        }
+      }
+    </div>
+  </section>
+
+  <!-- Gráficos -->
+  <section class="seccion" aria-labelledby="titulo-graficos">
+    <h2 id="titulo-graficos">Última hora, minuto a minuto</h2>
+    <div class="graficos">
+      <article class="grafico">
+        <header>
+          <h3>Peticiones por minuto</h3>
+          <p>Correctas, rechazadas (4xx) y errores del servidor (5xx).</p>
+        </header>
+        <ui-serie tipo="barras" titulo="Peticiones por minuto" [puntos]="puntosTrafico()" [componentes]="componentesTrafico" [altura]="180" />
+      </article>
+      <article class="grafico">
+        <header>
+          <h3>Latencia p95</h3>
+          <p>El 95 % de las peticiones de cada minuto respondió en menos de este tiempo.</p>
+        </header>
+        <ui-serie tipo="linea" titulo="Latencia p95 por minuto" unidad=" ms" [puntos]="puntosLatencia()" [componentes]="componentesLatencia" [altura]="180" />
+      </article>
+    </div>
+  </section>
+
+  <!-- Infraestructura -->
+  <section class="seccion" aria-labelledby="titulo-infra">
+    <h2 id="titulo-infra">Infraestructura</h2>
+    <div class="metricas">
+      @for (c of infraestructura(); track c.id) {
+        <article class="metrica" [attr.data-celda]="c.id">
+          <div class="metrica__cabecera">
+            <h3 class="metrica__label"><ui-icon [name]="c.icono" [size]="16" /> {{ c.etiqueta }}</h3>
+            @if (c.badge; as b) { <app-badge [tone]="b.tono">{{ b.texto }}</app-badge> }
+          </div>
+          <span class="metrica__valor">{{ c.valor }}</span>
+          @if (c.uso !== undefined) {
+            <div class="uso" role="progressbar" [attr.aria-label]="c.etiqueta" [attr.aria-valuenow]="c.uso" aria-valuemin="0" aria-valuemax="100"
+              [style.--value]="c.uso + '%'" [attr.data-alto]="c.uso >= 90 || null"></div>
+          }
+          <span class="metrica__detalle">{{ c.detalle }}</span>
+        </article>
+      }
+    </div>
+  </section>
+
+  <!-- Endpoints -->
+  <section class="seccion" aria-labelledby="titulo-rutas">
+    <div class="seccion__cabecera">
+      <h2 id="titulo-rutas">Endpoints · últimos {{ ventana() }} min</h2>
+      <app-segmented label="Orden de los endpoints" [options]="opcionesOrden" [value]="ordenRutas()" (valueChange)="ordenRutas.set($event)" />
+    </div>
+    @if (rutasOrdenadas().length) {
+      <div class="ui-table-wrap">
+        <table class="ui-table ui-table--compacta ui-table--tarjetas rutas" aria-labelledby="titulo-rutas">
+          <thead>
+            <tr>
+              <th scope="col">Endpoint</th>
+              <th scope="col" class="num">Peticiones</th>
+              <th scope="col" class="num">Errores</th>
+              <th scope="col" class="num col-p3">Promedio</th>
+              <th scope="col" class="num">p95</th>
+              <th scope="col" class="num col-p3">Máx.</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of rutasOrdenadas(); track r.metodo + r.ruta) {
+              <tr>
+                <td class="rutas__endpoint">
+                  <span class="metodo" [attr.data-metodo]="r.metodo">{{ r.metodo }}</span>
+                  <a class="u-mono" [routerLink]="rutaActividad" [queryParams]="{ metodo: r.metodo, ruta: r.ruta, rango: '24h' }"
+                    [attr.aria-label]="'Ver la traza de ' + r.metodo + ' ' + r.ruta">{{ r.ruta }}</a>
+                </td>
+                <td class="num" data-label="Peticiones">{{ numero(r.peticiones) }}</td>
+                <td class="num" data-label="Errores">
+                  <span class="rutas__errores">
+                  @if (r.errores5xx) {
+                    <app-badge tone="danger">{{ r.errores5xx }} 5xx</app-badge>
+                  }
+                  @if (r.errores4xx) {
+                    <app-badge tone="warning">{{ r.errores4xx }} 4xx</app-badge>
+                  }
+                  @if (!r.errores4xx && !r.errores5xx) { <span class="u-muted">0</span> } @else { <span class="u-muted rutas__tasa">{{ tasa(r) }}</span> }
+                                  </span>
+                </td>
+                <td class="num col-p3" data-label="Promedio">{{ numero(r.promedioMs) }} ms</td>
+                <td class="num" data-label="p95" [class.lento]="r.p95Ms >= (incidencias()?.umbralLentoMs ?? 1000)">{{ numero(r.p95Ms) }} ms</td>
+                <td class="num col-p3" data-label="Máx.">{{ numero(r.maxMs) }} ms</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else if (resumen()) {
+      <p class="vacio">{{ ordenRutas() === 'errores' ? 'Ningún endpoint con errores en este periodo.' : 'Aún no hay peticiones en este periodo.' }}</p>
+    }
+  </section>
+
+  <div class="fila">
+    <!-- Incidencias -->
+    <section class="seccion" aria-labelledby="titulo-incidencias">
+      <div class="seccion__cabecera">
+        <h2 id="titulo-incidencias">Incidencias recientes</h2>
+        <app-segmented label="Tipo de incidencia" [options]="opcionesIncidencia" [value]="tipoIncidencia()" (valueChange)="tipoIncidencia.set($event)" />
+      </div>
+      @if (listaIncidencias().length) {
+        <ul class="lista">
+          @for (p of listaIncidencias(); track $index) {
+            <li>
+              <app-badge [tone]="tonoEstado(p.estado)">{{ p.estado }}</app-badge>
+              <div class="lista__cuerpo">
+                <p class="lista__titulo"><span class="metodo" [attr.data-metodo]="p.metodo">{{ p.metodo }}</span> <span class="u-mono" [title]="p.uri">{{ p.uri }}</span></p>
+                <p class="lista__meta">
+                  {{ numero(p.duracionMs) }} ms · {{ p.actorUsuario ? formatearLogin(p.actorUsuario) : 'Anónimo' }}
+                  · <time [attr.datetime]="p.ocurridoEn" [title]="p.ocurridoEn | fechaHora: 'completa' : true">{{ p.ocurridoEn | fechaHora: 'relativa' : true }}</time>
+                </p>
+              </div>
+              @if (p.idCorrelacion) {
+                <a appButton variant="tertiary" size="sm" [routerLink]="rutaActividad" [queryParams]="{ idCorrelacion: p.idCorrelacion }">Ver traza</a>
+              }
+            </li>
+          }
+        </ul>
+      } @else if (incidencias()) {
+        <p class="vacio"><ui-icon name="checkCircleFilled" [size]="16" class="ok" />
+          {{ tipoIncidencia() === 'errores' ? 'Sin errores desde el último arranque.' : 'Ninguna petición superó ' + numero(incidencias()!.umbralLentoMs) + ' ms.' }}</p>
+      }
+    </section>
+
+    <!-- Usuarios activos -->
+    <section class="seccion" aria-labelledby="titulo-presentes">
+      <div class="seccion__cabecera">
+        <h2 id="titulo-presentes">Conectados · 15 min</h2>
+        <a appButton variant="tertiary" size="sm" [routerLink]="rutaActividad">Toda la actividad <ui-icon name="chevronRight" [size]="16" /></a>
+      </div>
+      @if (presentes().length) {
+        <ul class="lista">
+          @for (u of presentes(); track u.actorId) {
+            <li>
+              <app-avatar [name]="(u.usuario ?? '?').replace('@', '')" />
+              <div class="lista__cuerpo">
+                <p class="lista__titulo">
+                  <a [routerLink]="rutaActividad" [queryParams]="{ actorId: u.actorId, rango: '24h' }">{{ formatearLogin(u.usuario ?? 'Usuario #' + u.actorId) }}</a>
+                  @if (u.errores) { <app-badge tone="warning">{{ u.errores }} {{ u.errores === 1 ? 'error' : 'errores' }}</app-badge> }
+                </p>
+                <p class="lista__meta">
+                  <span class="u-mono">{{ u.ultimaRuta }}</span> · {{ numero(u.peticiones) }} pet. · {{ u.ip || '—' }}
+                  · <time [attr.datetime]="u.ultimaVez">{{ u.ultimaVez | fechaHora: 'relativa' : true }}</time>
+                </p>
+              </div>
+              @if (puedeAuditoria()) {
+                <a appButton variant="tertiary" size="sm" [routerLink]="rutaAuditoria" [queryParams]="{ actorId: u.actorId }">Auditoría</a>
+              }
+            </li>
+          }
+        </ul>
+      } @else if (resumen()) {
+        <p class="vacio">Nadie ha usado la API en los últimos 15 minutos.</p>
+      }
+    </section>
+  </div>
+
+  <app-notice class="nota" silent>
+    Las métricas en vivo son de esta instancia y se reinician al desplegar. La traza completa por usuario queda en
+    <a [routerLink]="rutaActividad">Actividad</a>@if (resumen()?.sistema?.colas; as c) { y se conserva {{ c.retencionDias }} días}.
+  </app-notice>
+}

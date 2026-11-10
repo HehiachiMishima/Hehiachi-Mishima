@@ -1,0 +1,241 @@
+@use 'design' as d;
+
+.actividad__lentas {
+  align-self: end;
+  min-height: 2.5rem;
+}
+
+.badge-quitar {
+  display: inline-grid;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  margin-right: -#{d.space('1')};
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  @include d.focus-ring;
+
+  &:hover {
+    background: d.color('surface-hover');
+  }
+}
+
+// ---------- Resumen del usuario ----------
+.usuario {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: d.space('6');
+  margin-bottom: d.space('8');
+  padding-bottom: d.space('8');
+  border-bottom: 1px solid d.color('border');
+}
+
+.usuario__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: d.space('4');
+}
+
+.usuario__eyebrow {
+  @include d.eyebrow;
+}
+
+.usuario__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: d.space('2');
+}
+
+.usuario__skeleton {
+  width: 100%;
+  height: 7rem;
+}
+
+.metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr));
+  padding: 1px 0 0 1px;
+}
+
+.metrica {
+  @include d.panel(d.space('6'));
+  display: flex;
+  flex-direction: column;
+  gap: d.space('2');
+  min-width: 0;
+  margin: -1px 0 0 -1px;
+}
+
+.metrica__cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: d.space('2');
+}
+
+.metrica__label {
+  @include d.type('mono-00-caps');
+  color: d.color('text-muted');
+}
+
+.metrica__valor {
+  margin-top: d.space('2');
+  @include d.type('heading-05');
+  @include d.tabular-nums;
+  color: d.color('text-strong');
+
+  &--texto {
+    @include d.type('heading-03');
+  }
+}
+
+.metrica__detalle {
+  overflow-wrap: anywhere;
+  @include d.type('body-01');
+  color: d.color('text-muted');
+}
+
+.graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: d.space('6');
+}
+
+.grafico {
+  @include d.panel(d.space('6'));
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: d.space('4');
+  min-width: 0;
+}
+
+// ---------- Tabla ----------
+.actividad__tabla {
+  td.u-mono {
+    @include d.type('mono-01');
+    color: d.color('text-muted');
+    white-space: nowrap;
+  }
+
+  .num {
+    text-align: end;
+    white-space: nowrap;
+    @include d.tabular-nums;
+  }
+
+  .lento {
+    color: d.color('warning');
+    font-weight: d.font-weight('medium');
+  }
+
+  .ui-link-btn:not(.actividad__ruta) {
+    color: d.color('text');
+
+    &:hover {
+      color: d.color('accent');
+    }
+  }
+
+  // Fallos del servidor: filete izquierdo de peligro.
+  tbody tr:has(app-badge.badge--danger) td:first-child {
+    box-shadow: inset 2px 0 d.color('danger');
+  }
+}
+
+.actividad__operacion {
+  max-width: 28rem;
+}
+
+.actividad__ruta {
+  display: flex;
+  align-items: baseline;
+  gap: d.space('2');
+  max-width: 100%;
+  text-align: start;
+
+  .u-mono {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.metodo {
+  flex-shrink: 0;
+  min-width: 3.25rem;
+  @include d.type('mono-00-caps');
+  color: d.color('text-faint');
+
+  &[data-metodo='POST'],
+  &[data-metodo='PUT'],
+  &[data-metodo='PATCH'] {
+    color: d.color('accent');
+  }
+
+  &[data-metodo='DELETE'] {
+    color: d.color('danger');
+  }
+}
+
+.actividad__detalle {
+  background: d.color('surface-muted');
+
+  &:hover {
+    background: d.color('surface-muted') !important;
+  }
+
+  td {
+    padding: d.space('4');
+  }
+}
+
+.kv {
+  @include d.kv-list;
+
+  dd {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: d.space('2');
+    overflow-wrap: anywhere;
+  }
+}
+
+.actividad__enlace {
+  @include d.type('body-01');
+}
+
+// ===================== Celular: tarjetas =====================
+@include d.bp-down('md') {
+  .actividad__tabla {
+    .actividad__hora {
+      grid-column: 1;
+      grid-row: 1;
+      align-self: center;
+    }
+
+    .celda-estado {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .actividad__operacion {
+      grid-column: 1 / -1;
+      max-width: none;
+    }
+
+    .actividad__detalle td {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .kv {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
