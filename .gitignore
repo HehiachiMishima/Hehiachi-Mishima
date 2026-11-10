@@ -17,3 +17,5 @@ Thumbs.db
 # --- Logs ---
 *.log
 *.sql
+!backend/schema.sql
+!backend/migraciones/*.sql

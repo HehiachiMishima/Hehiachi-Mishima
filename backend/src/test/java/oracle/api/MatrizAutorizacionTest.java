@@ -48,7 +48,7 @@ class MatrizAutorizacionTest extends ApiPrueba {
             Pattern.compile("^\\s*hasAuthority\\('[A-Z_]+'\\)(\\s+and\\s+hasAuthority\\('[A-Z_]+'\\))*\\s*$");
     private static final Pattern VARIABLE = Pattern.compile("\\{[^}]+}");
     private static final String ID_INEXISTENTE = "987654321";
-    private static final Set<String> PUBLICOS = Set.of("/api/auth/login", "/api/health");
+    private static final Set<String> PUBLICOS = Set.of("/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/health");
 
     @Autowired
     @Qualifier("requestMappingHandlerMapping")

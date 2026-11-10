@@ -51,7 +51,7 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(autorizacion -> autorizacion
-                        .requestMatchers("/api/auth/login", "/api/health").permitAll()
+                        .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/auth/logout", "/api/health").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(excepciones -> excepciones
@@ -79,9 +79,10 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With",
                 "X-Request-Id"));
-        // El token viaja en la cabecera Authorization: no hacen falta cookies.
         config.setExposedHeaders(List.of("X-Request-Id", "Content-Disposition"));
-        config.setAllowCredentials(false);
+        // Credenciales = la cookie HttpOnly del refresh token (Path=/api/auth). El
+        // access token sigue en Authorization. Origenes siempre explicitos (nunca *).
+        config.setAllowCredentials(true);
         config.setMaxAge(maxAge);
 
         UrlBasedCorsConfigurationSource fuente = new UrlBasedCorsConfigurationSource();

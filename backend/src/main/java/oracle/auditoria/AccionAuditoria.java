@@ -5,6 +5,10 @@ public enum AccionAuditoria {
     LOGIN_EXITOSO,
     LOGIN_FALLIDO,
     LOGIN_BLOQUEADO,
+    /** Cierre de sesion voluntario (revoca la familia de refresh tokens). */
+    LOGOUT,
+    /** Se presento un refresh token ya usado: posible robo; se revoca la sesion entera. */
+    SESION_REUTILIZADA,
     CONTRASENA_CAMBIADA,
     USUARIO_CREADO,
     USUARIO_ACTUALIZADO,

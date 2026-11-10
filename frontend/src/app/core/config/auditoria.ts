@@ -7,6 +7,8 @@ export const ACCIONES_AUDITORIA: Record<string, string> = {
   LOGIN_EXITOSO: 'Inicio de sesión',
   LOGIN_FALLIDO: 'Inicio de sesión fallido',
   LOGIN_BLOQUEADO: 'Inicio de sesión bloqueado',
+  LOGOUT: 'Cierre de sesión',
+  SESION_REUTILIZADA: 'Sesión robada bloqueada',
   CONTRASENA_CAMBIADA: 'Contraseña cambiada',
   USUARIO_CREADO: 'Usuario creado',
   USUARIO_ACTUALIZADO: 'Usuario actualizado',
@@ -32,7 +34,7 @@ export const ACCIONES_AUDITORIA: Record<string, string> = {
 };
 
 export const GRUPOS_ACCIONES: { nombre: string; acciones: string[] }[] = [
-  { nombre: 'Sesión', acciones: ['LOGIN_EXITOSO', 'LOGIN_FALLIDO', 'CONTRASENA_CAMBIADA'] },
+  { nombre: 'Sesión', acciones: ['LOGIN_EXITOSO', 'LOGIN_FALLIDO', 'LOGOUT', 'SESION_REUTILIZADA', 'CONTRASENA_CAMBIADA'] },
   { nombre: 'Usuarios', acciones: ['USUARIO_CREADO', 'USUARIO_ACTUALIZADO', 'USUARIO_ELIMINADO', 'USUARIO_ESTADO_CAMBIADO', 'SESIONES_CERRADAS'] },
   { nombre: 'Roles', acciones: ['ROL_CREADO', 'ROL_ACTUALIZADO', 'ROL_ELIMINADO', 'ROL_ESTADO_CAMBIADO'] },
   {

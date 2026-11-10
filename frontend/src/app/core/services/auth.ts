@@ -1,9 +1,10 @@
 import { HttpClient } from '@angular/common/http';
 import { Service, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, map, of, tap } from 'rxjs';
+import { Observable, catchError, finalize, firstValueFrom, map, of, shareReplay, tap } from 'rxjs';
 import { CONFIG } from '../config/configuracion';
 import { environment } from '../../../environments/environment';
+import { CABECERA_AJAX } from '../interceptors/contexto';
 import { ApiResponse, AuthResponse, CambiarContrasenaRequest, LoginRequest, SesionVigente } from '../models';
 import { Carga } from './carga';
 import { Notificaciones } from './notificaciones';
@@ -21,25 +22,68 @@ export class Auth {
   private readonly notificaciones = inject(Notificaciones);
   private readonly base = environment.apiUrl.replace(/\/+$/, '');
   private ultimoRefresco = 0;
+  /** Renovación en curso, compartida: varias peticiones con 401 disparan UN solo /auth/refresh. */
+  private renovacion: Observable<boolean> | null = null;
 
   readonly sesion = this.sesionStore.sesion;
   readonly permisos = this.sesionStore.permisos;
   readonly usuario = this.sesionStore.usuario;
   readonly autenticado = this.sesionStore.autenticado;
 
+  /** Login: el access token queda en memoria y el servidor deja el refresh token en una cookie HttpOnly. */
   iniciarSesion(credenciales: LoginRequest): Observable<AuthResponse> {
-    return this.http.post<ApiResponse<AuthResponse>>(`${this.base}/auth/login`, credenciales).pipe(
-      map((respuesta) => respuesta.datos),
-      tap((datos) =>
-        this.sesionStore.guardar({
-          token: datos.token,
-          tipo: datos.tipo,
-          expiraEn: datos.expiraEn,
-          usuario: datos.usuario,
-          permisos: datos.permisos,
-        }),
-      ),
-    );
+    return this.http
+      .post<ApiResponse<AuthResponse>>(`${this.base}/auth/login`, credenciales, { withCredentials: true })
+      .pipe(
+        map((respuesta) => respuesta.datos),
+        tap((datos) => this.guardar(datos)),
+      );
+  }
+
+  /**
+   * Pide un access token nuevo con la cookie del refresh token (sin
+   * contraseña). Emite true si se renovó y false si la sesión ya no es
+   * renovable (vencida por inactividad o por el máximo, revocada, cerrada).
+   * Nunca falla: quien llama decide si expulsa.
+   */
+  renovar(): Observable<boolean> {
+    if (!this.renovacion) {
+      this.renovacion = this.http
+        .post<ApiResponse<AuthResponse>>(`${this.base}/auth/refresh`, {}, { withCredentials: true, headers: CABECERA_AJAX })
+        .pipe(
+          map((respuesta) => respuesta.datos),
+          tap((datos) => this.guardar(datos)),
+          map(() => true),
+          catchError(() => of(false)),
+          finalize(() => (this.renovacion = null)),
+          shareReplay({ bufferSize: 1, refCount: false }),
+        );
+    }
+    return this.renovacion;
+  }
+
+  /** Al arrancar la app (recarga, pestaña nueva): recupera la sesión desde la cookie si existe. */
+  async restaurar(): Promise<void> {
+    if (!this.sesionStore.autenticado()) {
+      await firstValueFrom(this.renovar());
+    }
+  }
+
+  private guardar(datos: AuthResponse): void {
+    this.sesionStore.guardar({
+      token: datos.token,
+      tipo: datos.tipo,
+      expiraEn: datos.expiraEn,
+      usuario: datos.usuario,
+      permisos: datos.permisos,
+    });
+  }
+
+  /** Revoca en el servidor la sesión (familia del refresh token) y borra la cookie. Sin esperar respuesta. */
+  private revocarEnServidor(): void {
+    this.http
+      .post(`${this.base}/auth/logout`, {}, { withCredentials: true, headers: CABECERA_AJAX })
+      .subscribe({ error: () => undefined });
   }
 
   /**
@@ -48,7 +92,8 @@ export class Auth {
    */
   cambiarContrasena(peticion: CambiarContrasenaRequest): Observable<void> {
     return this.http
-      .put<ApiResponse<Partial<AuthResponse> | null>>(`${this.base}/auth/contrasena`, peticion)
+      // withCredentials: el servidor revoca las sesiones anteriores y deja una cookie nueva para esta.
+      .put<ApiResponse<Partial<AuthResponse> | null>>(`${this.base}/auth/contrasena`, peticion, { withCredentials: true })
       .pipe(
         tap((respuesta) => {
           const datos = respuesta?.datos;
@@ -85,6 +130,7 @@ export class Auth {
   }
 
   cerrarSesion(redirigir = true): void {
+    this.revocarEnServidor();
     this.sesionStore.limpiar();
     if (!redirigir) {
       return;
@@ -103,6 +149,8 @@ export class Auth {
     if (this.sesionStore.sesion() === null) {
       return;
     }
+    // Cierra también la sesión del servidor: una expulsión por inactividad no debe poder renovarse.
+    this.revocarEnServidor();
     this.sesionStore.limpiar();
     if (motivo === 'revocada') {
       this.notificaciones.advertencia(
@@ -110,7 +158,7 @@ export class Auth {
         'Ya no es válida (por ejemplo, porque se cambió tu contraseña). Vuelve a iniciar sesión.',
       );
     } else {
-      this.notificaciones.advertencia('Sesión expirada', 'Vuelve a iniciar sesión para continuar.');
+      this.notificaciones.advertencia('Sesión expirada', 'Se cerró por inactividad o por tiempo máximo. Vuelve a iniciar sesión.');
     }
     const url = this.router.url;
     if (!url.startsWith(CONFIG.rutas.login)) {

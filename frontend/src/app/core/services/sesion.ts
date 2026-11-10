@@ -7,15 +7,15 @@ const CLAVE = CONFIG.almacenamiento.sesion;
 /**
  * Estado de la sesión autenticada.
  *
- * Decisión de seguridad: el JWT se guarda en `sessionStorage` (no en
- * `localStorage`). Queda limitado a la pestaña y se borra al cerrarla, lo que
- * reduce la ventana de robo ante un XSS o un equipo compartido. El coste es
- * que cada pestaña nueva pide iniciar sesión. Una cookie HttpOnly exigiría
- * reactivar CSRF en el backend y se descarta por ahora.
+ * Decisión de seguridad: el access token (JWT de vida corta) vive SOLO en
+ * memoria; nunca en sessionStorage ni localStorage, así un XSS no encuentra
+ * un token persistido. Al recargar o abrir otra pestaña la sesión se
+ * restaura con POST /auth/refresh, que usa el refresh token de una cookie
+ * HttpOnly (Path=/api/auth, SameSite=Strict) que el JavaScript no puede leer.
  */
 @Service()
 export class SesionStore {
-  private readonly _sesion = signal<Sesion | null>(this.leer());
+  private readonly _sesion = signal<Sesion | null>(this.limpiarHeredada());
   private readonly _permisos = computed<readonly string[]>(() => this._sesion()?.permisos ?? []);
 
   readonly sesion = this._sesion.asReadonly();
@@ -25,7 +25,6 @@ export class SesionStore {
 
   guardar(sesion: Sesion): void {
     this._sesion.set(sesion);
-    this.persistir(sesion);
   }
 
   /** Sustituye identidad y permisos por los vigentes en el servidor (sin tocar el token). */
@@ -46,13 +45,7 @@ export class SesionStore {
 
   limpiar(): void {
     this._sesion.set(null);
-    try {
-      sessionStorage.removeItem(CLAVE);
-      // Limpia sesiones heredadas de versiones que usaban localStorage.
-      localStorage.removeItem(CLAVE);
-    } catch {
-      /* almacenamiento no disponible */
-    }
+    this.limpiarHeredada();
   }
 
   tienePermiso(permiso: string): boolean {
@@ -75,29 +68,14 @@ export class SesionStore {
     return true;
   }
 
-  private persistir(sesion: Sesion): void {
+  /** Borra tokens que versiones anteriores guardaban en el navegador. */
+  private limpiarHeredada(): null {
     try {
-      sessionStorage.setItem(CLAVE, JSON.stringify(sesion));
+      sessionStorage.removeItem(CLAVE);
+      localStorage.removeItem(CLAVE);
     } catch {
       /* almacenamiento no disponible */
     }
-  }
-
-  private leer(): Sesion | null {
-    try {
-      localStorage.removeItem(CLAVE);
-      const crudo = sessionStorage.getItem(CLAVE);
-      if (!crudo) {
-        return null;
-      }
-      const sesion = JSON.parse(crudo) as Sesion;
-      if (this.esVigente(sesion)) {
-        return sesion;
-      }
-      sessionStorage.removeItem(CLAVE);
-      return null;
-    } catch {
-      return null;
-    }
+    return null;
   }
 }

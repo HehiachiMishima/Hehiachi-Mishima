@@ -21,10 +21,18 @@ export const CONFIG = {
     duracionDeshacer: 8000,
   },
   sesion: {
-    /** Margen (ms) antes del vencimiento real para forzar el cierre. */
-    margenExpiracionMs: 0,
-    /** Antelación (ms) con la que se avisa de que la sesión va a vencer (WCAG 2.2.1). */
+    /**
+     * Antelación (ms) con la que se decide renovar el access token antes de que
+     * venza: si hubo actividad reciente se renueva en silencio; si no, se avisa
+     * (WCAG 2.2.1: al menos 20 s para pedir más tiempo con una sola acción).
+     */
     avisoExpiracionMs: 120_000,
+    /**
+     * Inactividad máxima en la pestaña (ms) para renovar sin preguntar. El
+     * servidor aplica además su propio límite (app.refresh.inactividad-min) y
+     * un máximo absoluto desde el login (app.refresh.max-horas).
+     */
+    inactividadMaxMs: 30 * 60_000,
   },
   busqueda: {
     debounceMs: 300,

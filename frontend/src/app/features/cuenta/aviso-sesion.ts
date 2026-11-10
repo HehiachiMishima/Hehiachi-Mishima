@@ -6,21 +6,24 @@ import { Button } from '../../shared/ui/button/button';
 
 const HORA = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' });
 
-/** Aviso previo al vencimiento de la sesión (WCAG 2.2.1). */
+/**
+ * Aviso de cierre por inactividad (WCAG 2.2.1): una sola acción para seguir.
+ * Cerrar el aviso (Esc o ✕) también cuenta como "seguir conectado".
+ */
 @Component({
   selector: 'app-aviso-sesion',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Modal, Button],
   template: `
     <ui-modal [abierto]="!!vigilante.aviso()" ancho="sm" [compacto]="true" [alerta]="true"
-      titulo="Tu sesión está por vencer" (cerrar)="vigilante.descartarAviso()">
+      titulo="¿Sigues ahí?" (cerrar)="vigilante.seguirConectado()">
       <p>
-        Tu sesión vencerá a las <strong>{{ hora() }}</strong>. Guarda los cambios pendientes:
-        después tendrás que volver a iniciar sesión.
+        No detectamos actividad. Por seguridad, tu sesión se cerrará a las <strong>{{ hora() }}</strong>.
+        Si sigues trabajando, no tendrás que volver a escribir tu contraseña.
       </p>
       <div modal-footer class="modal-foot">
-        <button type="button" appButton variant="ghost" (click)="cerrarSesion()">Cerrar sesión ahora</button>
-        <button type="button" appButton data-autofocus (click)="vigilante.descartarAviso()">Entendido</button>
+        <button type="button" appButton variant="ghost" (click)="cerrarSesion()">Cerrar sesión</button>
+        <button type="button" appButton data-autofocus (click)="vigilante.seguirConectado()">Seguir conectado</button>
       </div>
     </ui-modal>
   `,
@@ -35,7 +38,7 @@ export class AvisoSesion {
   });
 
   cerrarSesion(): void {
-    this.vigilante.descartarAviso();
+    this.vigilante.aviso.set(null);
     this.auth.cerrarSesion();
   }
 }

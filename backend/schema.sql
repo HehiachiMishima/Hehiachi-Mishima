@@ -218,9 +218,14 @@ CREATE TABLE seguridad.sesiones_refresh (
     expira_en         TIMESTAMPTZ NOT NULL,
     familia_expira_en TIMESTAMPTZ NOT NULL,
     revocado_en       TIMESTAMPTZ,
+    motivo_revocacion VARCHAR(20),
     ip                VARCHAR(45),
+    user_agent        VARCHAR(255),
     creado_en         TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_sesiones_refresh_token UNIQUE (token_hash),
+    CONSTRAINT ck_sesiones_refresh_motivo CHECK (
+        (revocado_en IS NULL AND motivo_revocacion IS NULL)
+        OR motivo_revocacion IN ('ROTADO', 'LOGOUT', 'CREDENCIALES', 'REUSO')),
     CONSTRAINT ck_sesiones_refresh_hash CHECK (token_hash ~ '^[0-9a-f]{64}$'),
     CONSTRAINT ck_sesiones_refresh_expira CHECK (expira_en <= familia_expira_en)
 );
@@ -231,6 +236,30 @@ CREATE INDEX idx_sesiones_refresh_vencidas ON seguridad.sesiones_refresh (famili
 COMMENT ON TABLE seguridad.sesiones_refresh IS 'Refresh tokens (solo su SHA-256). Un login = una familia; cada renovación rota el token.';
 COMMENT ON COLUMN seguridad.sesiones_refresh.expira_en IS 'Vence por inactividad; nunca después de familia_expira_en.';
 COMMENT ON COLUMN seguridad.sesiones_refresh.familia_expira_en IS 'Máximo de la sesión desde el login.';
+COMMENT ON COLUMN seguridad.sesiones_refresh.motivo_revocacion IS 'ROTADO (renovado), LOGOUT, CREDENCIALES (contraseña/desactivación/cierre forzado) o REUSO (token robado).';
+
+-- Subir credenciales_version (contraseña, cierre forzado de sesiones) o
+-- desactivar la cuenta revoca también los refresh tokens vivos: nadie puede
+-- renovar un access token ya revocado.
+CREATE FUNCTION seguridad.revocar_refresh_por_credenciales()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+    IF NEW.credenciales_version IS DISTINCT FROM OLD.credenciales_version
+       OR (OLD.activo AND NOT NEW.activo) THEN
+        UPDATE seguridad.sesiones_refresh
+        SET revocado_en = now(), motivo_revocacion = 'CREDENCIALES'
+        WHERE usuario_id = NEW.id AND revocado_en IS NULL;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER trg_usuarios_revocar_refresh
+AFTER UPDATE OF credenciales_version, activo ON seguridad.usuarios
+FOR EACH ROW EXECUTE FUNCTION seguridad.revocar_refresh_por_credenciales();
 
 -- ------------------------------------------------------------
 -- Vistas de resolución (respetan activo de rol y de permiso)

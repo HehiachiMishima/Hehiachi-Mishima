@@ -42,6 +42,8 @@ public class AuthService {
 
     /** Mensaje unico para no revelar si la cuenta existe, esta bloqueada o desactivada. */
     static final String CREDENCIALES_INVALIDAS = "Usuario o contraseña incorrectos.";
+    /** Refresh rechazado (vencido, revocado o desconocido): sin detallar el motivo. */
+    static final String SESION_VENCIDA = "Tu sesión terminó. Vuelve a iniciar sesión.";
 
     private final UsuarioRepository usuarioRepository;
     private final ResolucionRepository resolucionRepository;
@@ -118,6 +120,22 @@ public class AuthService {
                 .toList();
         return ApiResponse.ok("Sesión vigente.",
                 new SesionResponse(UsuarioResponse.of(usuario, true), permisos));
+    }
+
+    /**
+     * Emite un access token nuevo para el titular de un refresh token valido.
+     * Relee usuario y permisos (refleja cambios de rol al instante) y exige que
+     * la cuenta siga activa.
+     */
+    public AuthResponse renovar(Long usuarioId) {
+        return Trazas.medir(log, "AuthService.renovar", () -> transacciones.consultar(() -> {
+            Usuario usuario = usuarioRepository.findById(usuarioId)
+                    .orElseThrow(() -> new NoAutorizadoException(SESION_VENCIDA));
+            if (!Boolean.TRUE.equals(usuario.getActivo())) {
+                throw new NoAutorizadoException(SESION_VENCIDA);
+            }
+            return emitir(usuario);
+        }));
     }
 
     /**
