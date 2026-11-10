@@ -42,7 +42,8 @@ export class MonitoreoApi {
     return this.api.get<PaginaResponse<PeticionTraza>>('/monitoreo/peticiones', { ...filtro });
   }
 
-  actividad(actorId: number, dias: number): Observable<ActividadUsuario> {
-    return this.api.get<ActividadUsuario>(`/monitoreo/usuarios/${actorId}/actividad`, { dias });
+  /** `zona` (IANA) decide en qué días de calendario se agrupa `porDia`. */
+  actividad(actorId: number, dias: number, zona: string): Observable<ActividadUsuario> {
+    return this.api.get<ActividadUsuario>(`/monitoreo/usuarios/${actorId}/actividad`, { dias, zona });
   }
 }

@@ -46,7 +46,16 @@ const ESTADOS = [
 
 const METODOS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
 const HORA = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-const DIA = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const DIA_HORA = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const DIA = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'short' });
+/** Zona IANA del navegador (America/Lima…): el backend agrupa los días en ella. */
+const ZONA_IANA = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+/** "2026-11-10" → fecha de calendario local (sin pasar por UTC, que correría el día). */
+function diaCalendario(texto: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
 
 const NAVEGADORES: [string, RegExp][] = [
   ['Edge', /Edg\/(\d+)/],
@@ -99,6 +108,22 @@ export class Actividad {
   readonly tamano = input(50, { transform: numeroUrl(50) });
   readonly textoCorrelacion = linkedSignal(() => this.idCorrelacion());
 
+  /**
+   * Instante de referencia del periodo. Se fija al cambiar un filtro (no al
+   * paginar): así 'desde'/'hasta' no se desplazan entre páginas y una petición
+   * nueva no empuja filas a la página siguiente. "Actualizar" lo mueve a ahora.
+   */
+  private readonly ancla = linkedSignal(() => {
+    this.rango();
+    this.actorId();
+    this.metodo();
+    this.ruta();
+    this.estado();
+    this.lentas();
+    this.idCorrelacion();
+    return Date.now();
+  });
+
   readonly rangos = RANGOS;
   readonly estados = ESTADOS;
   readonly metodos = METODOS;
@@ -127,9 +152,11 @@ export class Actividad {
 
   readonly filtro = computed<FiltroPeticiones>(() => {
     const r = RANGOS.find((x) => x.id === this.rango()) ?? RANGOS[1];
+    const ancla = this.ancla();
     return {
       // Con un id de petición se busca en todo el periodo conservado.
-      desde: this.idCorrelacion() ? undefined : isoUtc(new Date(Date.now() - r.ms)),
+      desde: this.idCorrelacion() ? undefined : isoUtc(new Date(ancla - r.ms)),
+      hasta: this.idCorrelacion() ? undefined : isoUtc(new Date(ancla)),
       actorId: this.actorId() || undefined,
       metodo: this.metodo() || undefined,
       ruta: this.ruta() || undefined,
@@ -161,7 +188,10 @@ export class Actividad {
     (this.actividad()?.ips ?? []).map((r) => ({ etiqueta: r.etiqueta, valor: r.valor })),
   );
   readonly diasUsuario = computed<PuntoSerie[]>(() =>
-    (this.actividad()?.porDia ?? []).map((d) => ({ etiqueta: DIA.format(new Date(d.etiqueta + 'T00:00:00Z')), valores: [d.valor] })),
+    (this.actividad()?.porDia ?? []).map((d) => {
+      const dia = diaCalendario(d.etiqueta);
+      return { etiqueta: dia ? DIA.format(dia) : d.etiqueta, valores: [d.valor] };
+    }),
   );
   readonly erroresUsuario = computed(() => {
     const a = this.actividad();
@@ -217,13 +247,17 @@ export class Actividad {
   }
 
   recargar(): void {
-    this.cargar(this.filtro());
+    // Mover el ancla recalcula el filtro y el efecto vuelve a cargar la tabla.
+    const ahora = Date.now();
+    this.ancla.set(ahora > this.ancla() ? ahora : this.ancla() + 1);
     this.cargarActividad(this.actorId(), (RANGOS.find((x) => x.id === this.rango()) ?? RANGOS[1]).dias);
   }
 
+  /** Solo la hora si es de hoy; con día si no (en 7 o 30 días las horas se repiten). */
   hora(valor: string): string {
     const f = aFecha(valor, true);
-    return f ? HORA.format(f) : '—';
+    if (!f) return '—';
+    return f.toDateString() === new Date().toDateString() ? HORA.format(f) : DIA_HORA.format(f);
   }
 
   tono(estado: number): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -286,7 +320,7 @@ export class Actividad {
     if (!id) return;
     this.cargandoActividad.set(true);
     this.api
-      .actividad(id, dias)
+      .actividad(id, dias, ZONA_IANA)
       .pipe(finalize(() => this.cargandoActividad.set(false)))
       .subscribe({ next: (a) => this.actividad.set(a), error: () => this.actividad.set(null) });
   }

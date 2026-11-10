@@ -64,7 +64,8 @@ public class MonitoreoController {
 
     @GetMapping("/usuarios/{id}/actividad")
     public ApiResponse<ActividadUsuario> actividad(@PathVariable Long id,
-            @RequestParam(required = false) Integer dias) {
-        return service.actividad(id, dias);
+            @RequestParam(required = false) Integer dias,
+            @RequestParam(required = false) String zona) {
+        return service.actividad(id, dias, zona);
     }
 }

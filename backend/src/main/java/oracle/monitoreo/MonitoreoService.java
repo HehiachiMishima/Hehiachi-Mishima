@@ -2,6 +2,7 @@ package oracle.monitoreo;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +11,7 @@ import oracle.common.exception.PeticionInvalidaException;
 import oracle.common.response.ApiResponse;
 import oracle.common.response.PaginaResponse;
 import oracle.common.support.CondicionSql;
+import oracle.common.support.FechasIso;
 import oracle.common.support.Trazas;
 import oracle.monitoreo.Respuestas.ActividadUsuario;
 import oracle.monitoreo.Respuestas.BaseDatos;
@@ -127,16 +129,17 @@ public class MonitoreoService {
         return ApiResponse.ok("Traza de peticiones.", p);
     }
 
-    public ApiResponse<ActividadUsuario> actividad(Long actorId, Integer dias) {
+    public ApiResponse<ActividadUsuario> actividad(Long actorId, Integer dias, String zona) {
         int d = dias == null ? 7 : dias;
         if (d < 1 || d > 90) {
             throw new PeticionInvalidaException("Los días deben estar entre 1 y 90.");
         }
+        ZoneId z = FechasIso.zona(zona);
         Instant desde = Instant.now().minus(Duration.ofDays(d));
         var a = Trazas.medir(log, "MonitoreoService.actividad", () -> transacciones.consultar(() -> {
             var t = repositorio.totalesActor(actorId, desde);
             return new ActividadUsuario(actorId, d, t.peticiones(), t.errores(), t.primera(), t.ultima(),
-                    repositorio.porDiaActor(actorId, desde), repositorio.rutasActor(actorId, desde),
+                    z.getId(), repositorio.porDiaActor(actorId, desde, z), repositorio.rutasActor(actorId, desde),
                     repositorio.ipsActor(actorId, desde), repositorio.estadosActor(actorId, desde));
         }));
         return ApiResponse.ok("Actividad del usuario.", a);

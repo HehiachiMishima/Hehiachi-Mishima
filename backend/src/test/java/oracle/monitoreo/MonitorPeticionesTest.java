@@ -61,4 +61,35 @@ class MonitorPeticionesTest {
         m.olvidar(7L);
         assertThat(m.presentes(15)).isEmpty();
     }
+
+    @Test
+    void filtroDePeticionesAceptaElFormatoDelFrontend() {
+        var f = new FiltroPeticiones("2026-11-10T13:00:00", "2026-11-10T14:00:00", null, null, null, null, null, null, 1, 25);
+        var c = f.condicion(Instant.parse("2026-11-10T14:00:00Z"));
+        assertThat(c.where()).contains("p.ocurrido_en >= ?").contains("p.ocurrido_en < ?");
+    }
+
+    @Test
+    void sinDesdeSeAcotaASieteDiasAntesDeHasta() {
+        var f = new FiltroPeticiones(null, "2026-01-31T00:00:00Z", null, null, null, null, null, null, 1, 25);
+        var c = f.condicion(Instant.parse("2026-11-10T14:00:00Z"));
+        assertThat(c.args().get(0)).isEqualTo(java.time.OffsetDateTime.parse("2026-01-24T00:00:00.000001Z"));
+    }
+
+    @Test
+    void desdePosteriorAHastaEs400() {
+        var f = new FiltroPeticiones("2026-11-10T15:00:00Z", "2026-11-10T14:00:00Z", null, null, null, null, null, null, 1, 25);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> f.condicion(Instant.now()))
+                .isInstanceOf(oracle.common.exception.PeticionInvalidaException.class);
+    }
+
+    @Test
+    void cubetaNoSeReiniciaConUnMinutoViejo() {
+        SerieMinutos s = new SerieMinutos();
+        s.registrar(1000, 200, 10);
+        s.registrar(940, 500, 10); // mismo hueco (1000 % 60 == 940 % 60), una hora antes
+        Agregado a = s.minuto(1000);
+        assertThat(a.peticiones).isEqualTo(1);
+        assertThat(a.errores5xx).isZero();
+    }
 }

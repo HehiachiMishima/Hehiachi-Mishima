@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import oracle.common.exception.PeticionInvalidaException;
 import oracle.common.support.CondicionSql;
+import oracle.common.support.FechasIso;
 
 /**
  * Filtro ya validado y normalizado. Construye el WHERE SOLO con las condiciones
@@ -236,25 +237,7 @@ final class FiltroAuditoria {
 
     /** ISO con zona, ISO sin zona (UTC) o fecha sola (inicio de dia / fin de dia exclusivo). */
     private static Instant fecha(String v, String campo, boolean esHasta) {
-        if (v == null || v.isBlank()) {
-            return null;
-        }
-        String t = v.trim();
-        try {
-            if (t.length() <= 10) {
-                LocalDate dia = LocalDate.parse(t);
-                return (esHasta ? dia.plusDays(1) : dia).atStartOfDay().toInstant(ZoneOffset.UTC);
-            }
-            Instant instante;
-            try {
-                instante = OffsetDateTime.parse(t).toInstant();
-            } catch (DateTimeParseException sinZona) {
-                instante = LocalDateTime.parse(t).toInstant(ZoneOffset.UTC);
-            }
-            // 'hasta' con hora es inclusivo: se pasa a limite exclusivo sumando 1 microsegundo.
-            return esHasta ? instante.plusNanos(1_000) : instante;
-        } catch (DateTimeParseException ex) {
-            throw new PeticionInvalidaException("La fecha '" + campo + "' no tiene un formato ISO-8601 válido.");
-        }
+        return FechasIso.leer(v, campo, esHasta);
     }
+
 }

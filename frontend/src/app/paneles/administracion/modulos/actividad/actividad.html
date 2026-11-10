@@ -146,7 +146,7 @@
           </article>
           @if (diasUsuario().length > 1) {
             <article class="grafico">
-              <h3>Peticiones por día (UTC)</h3>
+              <h3>Peticiones por día <span class="u-muted">({{ zona }})</span></h3>
               <ui-serie tipo="barras" titulo="Peticiones por día" [puntos]="diasUsuario()" [componentes]="[{ nombre: 'Peticiones', color: 'var(--color-chart-2)' }]" [altura]="140" />
             </article>
           }

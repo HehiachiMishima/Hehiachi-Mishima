@@ -67,9 +67,9 @@ public final class Respuestas {
     public record Conteo(String etiqueta, long valor) {
     }
 
-    /** Lo que hizo un usuario en los ultimos N dias segun la traza persistida. */
+    /** Lo que hizo un usuario en los ultimos N dias segun la traza persistida; porDia en {@code zona}. */
     public record ActividadUsuario(Long actorId, int dias, long peticiones, long errores, Instant primera,
-            Instant ultima, List<Conteo> porDia, List<Conteo> rutas, List<Conteo> ips, List<Conteo> estados) {
+            Instant ultima, String zona, List<Conteo> porDia, List<Conteo> rutas, List<Conteo> ips, List<Conteo> estados) {
     }
 
     private Respuestas() {

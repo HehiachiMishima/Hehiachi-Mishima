@@ -139,6 +139,9 @@ export interface ActividadUsuario {
   errores: number;
   primera: string | null;
   ultima: string | null;
+  /** Zona IANA en la que se agruparon los días. */
+  zona: string;
+  /** etiqueta = día de calendario YYYY-MM-DD en `zona`. */
   porDia: ConteoMonitoreo[];
   rutas: ConteoMonitoreo[];
   ips: ConteoMonitoreo[];

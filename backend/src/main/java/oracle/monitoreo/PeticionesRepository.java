@@ -5,6 +5,7 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -99,12 +100,14 @@ class PeticionesRepository {
                 actorId, OffsetDateTime.ofInstant(desde, ZoneOffset.UTC));
     }
 
-    List<Conteo> porDiaActor(long actorId, Instant desde) {
-        return conteos("""
-                SELECT to_char(date_trunc('day', ocurrido_en AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS etiqueta,
-                       COUNT(*) AS valor
+    /** Dias de calendario en {@code zona} (YYYY-MM-DD), no en UTC: un 23:30 local no cae en el dia siguiente. */
+    List<Conteo> porDiaActor(long actorId, Instant desde, ZoneId zona) {
+        return jdbc.query("""
+                SELECT to_char(ocurrido_en AT TIME ZONE ?, 'YYYY-MM-DD') AS etiqueta, COUNT(*) AS valor
                 FROM peticiones WHERE actor_id = ? AND ocurrido_en >= ?
-                GROUP BY 1 ORDER BY 1""", actorId, desde);
+                GROUP BY 1 ORDER BY 1""",
+                (rs, i) -> new Conteo(rs.getString("etiqueta"), rs.getLong("valor")),
+                zona.getId(), actorId, OffsetDateTime.ofInstant(desde, ZoneOffset.UTC));
     }
 
     List<Conteo> rutasActor(long actorId, Instant desde) {

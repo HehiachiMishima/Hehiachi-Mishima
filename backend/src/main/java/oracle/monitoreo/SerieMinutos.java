@@ -45,6 +45,9 @@ final class SerieMinutos {
         private final long[] hist = new long[Histograma.CUBETAS];
 
         synchronized void registrar(long m, int estado, long ms) {
+            if (m < minuto) {
+                return; // evento de hace >= 60 min (reloj atrasado): no pisa el minuto vigente
+            }
             if (minuto != m) {
                 minuto = m;
                 peticiones = 0;

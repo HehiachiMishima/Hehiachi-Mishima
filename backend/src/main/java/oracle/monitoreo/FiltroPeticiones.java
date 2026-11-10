@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -12,6 +11,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import oracle.common.exception.PeticionInvalidaException;
 import oracle.common.support.CondicionSql;
+import oracle.common.support.FechasIso;
 
 /**
  * Filtros de GET /api/monitoreo/peticiones, validados. Solo se agregan al
@@ -39,8 +39,8 @@ public record FiltroPeticiones(
     CondicionSql condicion(Instant ahora) {
         List<String> c = new ArrayList<>();
         List<Object> a = new ArrayList<>();
-        Instant d = fecha(desde, "desde");
-        Instant h = fecha(hasta, "hasta");
+        Instant d = FechasIso.leer(desde, "desde", false);
+        Instant h = FechasIso.leer(hasta, "hasta", true);
         if (d != null && h != null && !d.isBefore(h)) {
             throw new PeticionInvalidaException("La fecha 'desde' debe ser anterior a 'hasta'.");
         }
@@ -48,9 +48,10 @@ public record FiltroPeticiones(
         if (corr != null && !CORRELACION.matcher(corr).matches()) {
             throw new PeticionInvalidaException("El identificador de petición no es válido.");
         }
-        // Sin fechas ni filtro selectivo se acota a 7 dias (la tabla puede ser grande).
+        // Sin 'desde' ni id de peticion se acota a 7 dias antes de 'hasta' (o de ahora):
+        // la tabla puede ser grande y asi siempre se usa el indice por fecha.
         if (d == null && corr == null) {
-            d = ahora.minus(RANGO_POR_DEFECTO);
+            d = (h != null ? h : ahora).minus(RANGO_POR_DEFECTO);
         }
         if (d != null) {
             c.add("p.ocurrido_en >= ?");
@@ -113,18 +114,4 @@ public record FiltroPeticiones(
         return new CondicionSql(c.isEmpty() ? "" : "WHERE " + String.join(" AND ", c), a);
     }
 
-    private static Instant fecha(String valor, String campo) {
-        if (valor == null || valor.isBlank()) {
-            return null;
-        }
-        try {
-            return OffsetDateTime.parse(valor.trim()).toInstant();
-        } catch (DateTimeParseException ex) {
-            try {
-                return Instant.parse(valor.trim());
-            } catch (DateTimeParseException ex2) {
-                throw new PeticionInvalidaException("La fecha '" + campo + "' debe ser ISO-8601 con zona (p. ej. 2026-01-31T10:00:00Z).");
-            }
-        }
-    }
 }
