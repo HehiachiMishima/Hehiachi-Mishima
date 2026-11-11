@@ -19,6 +19,7 @@ import { useAccionesUsuario } from "../acciones";
 import { aFila, columnas, PREFERENCIAS_INICIALES, PROPIEDADES_FILTRO, type FilaUsuario } from "../columnas";
 import { PreferenciasUsuarios } from "../componentes/PreferenciasUsuarios";
 import { useResumenAccesos, useUsuarios } from "../consultas";
+import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 /** Filtro inicial desde la URL (enlaces del Resumen: ?estado=Activo, ?sinRol=1). */
 function consultaInicial(p: URLSearchParams): PropertyFilterProps.Query {
@@ -105,6 +106,7 @@ export function ListaUsuarios() {
         header={
           <Header
             variant="awsui-h1-sticky"
+            info={<InfoAyuda />}
             counter={consulta.data ? `(${filas.length})` : undefined}
             description="Cuentas con acceso a la plataforma, sus roles y permisos efectivos"
             actions={

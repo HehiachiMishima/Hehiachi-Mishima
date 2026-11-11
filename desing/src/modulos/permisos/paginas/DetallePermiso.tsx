@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import Alert from "@cloudscape-design/components/alert";
-import Badge from "@cloudscape-design/components/badge";
 import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
 import ButtonDropdown from "@cloudscape-design/components/button-dropdown";
@@ -26,6 +25,7 @@ import { PERMISOS } from "@/core/sesion/permisos";
 import { useSesion } from "@/core/sesion/useSesion";
 import { MOTIVO_PROTEGIDO, useAccionesPermiso } from "../acciones";
 import { usePermiso, useRolesPermiso } from "../consultas";
+import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 /** Detalle de un permiso: datos, roles que lo conceden e historial. */
 export function DetallePermiso() {
@@ -92,6 +92,7 @@ export function DetallePermiso() {
       header={
         <Header
           variant="h1"
+          info={<InfoAyuda />}
           description={<Box variant="code">{p.nombre}</Box>}
           actions={
             <ButtonDropdown items={acciones.items(p)} onItemClick={({ detail }) => acciones.ejecutar(detail.id, p)}>
@@ -115,7 +116,6 @@ export function DetallePermiso() {
                 value: (
                   <SpaceBetween direction="horizontal" size="xs">
                     <StatusIndicator type={p.activo ? "success" : "stopped"}>{p.activo ? "Activo" : "Inactivo"}</StatusIndicator>
-
                   </SpaceBetween>
                 ),
               },

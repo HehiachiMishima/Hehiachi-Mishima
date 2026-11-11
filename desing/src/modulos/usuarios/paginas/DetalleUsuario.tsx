@@ -25,6 +25,7 @@ import { MOTIVO_PROTEGIDO, useAccionesUsuario } from "../acciones";
 import { TablaPermisosUsuario } from "../componentes/TablaPermisosUsuario";
 import { TablaRolesUsuario } from "../componentes/TablaRolesUsuario";
 import { useAlternarRol, useAplicarAjuste, useCatalogoRoles, usePermisosUsuario, useRolesUsuario, useUsuario } from "../consultas";
+import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 const AJUSTE_TEXTO = { heredar: "Ajuste eliminado: hereda de sus roles", conceder: "Permiso concedido", denegar: "Permiso denegado" } as const;
 
@@ -126,6 +127,7 @@ export function DetalleUsuario() {
       header={
         <Header
           variant="h1"
+          info={<InfoAyuda />}
           description={`${login(u.usuario)} · ${u.email}`}
           actions={
             <SpaceBetween direction="horizontal" size="xs">
@@ -148,7 +150,7 @@ export function DetalleUsuario() {
         {bloqueo && <Alert type="info">{bloqueo}</Alert>}
         <Container header={<Header variant="h2">Detalles</Header>}>
           <KeyValuePairs
-            columns={3}
+            columns={4}
             items={[
               { label: "Usuario", value: login(u.usuario) },
               { label: "Correo electrónico", value: u.email },
@@ -158,12 +160,27 @@ export function DetalleUsuario() {
                 value: (
                   <SpaceBetween direction="horizontal" size="xs">
                     <StatusIndicator type={u.activo ? "success" : "stopped"}>{u.activo ? "Activo" : "Inactivo"}</StatusIndicator>
-                    {u.protegido && <Badge>Protegido</Badge>}
                   </SpaceBetween>
                 ),
               },
               { label: "Creado", value: `${fechaHora(u.creadoEn)} por ${nombrePor(u.creadoPor)}` },
               { label: "Último cambio", value: u.actualizadoEn ? `${haceCuanto(u.actualizadoEn)} por ${nombrePor(u.actualizadoPor)}` : "Sin cambios" },
+              {
+                label: "Roles",
+                value: !rolesUsuario.data ? (
+                  "—"
+                ) : rolesUsuario.data.length ? (
+                  <SpaceBetween direction="horizontal" size="xxs">
+                    {rolesUsuario.data.map((r) => (
+                      <Badge key={r.id} color={r.activo ? "blue" : "grey"}>
+                        {r.nombre}
+                      </Badge>
+                    ))}
+                  </SpaceBetween>
+                ) : (
+                  <StatusIndicator type="warning">Sin rol</StatusIndicator>
+                ),
+              },
             ]}
           />
         </Container>

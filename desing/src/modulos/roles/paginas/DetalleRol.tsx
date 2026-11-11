@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import Alert from "@cloudscape-design/components/alert";
-import Badge from "@cloudscape-design/components/badge";
 import Button from "@cloudscape-design/components/button";
 import ButtonDropdown from "@cloudscape-design/components/button-dropdown";
 import Container from "@cloudscape-design/components/container";
@@ -27,6 +26,7 @@ import { useSesion } from "@/core/sesion/useSesion";
 import { MOTIVO_PROTEGIDO, useAccionesRol } from "../acciones";
 import { TablaPermisosRol } from "../componentes/TablaPermisosRol";
 import { useAlternarPermisoRol, useCatalogoPermisos, usePermisosRol, useRol, useUsuariosRol } from "../consultas";
+import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 /** Detalle de un rol: datos, permisos que concede (editables), usuarios que lo tienen e historial. */
 export function DetalleRol() {
@@ -127,6 +127,7 @@ export function DetalleRol() {
       header={
         <Header
           variant="h1"
+          info={<InfoAyuda />}
           description={r.descripcion ?? "Sin descripción"}
           actions={
             <SpaceBetween direction="horizontal" size="xs">
@@ -151,7 +152,6 @@ export function DetalleRol() {
                 value: (
                   <SpaceBetween direction="horizontal" size="xs">
                     <StatusIndicator type={r.activo ? "success" : "stopped"}>{r.activo ? "Activo" : "Inactivo"}</StatusIndicator>
-                    {r.protegido && <Badge>Protegido</Badge>}
                   </SpaceBetween>
                 ),
               },

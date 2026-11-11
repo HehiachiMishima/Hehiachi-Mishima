@@ -23,9 +23,16 @@ export default defineConfig({
     chunkSizeWarningLimit: 1300,
     rollupOptions: {
       output: {
-        // Cloudscape y React en chunks propios: cachean entre despliegues y las páginas pesan poco.
+        // Cloudscape, sus gráficos y React en chunks propios: cachean entre despliegues y las páginas
+        // pesan poco. Los gráficos (con d3) solo se descargan en las páginas que los usan.
         manualChunks: (id) =>
-          id.includes("node_modules/@cloudscape-design") ? "cloudscape" : id.includes("node_modules/react") ? "react" : undefined,
+          /node_modules\/(d3-|internmap|@cloudscape-design\/components\/(bar-chart|line-chart|area-chart|pie-chart|mixed-line-bar-chart|internal\/components\/(cartesian-chart|chart-)))/.test(id)
+            ? "graficos"
+            : id.includes("node_modules/@cloudscape-design")
+              ? "cloudscape"
+              : id.includes("node_modules/react")
+                ? "react"
+                : undefined,
       },
     },
   },

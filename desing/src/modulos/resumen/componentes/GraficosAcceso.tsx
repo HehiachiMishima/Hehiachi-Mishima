@@ -1,4 +1,5 @@
 import BarChart from "@cloudscape-design/components/bar-chart";
+import MixedLineBarChart from "@cloudscape-design/components/mixed-line-bar-chart";
 import Container from "@cloudscape-design/components/container";
 import Grid from "@cloudscape-design/components/grid";
 import Header from "@cloudscape-design/components/header";
@@ -15,10 +16,10 @@ export function GraficosAcceso({ datos, estado, onReintentar }: { datos: Analiti
   const permisos = (datos?.permisosMasOtorgados ?? []).slice(0, 10);
   const altas = datos?.altasPorMes ?? [];
   const comun = { statusType: estado, hideFilter: true, onRecoveryClick: onReintentar, height: 240 } as const;
-  const col = { colspan: { default: 12, s: 6, m: 4 } };
+  const col = { colspan: { default: 12, s: 4 } };
 
   return (
-    <Grid gridDefinition={[col, col, { colspan: { default: 12, m: 4 } }]}>
+    <Grid gridDefinition={[col, col, { colspan: { default: 12, s: 4 } }]}>
       <Container fitHeight header={<Header variant="h2" description="Roles sin usuarios son candidatos a limpieza">Usuarios por rol</Header>}>
         <BarChart
           {...comun}
@@ -42,7 +43,7 @@ export function GraficosAcceso({ datos, estado, onReintentar }: { datos: Analiti
         />
       </Container>
       <Container fitHeight header={<Header variant="h2" description="Altas por mes en los últimos 12 meses">Crecimiento de cuentas</Header>}>
-        <BarChart
+        <MixedLineBarChart
           {...comun}
           xScaleType="categorical"
           ariaLabel="Altas de cuentas por mes"
@@ -50,7 +51,7 @@ export function GraficosAcceso({ datos, estado, onReintentar }: { datos: Analiti
           yTitle="Cuentas"
           series={[
             { title: "Altas", type: "bar", data: altas.map((p) => ({ x: mes(p.periodo), y: p.valor })) },
-            { title: "Siguen activas", type: "bar", data: altas.map((p) => ({ x: mes(p.periodo), y: p.secundario })) },
+            { title: "Siguen activas", type: "line", data: altas.map((p) => ({ x: mes(p.periodo), y: p.secundario })) },
           ]}
           empty={<EstadoVacio titulo="Sin altas" texto="No hubo altas en el periodo." />}
         />

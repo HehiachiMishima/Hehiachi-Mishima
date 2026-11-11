@@ -11,11 +11,13 @@ import { mensajeDeError } from "@/core/api/errores";
 import { useSesion } from "@/core/sesion/useSesion";
 import { modulosAccesibles, rutaDe } from "@/modulos/registro";
 import { AccesosRapidos } from "./componentes/AccesosRapidos";
+import { EstadoCuentas } from "./componentes/EstadoCuentas";
 import { GraficosAcceso } from "./componentes/GraficosAcceso";
 import { IndicadoresAcceso } from "./componentes/IndicadoresAcceso";
 import { IndicadoresSeguridad } from "./componentes/IndicadoresSeguridad";
 import { RequiereAtencion } from "./componentes/RequiereAtencion";
 import { claves, useAnalitica, useEventosSeguridad, useIndicadoresSeguridad } from "./consultas";
+import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 const FECHA = new Intl.DateTimeFormat("es", { weekday: "long", day: "numeric", month: "long" });
 
@@ -35,16 +37,19 @@ export default function ResumenPagina() {
 
   const accesos = modulosAccesibles(permisos)
     .filter((m) => m.id !== "resumen")
-    .map((m) => ({ id: m.id, titulo: m.titulo, descripcion: m.descripcion, href: rutaDe(m) }));
+    .map((m) => ({ id: m.id, titulo: m.titulo, descripcion: m.descripcion, href: rutaDe(m), icono: m.icono }));
 
   const estadoGraficos = analitica.isError && !analitica.data ? "error" : analitica.data ? "finished" : "loading";
-  const seccionesMedias = seguridad.length ? [{ colspan: { default: 12, m: 6 } }, { colspan: { default: 12, m: 6 } }] : [{ colspan: 12 }];
+  const tercio = { colspan: { default: 12, s: 4 } };
+  const seccionesMedias = seguridad.length ? [tercio, tercio, tercio] : [{ colspan: { default: 12, s: 6 } }, { colspan: { default: 12, s: 6 } }];
 
   return (
     <ContentLayout
+      headerVariant="high-contrast"
       header={
         <Header
           variant="h1"
+          info={<InfoAyuda />}
           description={`${FECHA.format(hoy)} · Estado del control de accesos${analitica.dataUpdatedAt ? ` · actualizado ${haceCuanto(new Date(analitica.dataUpdatedAt))}` : ""}`}
           actions={
             <Button iconName="refresh" loading={analitica.isFetching} onClick={actualizar}>
@@ -65,6 +70,7 @@ export default function ResumenPagina() {
         <IndicadoresAcceso kpis={analitica.data?.kpis} />
         <Grid gridDefinition={seccionesMedias}>
           <RequiereAtencion kpis={analitica.data?.kpis} eventos={eventos.data} />
+          <EstadoCuentas kpis={analitica.data?.kpis} estado={estadoGraficos} onReintentar={actualizar} />
           {seguridad.length > 0 && <IndicadoresSeguridad indicadores={seguridad} />}
         </Grid>
         <GraficosAcceso datos={analitica.data} estado={estadoGraficos} onReintentar={actualizar} />

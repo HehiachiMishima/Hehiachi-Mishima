@@ -13,6 +13,7 @@ import TokenGroup from "@cloudscape-design/components/token-group";
 import { actorDeEvento, etiquetaAccion, etiquetaEntidad, LIMITE_EXPORTACION, objetivoDeEvento, resultadoDe } from "@/compartido/auditoria/etiquetas";
 import type { AuditoriaEvento } from "@/compartido/auditoria/tipos";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
+import { CategoriaAccion } from "@/compartido/componentes/Insignias";
 import { ModalConfirmacion } from "@/compartido/componentes/ModalConfirmacion";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
 import { PanelDividido } from "@/compartido/marco/PanelDividido";
@@ -25,6 +26,7 @@ import { DetalleEvento } from "./componentes/DetalleEvento";
 import { FiltrosAuditoria } from "./componentes/FiltrosAuditoria";
 import { exportarAuditoria, useEvento, useEventos } from "./consultas";
 import { aConsulta, CLAVES_URL, hayFiltros, leerFiltros, VISTAS } from "./filtros";
+import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 const TAMANOS = [20, 50, 100];
 
@@ -105,6 +107,7 @@ export default function AuditoriaPagina() {
         header={
           <Header
             variant="awsui-h1-sticky"
+            info={<InfoAyuda />}
             counter={consulta.data ? `(${numero(total)})` : undefined}
             description={`Registro de solo lectura de inicios de sesión y cambios de acceso. Horas en ${zonaHoraria()}.`}
             actions={
@@ -188,6 +191,7 @@ export default function AuditoriaPagina() {
                 <Box color="text-body-secondary">{actorDeEvento(e)}</Box>
               ),
           },
+          { id: "categoria", header: "Categoría", cell: (e) => <CategoriaAccion accion={e.accion} />, width: 140 },
           { id: "objetivo", header: "Objetivo", cell: (e) => objetivoDeEvento(e), minWidth: 200 },
           { id: "ip", header: "IP", cell: (e) => e.ip ?? "—" },
         ]}

@@ -12,6 +12,7 @@ import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
 import TokenGroup from "@cloudscape-design/components/token-group";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
+import { MetodoHttp } from "@/compartido/componentes/Insignias";
 import { ModalConfirmacion } from "@/compartido/componentes/ModalConfirmacion";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
 import { PanelDividido } from "@/compartido/marco/PanelDividido";
@@ -28,6 +29,7 @@ import { ResumenUsuario } from "./componentes/ResumenUsuario";
 import { useActividadUsuario, useCerrarSesiones, usePeticiones } from "./consultas";
 import { aConsulta, CLAVES_URL, diasDe, hayFiltros, LENTA_MS, leerFiltros } from "./filtros";
 import type { PeticionTraza } from "./tipos";
+import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 const TAMANOS = [25, 50, 100];
 const ZONA = zonaIana();
@@ -95,7 +97,7 @@ export default function ActividadPagina() {
       <ContentLayout
         header={
           filtros.actorId ? (
-            <Header variant="h1" description={`Qué hizo ${nombreUsuario}, cuándo y con qué resultado. Horas en ${zonaHoraria()}.`}>
+            <Header variant="h1" info={<InfoAyuda />} description={`Qué hizo ${nombreUsuario}, cuándo y con qué resultado. Horas en ${zonaHoraria()}.`}>
               {`Actividad de ${nombreUsuario}`}
             </Header>
           ) : undefined
@@ -130,6 +132,7 @@ export default function ActividadPagina() {
             header={
               <Header
                 variant={filtros.actorId ? "h2" : "awsui-h1-sticky"}
+                info={<InfoAyuda />}
                 counter={consulta.data ? `(${numero(consulta.data.total)})` : undefined}
                 description={filtros.actorId ? undefined : `Cada llamada a la API con su usuario, resultado y duración. Horas en ${zonaHoraria()}.`}
                 actions={<Button iconName="refresh" ariaLabel="Actualizar" loading={consulta.isFetching} onClick={actualizar} />}
@@ -174,10 +177,13 @@ export default function ActividadPagina() {
                 isRowHeader: true,
                 minWidth: 260,
                 cell: (p) => (
+                <SpaceBetween direction="horizontal" size="xs" alignItems="center">
+                  <MetodoHttp metodo={p.metodo} />
                   <Link href="#" onFollow={(e) => (e.preventDefault(), setSeleccion(p))}>
-                    {`${p.metodo} ${p.uri}`}
+                    {p.uri}
                   </Link>
-                ),
+                </SpaceBetween>
+              ),
               },
               {
                 id: "usuario",

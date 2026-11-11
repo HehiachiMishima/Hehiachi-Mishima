@@ -2,7 +2,12 @@ import { Suspense, useCallback, useMemo, useState } from "react";
 import { Outlet, useMatches } from "react-router";
 import AppLayout, { type AppLayoutProps } from "@cloudscape-design/components/app-layout";
 import BreadcrumbGroup, { type BreadcrumbGroupProps } from "@cloudscape-design/components/breadcrumb-group";
+import Box from "@cloudscape-design/components/box";
 import Flashbar from "@cloudscape-design/components/flashbar";
+import HelpPanel from "@cloudscape-design/components/help-panel";
+import Icon from "@cloudscape-design/components/icon";
+import List from "@cloudscape-design/components/list";
+import SpaceBetween from "@cloudscape-design/components/space-between";
 import SplitPanel from "@cloudscape-design/components/split-panel";
 import type { DatosRuta } from "@/app/rutas";
 import { CargandoPagina } from "@/compartido/componentes/CargandoPagina";
@@ -23,6 +28,7 @@ export function Shell() {
   const [tipoPagina, setTipoPagina] = useState<AppLayoutProps.ContentType | null>(null);
   const [panel, setPanel] = useState<PanelDivididoDef | null>(null);
   const [contenedorPanel, setContenedorPanel] = useState<HTMLElement | null>(null);
+  const [ayudaAbierta, setAyudaAbierta] = useState(false);
   const [prefsPanel, setPrefsPanel] = useState<AppLayoutProps.SplitPanelPreferences>({ position: "side" });
   const { avisos } = useNotificaciones();
   const seguir = useSeguirEnlace();
@@ -33,7 +39,14 @@ export function Shell() {
   const fijarMigas = useCallback((m: BreadcrumbGroupProps.Item[]) => setMigasPagina(m), []);
   const fijarTipo = useCallback((t: AppLayoutProps.ContentType | null) => setTipoPagina(t), []);
   const fijarPanel = useCallback((p: PanelDivididoDef | null) => setPanel(p), []);
-  const marco = useMemo<ValorMarco>(() => ({ fijarMigas, fijarTipo, fijarPanel, contenedorPanel }), [fijarMigas, fijarTipo, fijarPanel, contenedorPanel]);
+  const abrirAyuda = useCallback(() => setAyudaAbierta(true), []);
+  const marco = useMemo<ValorMarco>(
+    () => ({ fijarMigas, fijarTipo, fijarPanel, abrirAyuda, contenedorPanel }),
+    [fijarMigas, fijarTipo, fijarPanel, abrirAyuda, contenedorPanel],
+  );
+  const modulo = datos?.modulo;
+  // Tableros con cabecera de alto contraste (la página usa ContentLayout headerVariant="high-contrast").
+  const destacada = modulo?.tipoContenido === "dashboard" && migasPagina.length === 0;
 
   const migas: BreadcrumbGroupProps.Item[] = [{ text: "Administración", href: "/" }];
   if (datos?.modulo) migas.push({ text: datos.modulo.titulo, href: rutaDe(datos.modulo) });
@@ -52,7 +65,25 @@ export function Shell() {
         breadcrumbs={<BreadcrumbGroup items={migas} onFollow={seguir} ariaLabel="Migas de pan" expandAriaLabel="Mostrar ruta" />}
         notifications={<Flashbar items={avisos} stackItems={avisos.length > 2} />}
         stickyNotifications
-        toolsHide
+        headerVariant={destacada ? "high-contrast" : "default"}
+        toolsHide={!modulo}
+        toolsOpen={ayudaAbierta}
+        onToolsChange={({ detail }) => setAyudaAbierta(detail.open)}
+        tools={
+          modulo && (
+            <HelpPanel header={<h2>{modulo.titulo}</h2>}>
+              <SpaceBetween size="m">
+                <Box variant="p">{modulo.ayuda.resumen}</Box>
+                <List
+                  ariaLabel="Claves de esta página"
+                  disablePaddings
+                  items={modulo.ayuda.puntos}
+                  renderItem={(p) => ({ id: p, icon: <Icon name="status-info" variant="link" />, content: p })}
+                />
+              </SpaceBetween>
+            </HelpPanel>
+          )
+        }
         splitPanelOpen={!!panel}
         onSplitPanelToggle={({ detail }) => !detail.open && panel?.onCerrar()}
         splitPanelPreferences={prefsPanel}
@@ -74,6 +105,9 @@ export function Shell() {
           navigationClose: "Cerrar navegación",
           navigationToggle: "Abrir navegación",
           notifications: "Notificaciones",
+          tools: "Ayuda",
+          toolsClose: "Cerrar ayuda",
+          toolsToggle: "Abrir ayuda",
         }}
       />
     </ContextoMarco.Provider>

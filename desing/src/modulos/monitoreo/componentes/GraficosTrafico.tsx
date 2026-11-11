@@ -2,26 +2,39 @@ import BarChart from "@cloudscape-design/components/bar-chart";
 import Container from "@cloudscape-design/components/container";
 import Grid from "@cloudscape-design/components/grid";
 import Header from "@cloudscape-design/components/header";
-import LineChart from "@cloudscape-design/components/line-chart";
+import MixedLineBarChart from "@cloudscape-design/components/mixed-line-bar-chart";
+import PieChart from "@cloudscape-design/components/pie-chart";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
-import { hora } from "@/compartido/util/formato";
-import type { PuntoMonitoreo } from "../tipos";
+import { hora, numero, porcentaje } from "@/compartido/util/formato";
+import type { PuntoMonitoreo, Ventana } from "../tipos";
 
 type Estado = "loading" | "finished" | "error";
 
-/** Peticiones por minuto (apiladas por resultado) y latencia p95 de la última hora. */
-export function GraficosTrafico({ serie, estado, onReintentar }: { serie: PuntoMonitoreo[]; estado: Estado; onReintentar: () => void }) {
+/** Umbral de lentitud que se dibuja sobre la latencia. */
+const UMBRAL_MS = 1000;
+
+/** Tendencias de la última hora (barras apiladas y latencia con umbral) y reparto de resultados de la ventana. */
+export function GraficosTrafico({ serie, ventana, estado, onReintentar }: { serie: PuntoMonitoreo[]; ventana: Ventana | undefined; estado: Estado; onReintentar: () => void }) {
   const etiquetas = serie.map((p) => hora(p.minuto));
   const vacio = <EstadoVacio titulo="Sin datos" texto="Aún no hay tráfico registrado." />;
-  const comunes = { height: 200, hideFilter: true, xTitle: "Hora", statusType: estado, empty: vacio, onRecoveryClick: onReintentar } as const;
+  const comunes = { height: 200, hideFilter: true, statusType: estado, empty: vacio, onRecoveryClick: onReintentar } as const;
+  const resultados = ventana
+    ? [
+        { title: "Correctas", value: Math.max(0, ventana.peticiones - ventana.errores4xx - ventana.errores5xx) },
+        { title: "Rechazadas (4xx)", value: ventana.errores4xx },
+        { title: "Errores (5xx)", value: ventana.errores5xx },
+      ].filter((d) => d.value > 0)
+    : [];
+  const col = { colspan: { default: 12, s: 4 } };
 
   return (
-    <Grid gridDefinition={[{ colspan: { default: 12, m: 6 } }, { colspan: { default: 12, m: 6 } }]}>
-      <Container header={<Header variant="h2" description="Correctas, rechazadas (4xx) y errores del servidor (5xx)">Peticiones por minuto</Header>}>
+    <Grid gridDefinition={[col, col, col]}>
+      <Container fitHeight header={<Header variant="h2" description="Correctas, rechazadas (4xx) y errores (5xx)">Peticiones por minuto</Header>}>
         <BarChart
           {...comunes}
           stackedBars
           xScaleType="categorical"
+          xTitle="Hora"
           yTitle="Peticiones"
           ariaLabel="Peticiones por minuto en la última hora"
           series={[
@@ -31,14 +44,37 @@ export function GraficosTrafico({ serie, estado, onReintentar }: { serie: PuntoM
           ]}
         />
       </Container>
-      <Container header={<Header variant="h2" description="El 95 % de las peticiones respondió en menos de este tiempo">Latencia p95</Header>}>
-        <LineChart
+      <Container fitHeight header={<Header variant="h2" description={`p95 y promedio; la línea marca ${numero(UMBRAL_MS)} ms`}>Latencia</Header>}>
+        <MixedLineBarChart
           {...comunes}
-          xScaleType="time"
+          xScaleType="categorical"
+          xTitle="Hora"
           yTitle="ms"
-          xTickFormatter={(d) => hora(d)}
-          ariaLabel="Latencia p95 por minuto en la última hora"
-          series={[{ title: "p95", type: "line", data: serie.map((p) => ({ x: new Date(p.minuto), y: p.p95Ms })) }]}
+          ariaLabel="Latencia por minuto en la última hora"
+          series={[
+            { title: "Promedio", type: "bar", data: serie.map((p, i) => ({ x: etiquetas[i], y: p.promedioMs })) },
+            { title: "p95", type: "line", data: serie.map((p, i) => ({ x: etiquetas[i], y: p.p95Ms })) },
+            { title: "Umbral de lentitud", type: "threshold", y: UMBRAL_MS },
+          ]}
+        />
+      </Container>
+      <Container fitHeight header={<Header variant="h2" description="Reparto de la ventana elegida">Resultados</Header>}>
+        <PieChart
+          variant="donut"
+          size="medium"
+          hideFilter
+          statusType={ventana ? "finished" : estado}
+          data={resultados}
+          innerMetricValue={ventana ? `${porcentaje(ventana.peticiones - ventana.errores4xx - ventana.errores5xx, ventana.peticiones)} %` : undefined}
+          innerMetricDescription="correctas"
+          segmentDescription={(d, total) => `${numero(d.value)} · ${porcentaje(d.value, total)} %`}
+          detailPopoverContent={(d, total) => [
+            { key: "Peticiones", value: numero(d.value) },
+            { key: "Proporción", value: `${porcentaje(d.value, total)} %` },
+          ]}
+          ariaLabel="Reparto de resultados"
+          empty={vacio}
+          onRecoveryClick={onReintentar}
         />
       </Container>
     </Grid>

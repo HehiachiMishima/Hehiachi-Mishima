@@ -1,4 +1,6 @@
 import Box from "@cloudscape-design/components/box";
+import AreaChart from "@cloudscape-design/components/area-chart";
+import PieChart from "@cloudscape-design/components/pie-chart";
 import BarChart from "@cloudscape-design/components/bar-chart";
 import Button from "@cloudscape-design/components/button";
 import ColumnLayout from "@cloudscape-design/components/column-layout";
@@ -79,19 +81,37 @@ export function ResumenUsuario({
             />
           </ColumnLayout>
           {graficos && (
-            <Grid gridDefinition={[{ colspan: { default: 12, s: 4 } }, { colspan: { default: 12, s: 4 } }, { colspan: { default: 12, s: 4 } }]}>
+            <Grid gridDefinition={[0, 1, 2, 3].map(() => ({ colspan: { default: 12, s: 6 } }))}>
               <Grafico titulo="Endpoints más usados">
                 <BarChart {...comun} horizontalBars ariaLabel="Endpoints más usados" series={[{ title: "Peticiones", type: "bar", data: a.rutas.slice(0, 8).map((c) => ({ x: c.etiqueta, y: c.valor })) }]} />
               </Grafico>
-              <Grafico titulo="Desde dónde se conecta">
-                <BarChart {...comun} horizontalBars ariaLabel="Direcciones IP del usuario" series={[{ title: "Peticiones", type: "bar", data: a.ips.slice(0, 8).map((c) => ({ x: c.etiqueta, y: c.valor })) }]} />
+              <Grafico titulo="Resultados">
+                <PieChart
+                  variant="donut"
+                  size="small"
+                  hideFilter
+                  data={a.estados.map((c) => ({ title: c.etiqueta, value: c.valor }))}
+                  innerMetricValue={`${100 - tasa} %`}
+                  innerMetricDescription="sin error"
+                  segmentDescription={(d, total) => `${numero(d.value)} · ${porcentaje(d.value, total)} %`}
+                  ariaLabel="Resultados de las peticiones del usuario"
+                />
               </Grafico>
               <Grafico titulo={`Peticiones por día (${a.zona})`}>
-                <BarChart
-                  {...comun}
-                  ariaLabel="Peticiones por día"
-                  series={[{ title: "Peticiones", type: "bar", data: a.porDia.map((c) => ({ x: DIA.format(new Date(`${c.etiqueta}T00:00:00Z`)), y: c.valor })) }]}
-                />
+                {a.porDia.length > 1 ? (
+                  <AreaChart
+                    {...comun}
+                    hideLegend
+                    ariaLabel="Peticiones por día"
+                    series={[{ title: "Peticiones", type: "area", data: a.porDia.map((c) => ({ x: DIA.format(new Date(`${c.etiqueta}T00:00:00Z`)), y: c.valor })) }]}
+                  />
+                ) : (
+                  // Un área necesita al menos dos puntos: con un solo día, barra.
+                  <BarChart {...comun} ariaLabel="Peticiones por día" series={[{ title: "Peticiones", type: "bar", data: a.porDia.map((c) => ({ x: DIA.format(new Date(`${c.etiqueta}T00:00:00Z`)), y: c.valor })) }]} />
+                )}
+              </Grafico>
+              <Grafico titulo="Desde dónde se conecta">
+                <BarChart {...comun} horizontalBars ariaLabel="Direcciones IP del usuario" series={[{ title: "Peticiones", type: "bar", data: a.ips.slice(0, 8).map((c) => ({ x: c.etiqueta, y: c.valor })) }]} />
               </Grafico>
             </Grid>
           )}

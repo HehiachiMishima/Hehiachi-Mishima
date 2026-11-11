@@ -64,6 +64,9 @@ export const ACCIONES_PRIVILEGIO = ["ROL_ASIGNADO", "OVERRIDE_ESTABLECIDO", "PER
 /** Máximo de filas que el backend exporta a CSV. */
 export const LIMITE_EXPORTACION = 50_000;
 
+/** Categoría de una acción ("Sesión", "Roles"…), según GRUPOS_ACCIONES. */
+export const categoriaDe = (accion: string): string => GRUPOS_ACCIONES.find((g) => g.acciones.includes(accion))?.nombre ?? "Otros";
+
 export const etiquetaAccion = (accion: string): string => ACCIONES_AUDITORIA[accion] ?? accion;
 
 export const etiquetaEntidad = (entidad: string | null): string => (entidad ? (ENTIDADES_AUDITORIA[entidad] ?? entidad) : "—");

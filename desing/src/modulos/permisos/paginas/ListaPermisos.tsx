@@ -1,5 +1,4 @@
 import { useCollection } from "@cloudscape-design/collection-hooks";
-import Badge from "@cloudscape-design/components/badge";
 import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
 import ButtonDropdown from "@cloudscape-design/components/button-dropdown";
@@ -23,6 +22,7 @@ import { useSesion } from "@/core/sesion/useSesion";
 import { useAccionesPermiso } from "../acciones";
 import { usePermisos } from "../consultas";
 import type { Permiso } from "../tipos";
+import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 type Estado = "todos" | "activos" | "inactivos";
 
@@ -71,6 +71,7 @@ export function ListaPermisos() {
         header={
           <Header
             variant="awsui-h1-sticky"
+            info={<InfoAyuda />}
             counter={consulta.data ? `(${consulta.data.length})` : undefined}
             description="Catálogo de permisos del sistema; se conceden mediante roles o ajustes individuales"
             actions={

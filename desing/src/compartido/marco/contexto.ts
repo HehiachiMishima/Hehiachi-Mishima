@@ -16,6 +16,8 @@ export interface ValorMarco {
   fijarMigas: (migas: BreadcrumbGroupProps.Item[]) => void;
   fijarTipo: (tipo: AppLayoutProps.ContentType | null) => void;
   fijarPanel: (panel: PanelDivididoDef | null) => void;
+  /** Abre el panel de ayuda del módulo (enlace "Info" de los títulos). */
+  abrirAyuda: () => void;
   /** Nodo DOM dentro del SplitPanel donde la página renderiza su contenido (portal). */
   contenedorPanel: HTMLElement | null;
 }

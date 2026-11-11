@@ -1,4 +1,5 @@
 import { useLocation } from "react-router";
+import Badge from "@cloudscape-design/components/badge";
 import SideNavigation, { type SideNavigationProps } from "@cloudscape-design/components/side-navigation";
 import { useSeguirEnlace } from "@/compartido/navegacion";
 import { ENTORNO } from "@/config/entorno";
@@ -16,7 +17,14 @@ export function MenuLateral() {
       (g): SideNavigationProps.Item => ({
         type: "section",
         text: g.titulo,
-        items: g.modulos.map((m) => ({ type: "link", text: m.titulo, href: rutaDe(m) })),
+        items: g.modulos.map(
+          (m): SideNavigationProps.Item => ({
+            type: "link",
+            text: m.titulo,
+            href: rutaDe(m),
+            info: m.insignia && <Badge color={m.insignia.color}>{m.insignia.texto}</Badge>,
+          }),
+        ),
       }),
     ),
     { type: "divider" },
