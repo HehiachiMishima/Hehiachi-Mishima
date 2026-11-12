@@ -12,6 +12,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Tabs, { type TabsProps } from "@cloudscape-design/components/tabs";
 import { Historial } from "@/compartido/auditoria/Historial";
+import { NoEncontrada } from "@/compartido/componentes/NoEncontrada";
 import { CargandoPagina } from "@/compartido/componentes/CargandoPagina";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
@@ -41,16 +42,19 @@ export function DetalleUsuario() {
   const consulta = useUsuario(id);
   const u = consulta.data;
   const acciones = useAccionesUsuario({ enDetalle: true, alEliminar: () => navegar("/usuarios") });
-  const verRoles = puede(PERMISOS.ASIGNAR_ROLES) || puede(PERMISOS.VER_ROLES);
+  // Mismos permisos que exige el backend para leer cada pestaña.
+  const verRoles = puede(PERMISOS.VER_ROLES);
   const verPermisos = puede(PERMISOS.VER_PERMISOS);
+  const idValido = Number.isInteger(id) && id > 0;
   const catalogoRoles = useCatalogoRoles();
   const rolesUsuario = useRolesUsuario(id);
-  const permisos = usePermisosUsuario(id);
+  const permisos = usePermisosUsuario(id, verPermisos);
   const alternarRol = useAlternarRol();
   const aplicarAjuste = useAplicarAjuste();
 
-  useMarcoPagina({ migas: [{ text: u ? login(u.usuario) : `#${id}`, href: `/usuarios/${id}` }] });
+  useMarcoPagina({ migas: idValido ? [{ text: u ? login(u.usuario) : `#${id}`, href: `/usuarios/${id}` }] : [] });
 
+  if (!idValido) return <NoEncontrada />;
   if (consulta.isPending) return <CargandoPagina />;
   if (!u) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.status === 404;
@@ -75,7 +79,11 @@ export function DetalleUsuario() {
     tabs.push({
       id: "roles",
       label: `Roles (${asignados.size})`,
-      content: (
+      content: rolesUsuario.isError ? (
+        <Alert type="error" action={<Button onClick={() => void rolesUsuario.refetch()}>Reintentar</Button>}>
+          {mensajeDeError(rolesUsuario.error, "No se pudieron cargar los roles.")}
+        </Alert>
+      ) : (
         <TablaRolesUsuario
           catalogo={catalogoRoles.data ?? rolesUsuario.data ?? []}
           asignados={asignados}
@@ -167,12 +175,12 @@ export function DetalleUsuario() {
               { label: "Último cambio", value: u.actualizadoEn ? `${haceCuanto(u.actualizadoEn)} por ${nombrePor(u.actualizadoPor)}` : "Sin cambios" },
               {
                 label: "Roles",
-                value: !rolesUsuario.data ? (
+                value: !verRoles || !rolesUsuario.data ? (
                   "—"
                 ) : rolesUsuario.data.length ? (
                   <SpaceBetween direction="horizontal" size="xxs">
                     {rolesUsuario.data.map((r) => (
-                      <Badge key={r.id} color={r.activo ? "blue" : "grey"}>
+                      <Badge key={r.id}>
                         {r.nombre}
                       </Badge>
                     ))}

@@ -15,7 +15,7 @@ export function IndicadoresTrafico({ resumen, minutos }: { resumen: ResumenMonit
   return (
     <Container fitHeight header={<Header variant="h2">{`Tráfico · últimos ${minutos} min`}</Header>}>
       <ColumnLayout columns={3} variant="text-grid" minColumnWidth={160}>
-        <Indicador titulo="Peticiones" valor={v ? numero(v.peticiones) : "—"} detalle={v && `${numero(v.porMinuto)} por minuto`} estado={v && <StatusIndicator type="info">Tráfico registrado</StatusIndicator>} />
+        <Indicador titulo="Peticiones" valor={v ? numero(v.peticiones) : "—"} detalle={v && `${numero(v.porMinuto)} por minuto`} />
         <Indicador
           titulo="Errores del servidor (5xx)"
           valor={v ? `${numero(v.tasaError5xx)} %` : "—"}

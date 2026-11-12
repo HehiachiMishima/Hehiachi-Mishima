@@ -13,6 +13,7 @@ import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
 import Tabs, { type TabsProps } from "@cloudscape-design/components/tabs";
 import { Historial } from "@/compartido/auditoria/Historial";
+import { NoEncontrada } from "@/compartido/componentes/NoEncontrada";
 import { CargandoPagina } from "@/compartido/componentes/CargandoPagina";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
@@ -31,6 +32,7 @@ import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 /** Detalle de un rol: datos, permisos que concede (editables), usuarios que lo tienen e historial. */
 export function DetalleRol() {
   const id = Number(useParams().id);
+  const idValido = Number.isInteger(id) && id > 0;
   const navegar = useNavigate();
   const seguir = useSeguirEnlace();
   const { puede } = useSesion();
@@ -38,15 +40,16 @@ export function DetalleRol() {
   const directorio = useDirectorioUsuarios();
   const [pestana, setPestana] = useState("permisos");
   const consulta = useRol(id);
-  const permisos = usePermisosRol(id);
-  const usuarios = useUsuariosRol(id);
+  const permisos = usePermisosRol(idValido ? id : null);
+  const usuarios = useUsuariosRol(idValido ? id : null);
   const catalogo = useCatalogoPermisos();
   const alternar = useAlternarPermisoRol();
   const acciones = useAccionesRol({ enDetalle: true, alEliminar: () => navegar("/roles") });
   const r = consulta.data;
 
-  useMarcoPagina({ migas: [{ text: r?.nombre ?? `#${id}`, href: `/roles/${id}` }] });
+  useMarcoPagina({ migas: idValido ? [{ text: r?.nombre ?? `#${id}`, href: `/roles/${id}` }] : [] });
 
+  if (!idValido) return <NoEncontrada />;
   if (consulta.isPending) return <CargandoPagina />;
   if (!r) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.status === 404;
@@ -61,11 +64,18 @@ export function DetalleRol() {
   const asignados = new Set((permisos.data ?? []).map((p) => p.id));
   const listaUsuarios = usuarios.data ?? [];
 
-  const tabs: TabsProps.Tab[] = [
+  // Cada pestaña solo si la sesión puede leer su endpoint (mismas reglas que el backend).
+  const tabs: TabsProps.Tab[] = [];
+  if (puede(PERMISOS.VER_PERMISOS)) {
+    tabs.push(
     {
       id: "permisos",
       label: `Permisos (${asignados.size})`,
-      content: (
+      content: permisos.isError ? (
+        <Alert type="error" action={<Button onClick={() => void permisos.refetch()}>Reintentar</Button>}>
+          {mensajeDeError(permisos.error, "No se pudieron cargar los permisos del rol.")}
+        </Alert>
+      ) : (
         <TablaPermisosRol
           catalogo={catalogo.data ?? permisos.data ?? []}
           asignados={asignados}
@@ -86,10 +96,18 @@ export function DetalleRol() {
         />
       ),
     },
+    );
+  }
+  if (puede(PERMISOS.VER_USUARIOS)) {
+    tabs.push(
     {
       id: "usuarios",
       label: `Usuarios (${listaUsuarios.length})`,
-      content: (
+      content: usuarios.isError ? (
+        <Alert type="error" action={<Button onClick={() => void usuarios.refetch()}>Reintentar</Button>}>
+          {mensajeDeError(usuarios.error, "No se pudieron cargar los usuarios del rol.")}
+        </Alert>
+      ) : (
         <Table
           variant="borderless"
           items={listaUsuarios}
@@ -119,7 +137,8 @@ export function DetalleRol() {
         />
       ),
     },
-  ];
+    );
+  }
   if (puede(PERMISOS.VER_AUDITORIA)) tabs.push({ id: "historial", label: "Historial", content: <Historial relacionadoCon={`ROL:${id}`} /> });
 
   return (
@@ -134,6 +153,11 @@ export function DetalleRol() {
               <ButtonDropdown items={acciones.items(r)} onItemClick={({ detail }) => acciones.ejecutar(detail.id, r)}>
                 Acciones
               </ButtonDropdown>
+              {puede(PERMISOS.MODIFICAR_ROLES) && (
+                <Button variant="primary" disabled={!!r.protegido} disabledReason={MOTIVO_PROTEGIDO} onClick={() => acciones.ejecutar("editar", r)}>
+                  Editar
+                </Button>
+              )}
             </SpaceBetween>
           }
         >
@@ -161,7 +185,9 @@ export function DetalleRol() {
             ]}
           />
         </Container>
-        <Tabs variant="container" tabs={tabs} activeTabId={pestana} onChange={({ detail }) => setPestana(detail.activeTabId)} ariaLabel="Secciones del rol" />
+        {tabs.length > 0 && (
+          <Tabs variant="container" tabs={tabs} activeTabId={tabs.some((t) => t.id === pestana) ? pestana : tabs[0].id} onChange={({ detail }) => setPestana(detail.activeTabId)} ariaLabel="Secciones del rol" />
+        )}
       </SpaceBetween>
       {acciones.modales}
     </ContentLayout>

@@ -1,5 +1,4 @@
 import { useLocation } from "react-router";
-import Badge from "@cloudscape-design/components/badge";
 import SideNavigation, { type SideNavigationProps } from "@cloudscape-design/components/side-navigation";
 import { useSeguirEnlace } from "@/compartido/navegacion";
 import { ENTORNO } from "@/config/entorno";
@@ -22,7 +21,6 @@ export function MenuLateral() {
             type: "link",
             text: m.titulo,
             href: rutaDe(m),
-            info: m.insignia && <Badge color={m.insignia.color}>{m.insignia.texto}</Badge>,
           }),
         ),
       }),

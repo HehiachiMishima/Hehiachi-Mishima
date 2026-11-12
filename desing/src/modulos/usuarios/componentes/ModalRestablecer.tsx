@@ -15,12 +15,14 @@ export function ModalRestablecer({
   usuario,
   procesando,
   error,
+  errorGeneral,
   onConfirmar,
   onCancelar,
 }: {
   usuario: string;
   procesando: boolean;
   error: string | null;
+  errorGeneral?: string | null;
   onConfirmar: (contrasena: string) => void;
   onCancelar: () => void;
 }) {
@@ -55,6 +57,11 @@ export function ModalRestablecer({
       }
     >
       <SpaceBetween size="m">
+        {errorGeneral && (
+          <Alert type="error" header="No se pudo restablecer la contraseña">
+            {errorGeneral}
+          </Alert>
+        )}
         <Alert type="info">Deberá usar esta contraseña en su próximo inicio de sesión. Comunícasela por un canal seguro. El cambio queda en la auditoría.</Alert>
         <FormField label="Contraseña nueva" errorText={errorNueva}>
           <SpaceBetween size="xs">

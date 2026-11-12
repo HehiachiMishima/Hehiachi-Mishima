@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useCollection } from "@cloudscape-design/collection-hooks";
-import Badge from "@cloudscape-design/components/badge";
 import Box from "@cloudscape-design/components/box";
 import Header from "@cloudscape-design/components/header";
 import Pagination from "@cloudscape-design/components/pagination";
@@ -93,11 +92,7 @@ export function TablaPermisosUsuario({
               ]}
             />
           </SpaceBetween>
-          <SpaceBetween direction="horizontal" size="xs">
-            <Badge color="blue">{`${permitidos} permitidos`}</Badge>
-            <Badge color="green">{`${concedidos} concedidos individualmente`}</Badge>
-            <Badge color="red">{`${denegados} denegados individualmente`}</Badge>
-          </SpaceBetween>
+          <Box variant="small" color="text-body-secondary">{`${permitidos} permitidos · ${concedidos} concedidos individualmente · ${denegados} denegados individualmente`}</Box>
         </SpaceBetween>
       }
       pagination={<Pagination {...paginationProps} />}

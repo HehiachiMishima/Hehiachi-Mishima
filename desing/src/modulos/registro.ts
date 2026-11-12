@@ -28,8 +28,6 @@ export interface ModuloDef {
   tipoContenido: AppLayoutProps.ContentType;
   /** Icono del sistema (accesos rápidos). */
   icono: IconProps.Name;
-  /** Insignia junto al enlace del menú lateral (p. ej. "En vivo"). */
-  insignia?: { texto: string; color: "blue" | "green" | "red" | "grey" };
   /** Ayuda contextual del panel de herramientas (enlace "Info" del título). */
   ayuda: { resumen: string; puntos: string[] };
   pagina: LazyExoticComponent<ComponentType>;
@@ -80,7 +78,6 @@ export const MODULOS: readonly ModuloDef[] = [
     permiso: PERMISOS.VER_MONITOREO,
     tipoContenido: "dashboard",
     icono: "heart",
-    insignia: { texto: "En vivo", color: "green" },
     ayuda: {
       resumen: "Salud de la API en tiempo real: disponibilidad, tráfico, latencias, errores y quién está conectado.",
       puntos: [

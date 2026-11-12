@@ -17,6 +17,8 @@ import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Toggle from "@cloudscape-design/components/toggle";
 import Wizard, { type WizardProps } from "@cloudscape-design/components/wizard";
 import { CargandoPagina } from "@/compartido/componentes/CargandoPagina";
+import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
+import { NoEncontrada } from "@/compartido/componentes/NoEncontrada";
 import { RequisitosContrasena } from "@/compartido/componentes/RequisitosContrasena";
 import { useMarcoPagina } from "@/compartido/marco/useMarcoPagina";
 import { contrasenaValida } from "@/compartido/util/contrasena";
@@ -34,10 +36,27 @@ const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Alta o edición de una cuenta (patrón de formulario de página completa). */
 export function FormularioUsuario() {
   const params = useParams();
-  const id = params.id ? Number(params.id) : undefined;
-  const consulta = useUsuario(id ?? 0);
-  if (id && consulta.isPending) return <CargandoPagina />;
-  return <Formulario key={id ?? "nuevo"} id={id} inicial={id ? consulta.data : undefined} />;
+  const navegar = useNavigate();
+  const editando = params.id !== undefined;
+  const id = Number(params.id);
+  const idValido = Number.isInteger(id) && id > 0;
+  const consulta = useUsuario(editando && idValido ? id : 0);
+  if (!editando) return <Formulario key="nuevo" />;
+  if (!idValido) return <NoEncontrada />;
+  if (consulta.isPending) return <CargandoPagina />;
+  if (!consulta.data) {
+    const noExiste = consulta.error instanceof ErrorApi && consulta.error.status === 404;
+    return (
+      <Container>
+        <EstadoVacio
+          titulo={noExiste ? "Usuario no encontrado" : "No se pudo cargar el usuario"}
+          texto={noExiste ? "Puede que se haya eliminado." : mensajeDeError(consulta.error)}
+          accion={<Button onClick={() => navegar("/usuarios")}>Volver a usuarios</Button>}
+        />
+      </Container>
+    );
+  }
+  return <Formulario key={id} id={id} inicial={consulta.data} />;
 }
 
 function Formulario({ id, inicial }: { id?: number; inicial?: Usuario }) {
@@ -79,13 +98,13 @@ function Formulario({ id, inicial }: { id?: number; inicial?: Usuario }) {
     usuario: servidor.campos.usuario || obligatorio(v.usuario, 50, "El usuario es obligatorio."),
     nombre: servidor.campos.nombre || obligatorio(v.nombre, 100, "El nombre es obligatorio."),
     apellido: servidor.campos.apellido || obligatorio(v.apellido, 100, "El apellido es obligatorio."),
-    email: servidor.campos.email || obligatorio(v.email, 150, "El correo es obligatorio.") || (enviado && !CORREO.test(v.email) ? "Escribe un correo válido." : undefined),
+    email: servidor.campos.email || obligatorio(v.email, 100, "El correo es obligatorio.") || (enviado && !CORREO.test(v.email) ? "Escribe un correo válido." : undefined),
     telefono: servidor.campos.telefono || (v.telefono.length > 20 ? "Máximo 20 caracteres." : undefined),
     contrasena: editando ? undefined : servidor.campos.contrasena || (enviadoClave && !contrasenaValida(contrasena) ? "La contraseña no cumple los requisitos." : undefined),
     confirmacion: editando ? undefined : enviadoClave && confirmacion !== contrasena ? "Las contraseñas no coinciden." : undefined,
   };
 
-  const datosValidos = !!(v.usuario.trim() && v.nombre.trim() && v.apellido.trim() && CORREO.test(v.email)) && v.usuario.length <= 50 && v.telefono.length <= 20;
+  const datosValidos = !!(v.usuario.trim() && v.nombre.trim() && v.apellido.trim() && CORREO.test(v.email)) && v.usuario.length <= 50 && v.email.length <= 100 && v.nombre.length <= 100 && v.apellido.length <= 100 && v.telefono.length <= 20;
   const claveValida = contrasenaValida(contrasena) && contrasena === confirmacion;
 
   const enviar = () => {
@@ -96,12 +115,16 @@ function Formulario({ id, inicial }: { id?: number; inicial?: Usuario }) {
     guardar.mutate(
       {
         id,
-        datos: { ...v, usuario: v.usuario.trim(), telefono: v.telefono.trim() || null, ...(editando ? {} : { contrasena }) },
+        datos: editando ? { ...v, usuario: v.usuario.trim(), telefono: v.telefono.trim() } : { ...v, usuario: v.usuario.trim(), telefono: v.telefono.trim() || null, contrasena },
         rolesIniciales: roles.map((r) => Number(r.value)),
       },
       {
-        onSuccess: (u) => {
-          notificar({ type: "success", content: editando ? `Se guardaron los cambios de ${login(u.usuario)}.` : `${login(u.usuario)} fue creado.` });
+        onSuccess: ({ usuario: u, rolesFallidos }) => {
+          notificar({ type: "success", content: editando ? `Se guardaron los cambios del usuario ${login(u.usuario)}.` : `Se creó el usuario ${login(u.usuario)}.` });
+          if (rolesFallidos.length) {
+            const nombres = rolesFallidos.map((rid) => roles.find((r) => Number(r.value) === rid)?.label ?? `#${rid}`).join(", ");
+            notificar({ type: "warning", header: "Algunos roles no se asignaron", content: `La cuenta se creó, pero no se pudo asignar: ${nombres}. Asígnalos desde la pestaña Roles.` });
+          }
           navegar(`/usuarios/${u.id}`);
         },
         onError: (e) => {
@@ -216,7 +239,7 @@ function Formulario({ id, inicial }: { id?: number; inicial?: Usuario }) {
   }
 
   // Alta: asistente por pasos; cada paso se valida antes de avanzar.
-  const asignaRoles = puede(PERMISOS.ASIGNAR_ROLES);
+  const asignaRoles = puede(PERMISOS.ASIGNAR_ROLES) && puede(PERMISOS.VER_ROLES);
   const pasos: WizardProps.Step[] = [
     { title: "Datos de la cuenta", info: <InfoAyuda />, description: "La persona podrá iniciar sesión con este usuario y contraseña.", content: seccionDatos },
     { title: "Contraseña inicial", description: "Comunícasela por un canal seguro.", content: seccionClave },
@@ -246,7 +269,7 @@ function Formulario({ id, inicial }: { id?: number; inicial?: Usuario }) {
               {roles.length ? (
                 <SpaceBetween direction="horizontal" size="xs">
                   {roles.map((r) => (
-                    <Badge key={r.value} color="blue">
+                    <Badge key={r.value}>
                       {r.label}
                     </Badge>
                   ))}

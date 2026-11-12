@@ -62,7 +62,7 @@ export function columnas(enlace: (u: FilaUsuario) => React.ReactNode): TableProp
         ) : (
           <SpaceBetween direction="horizontal" size="xxs">
             {u.roles.slice(0, 2).map((r) => (
-              <Badge key={r} color="blue">
+              <Badge key={r}>
                 {r}
               </Badge>
             ))}

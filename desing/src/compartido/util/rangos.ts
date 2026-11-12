@@ -17,7 +17,11 @@ const MS: Partial<Record<DateRangePickerProps.TimeUnit, number>> = {
   hour: 3_600_000,
   day: 86_400_000,
   week: 7 * 86_400_000,
+  month: 30 * 86_400_000,
+  year: 365 * 86_400_000,
 };
+
+const UNIDADES_URL = /^(\d+)(second|minute|hour|day|week|month|year)$/;
 
 export interface RangoUrl {
   rango?: string | null;
@@ -28,7 +32,12 @@ export interface RangoUrl {
 /** URL → valor del DateRangePicker (por defecto el relativo indicado). */
 export function rangoDesdeUrl(u: RangoUrl, porDefecto = "7d"): DateRangePickerProps.Value {
   if (u.desde || u.hasta) return { type: "absolute", startDate: u.desde ?? "", endDate: u.hasta ?? "" };
-  return RANGOS_RELATIVOS.find((r) => r.key === u.rango) ?? RANGOS_RELATIVOS.find((r) => r.key === porDefecto)!;
+  const conocido = RANGOS_RELATIVOS.find((r) => r.key === u.rango);
+  if (conocido) return conocido;
+  // Periodo personalizado del selector ("3day", "90minute"…): se conserva tal cual.
+  const m = UNIDADES_URL.exec(u.rango ?? "");
+  if (m && Number(m[1]) > 0) return { type: "relative", amount: Number(m[1]), unit: m[2] as DateRangePickerProps.TimeUnit };
+  return RANGOS_RELATIVOS.find((r) => r.key === porDefecto)!;
 }
 
 /** Valor del DateRangePicker → parámetros de URL. */
@@ -49,17 +58,20 @@ export function rangoAInstantes(v: DateRangePickerProps.Value, ancla: number): {
 }
 
 const UNIDADES: Partial<Record<DateRangePickerProps.TimeUnit, [string, string]>> = {
+  second: ["segundo", "segundos"],
   minute: ["minuto", "minutos"],
   hour: ["hora", "horas"],
   day: ["día", "días"],
   week: ["semana", "semanas"],
+  month: ["mes", "meses"],
+  year: ["año", "años"],
 };
 
 /** Texto de un periodo relativo: "Últimas 24 horas", "Últimos 7 días". */
 export function textoRango(v: DateRangePickerProps.RelativeValue): string {
   const [uno, varios] = UNIDADES[v.unit] ?? [v.unit, v.unit];
-  if (v.amount === 1) return v.unit === "hour" ? "Última hora" : v.unit === "week" ? "Última semana" : `Último ${uno}`;
   const femenino = v.unit === "hour" || v.unit === "week";
+  if (v.amount === 1) return `${femenino ? "Última" : "Último"} ${uno}`;
   return `${femenino ? "Últimas" : "Últimos"} ${v.amount} ${varios}`;
 }
 

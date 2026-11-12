@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import Alert from "@cloudscape-design/components/alert";
-import Badge, { type BadgeProps } from "@cloudscape-design/components/badge";
 import Button from "@cloudscape-design/components/button";
 import ContentLayout from "@cloudscape-design/components/content-layout";
 import Grid from "@cloudscape-design/components/grid";
@@ -11,7 +10,6 @@ import SegmentedControl from "@cloudscape-design/components/segmented-control";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import Tabs from "@cloudscape-design/components/tabs";
 import Toggle from "@cloudscape-design/components/toggle";
-import { MetodoHttp } from "@/compartido/componentes/Insignias";
 import { useSeguirEnlace } from "@/compartido/navegacion";
 import { haceCuanto, login } from "@/compartido/util/formato";
 import { mensajeDeError } from "@/core/api/errores";
@@ -25,16 +23,6 @@ import { TablaIncidencias } from "./componentes/TablaIncidencias";
 import { claves, useIncidencias, useResumen, useRutas, useSerie, useUsuariosActivos } from "./consultas";
 import type { PeticionTraza, VentanaMinutos } from "./tipos";
 import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
-
-/** Etiqueta de pestaña con su contador en color (gris si es 0). */
-function Contador({ texto, n, color }: { texto: string; n: number; color: BadgeProps["color"] }) {
-  return (
-    <SpaceBetween direction="horizontal" size="xs" alignItems="center">
-      <span>{texto}</span>
-      <Badge color={n ? color : "grey"}>{n}</Badge>
-    </SpaceBetween>
-  );
-}
 
 const VENTANAS: { id: `${VentanaMinutos}`; text: string }[] = [
   { id: "5", text: "5 min" },
@@ -65,12 +53,9 @@ export default function MonitoreoPagina() {
 
   const rango = minutos <= 60 ? "1h" : "24h";
   const aTraza = (p: PeticionTraza) => (
-    <SpaceBetween direction="horizontal" size="xs" alignItems="center">
-      <MetodoHttp metodo={p.metodo} />
-      <Link href={p.idCorrelacion ? `/actividad?idCorrelacion=${encodeURIComponent(p.idCorrelacion)}` : `/actividad?ruta=${encodeURIComponent(p.ruta)}&rango=1h`} onFollow={seguir}>
-        {p.uri}
-      </Link>
-    </SpaceBetween>
+    <Link href={p.idCorrelacion ? `/actividad?idCorrelacion=${encodeURIComponent(p.idCorrelacion)}` : `/actividad?ruta=${encodeURIComponent(p.ruta)}&rango=1h`} onFollow={seguir}>
+      {`${p.metodo} ${p.uri}`}
+    </Link>
   );
   const errores = incidencias.data?.errores ?? [];
   const lentas = incidencias.data?.lentas ?? [];
@@ -78,7 +63,6 @@ export default function MonitoreoPagina() {
 
   return (
     <ContentLayout
-      headerVariant="high-contrast"
       header={
         <Header
           variant="h1"
@@ -122,35 +106,32 @@ export default function MonitoreoPagina() {
           tabs={[
             {
               id: "endpoints",
-              label: <Contador texto="Endpoints" n={rutas.data?.length ?? 0} color="blue" />,
+              label: `Endpoints (${rutas.data?.length ?? 0})`,
               content: (
                 <TablaEndpoints
                   rutas={rutas.data ?? []}
                   cargando={rutas.isPending}
                   enlace={(r) => (
-                    <SpaceBetween direction="horizontal" size="xs" alignItems="center">
-                      <MetodoHttp metodo={r.metodo} />
-                      <Link href={`/actividad?metodo=${r.metodo}&ruta=${encodeURIComponent(r.ruta)}&rango=${rango}`} onFollow={seguir}>
-                        {r.ruta}
-                      </Link>
-                    </SpaceBetween>
+                    <Link href={`/actividad?metodo=${r.metodo}&ruta=${encodeURIComponent(r.ruta)}&rango=${rango}`} onFollow={seguir}>
+                      {`${r.metodo} ${r.ruta}`}
+                    </Link>
                   )}
                 />
               ),
             },
             {
               id: "errores",
-              label: <Contador texto="Errores recientes" n={errores.length} color="red" />,
+              label: `Errores recientes (${errores.length})`,
               content: <TablaIncidencias tipo="errores" peticiones={errores} cargando={incidencias.isPending} umbralMs={incidencias.data?.umbralLentoMs ?? 1000} enlace={aTraza} />,
             },
             {
               id: "lentas",
-              label: <Contador texto="Peticiones lentas" n={lentas.length} color="severity-medium" />,
+              label: `Peticiones lentas (${lentas.length})`,
               content: <TablaIncidencias tipo="lentas" peticiones={lentas} cargando={incidencias.isPending} umbralMs={incidencias.data?.umbralLentoMs ?? 1000} enlace={aTraza} />,
             },
             {
               id: "conectados",
-              label: <Contador texto="Conectados" n={conectados.length} color="green" />,
+              label: `Conectados (${conectados.length})`,
               content: (
                 <TablaConectados
                   presentes={conectados}

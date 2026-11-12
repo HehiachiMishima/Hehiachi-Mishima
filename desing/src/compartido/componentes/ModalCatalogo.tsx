@@ -50,7 +50,8 @@ export function ModalCatalogo({
     setGuardando(true);
     setError({ campos: {} });
     try {
-      await onGuardar({ nombre: nombre.trim(), descripcion: descripcion.trim() || null, activo });
+      // Al editar, "" borra la descripción (el backend interpreta null como "sin cambios").
+      await onGuardar({ nombre: nombre.trim(), descripcion: descripcion.trim() || (inicial ? "" : null), activo });
     } catch (e) {
       const campos = e instanceof ErrorApi ? e.campos : {};
       setError({ campos, general: Object.keys(campos).length ? undefined : mensajeDeError(e) });

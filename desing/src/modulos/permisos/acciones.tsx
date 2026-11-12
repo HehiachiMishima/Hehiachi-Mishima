@@ -21,6 +21,7 @@ export function useAccionesPermiso({ enDetalle = false, alEliminar }: { enDetall
   const navegar = useNavigate();
   const { notificar } = useNotificaciones();
   const [pendiente, setPendiente] = useState<Pendiente | null>(null);
+  const [errorModal, setErrorModal] = useState<string | null>(null);
   const guardar = useGuardarPermiso();
   const estado = useCambiarEstadoPermiso();
   const eliminar = useEliminarPermiso();
@@ -31,11 +32,19 @@ export function useAccionesPermiso({ enDetalle = false, alEliminar }: { enDetall
     const con = (id: AccionPermiso, text: string): ButtonDropdownProps.Item => ({ id, text, disabled: !!bloqueo, disabledReason: bloqueo });
     const lista: ButtonDropdownProps.ItemOrGroup[] = [];
     if (!enDetalle) lista.push({ id: "detalle", text: "Ver detalle" });
-    if (puede(PERMISOS.MODIFICAR_PERMISOS)) lista.push(con("editar", "Editar"), p.activo ? con("desactivar", "Desactivar") : con("activar", "Activar"));
+    if (puede(PERMISOS.MODIFICAR_PERMISOS)) {
+      if (!enDetalle) lista.push(con("editar", "Editar"));
+      lista.push(p.activo ? con("desactivar", "Desactivar") : con("activar", "Activar"));
+    }
     if (puede(PERMISOS.ELIMINAR_PERMISOS)) lista.push(con("eliminar", "Eliminar"));
     return lista;
   }
 
+  const abrirModal = (p: NonNullable<typeof pendiente>) => {
+    setErrorModal(null);
+    setPendiente(p);
+  };
+  const falloModal = (e: unknown) => setErrorModal(mensajeDeError(e));
   const fallo = (titulo: string) => (e: unknown) => notificar({ type: "error", header: titulo, content: mensajeDeError(e) });
   const listo = (mensaje: string) => () => {
     setPendiente(null);
@@ -45,8 +54,9 @@ export function useAccionesPermiso({ enDetalle = false, alEliminar }: { enDetall
 
   function ejecutar(id: string, p: Permiso) {
     if (id === "detalle") navegar(`/permisos/${p.id}`);
-    else if (id === "activar") estado.mutate({ id: p.id, activo: true }, { onSuccess: listo(`${nombre(p)} quedó activo.`), onError: fallo("No se pudo activar") });
-    else setPendiente({ accion: id as "editar" | "desactivar" | "eliminar", permiso: p });
+    else if (id === "activar")
+      estado.mutate({ id: p.id, activo: true }, { onSuccess: listo(`El permiso ${p.nombre} quedó activo.`), onError: fallo("No se pudo activar") });
+    else abrirModal({ accion: id as "editar" | "desactivar" | "eliminar", permiso: p });
   }
 
   let modales: React.ReactNode = null;
@@ -62,7 +72,7 @@ export function useAccionesPermiso({ enDetalle = false, alEliminar }: { enDetall
         onCancelar={cancelar}
         onGuardar={async (datos) => {
           const p = await guardar.mutateAsync({ id: actual?.id, datos });
-          listo(actual ? `Se guardaron los cambios de ${nombre(p)}.` : `Se creó el permiso ${p.nombre}.`)();
+          listo(actual ? `Se guardaron los cambios del permiso ${p.nombre}.` : `Se creó el permiso ${p.nombre}.`)();
           if (!actual) navegar(`/permisos/${p.id}`);
         }}
       />
@@ -72,13 +82,14 @@ export function useAccionesPermiso({ enDetalle = false, alEliminar }: { enDetall
     const n = rolesImpacto.data?.length;
     modales = (
       <ModalConfirmacion
+        error={errorModal}
         key={`desactivar-${p.id}`}
         titulo={`¿Desactivar ${nombre(p)}?`}
         boton="Desactivar"
         conMotivo
         procesando={estado.isPending}
         onCancelar={cancelar}
-        onConfirmar={(motivo) => estado.mutate({ id: p.id, activo: false, motivo }, { onSuccess: listo(`${nombre(p)} quedó inactivo.`), onError: fallo("No se pudo desactivar") })}
+        onConfirmar={(motivo) => estado.mutate({ id: p.id, activo: false, motivo }, { onSuccess: listo(`El permiso ${p.nombre} quedó inactivo.`), onError: falloModal })}
       >
         {`Dejará de conceder acceso${n === undefined ? "" : n === 0 ? " (ningún rol lo concede ahora)" : ` a los usuarios de ${plural(n, "rol", "roles")}`}. Las asignaciones se conservan y podrás reactivarlo.`}
       </ModalConfirmacion>
@@ -87,6 +98,7 @@ export function useAccionesPermiso({ enDetalle = false, alEliminar }: { enDetall
     const p = pendiente.permiso;
     modales = (
       <ModalConfirmacion
+        error={errorModal}
         key={`eliminar-${p.id}`}
         titulo={`¿Eliminar ${nombre(p)}?`}
         boton="Eliminar"
@@ -98,7 +110,7 @@ export function useAccionesPermiso({ enDetalle = false, alEliminar }: { enDetall
               listo(`Se eliminó el permiso ${p.nombre}.`)();
               alEliminar?.();
             },
-            onError: fallo("No se pudo eliminar"),
+            onError: falloModal,
           })
         }
       >
@@ -107,5 +119,5 @@ export function useAccionesPermiso({ enDetalle = false, alEliminar }: { enDetall
     );
   }
 
-  return { items, ejecutar, crear: () => setPendiente({ accion: "crear" }), modales };
+  return { items, ejecutar, crear: () => abrirModal({ accion: "crear" }), modales };
 }

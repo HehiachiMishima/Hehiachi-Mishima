@@ -11,7 +11,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
 import TextFilter from "@cloudscape-design/components/text-filter";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
 import { useSeguirEnlace } from "@/compartido/navegacion";
@@ -21,7 +21,6 @@ import { PERMISOS } from "@/core/sesion/permisos";
 import { useSesion } from "@/core/sesion/useSesion";
 import { useAccionesPermiso } from "../acciones";
 import { usePermisos } from "../consultas";
-import type { Permiso } from "../tipos";
 import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 type Estado = "todos" | "activos" | "inactivos";
@@ -52,7 +51,14 @@ export function ListaPermisos() {
     pagination: { pageSize: 20 },
     selection: { trackBy: "id" },
   });
-  const elegido = collectionProps.selectedItems?.[0] as Permiso | undefined;
+  // La selección se resuelve contra los datos actuales: tras activar, editar o eliminar, el menú
+  // "Acciones" refleja el estado nuevo y nunca apunta a un elemento que ya no existe.
+  const idElegido = collectionProps.selectedItems?.[0]?.id;
+  const elegido = filas.find((f) => f.id === idElegido);
+  useEffect(() => {
+    if (idElegido !== undefined && consulta.data && !elegido) actions.setSelectedItems([]);
+    // oxlint-disable-next-line react/exhaustive-deps -- `actions` cambia en cada render
+  }, [idElegido, elegido, consulta.data]);
   const por = (id: number | null) => (id === null ? "—" : id === 0 ? "Sistema" : login(directorio.porId.get(id)?.usuario ?? `#${id}`));
 
   return (

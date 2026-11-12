@@ -14,6 +14,7 @@ import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
 import Tabs, { type TabsProps } from "@cloudscape-design/components/tabs";
 import { Historial } from "@/compartido/auditoria/Historial";
+import { NoEncontrada } from "@/compartido/componentes/NoEncontrada";
 import { CargandoPagina } from "@/compartido/componentes/CargandoPagina";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
@@ -30,18 +31,20 @@ import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 /** Detalle de un permiso: datos, roles que lo conceden e historial. */
 export function DetallePermiso() {
   const id = Number(useParams().id);
+  const idValido = Number.isInteger(id) && id > 0;
   const navegar = useNavigate();
   const seguir = useSeguirEnlace();
   const { puede } = useSesion();
   const directorio = useDirectorioUsuarios();
   const [pestana, setPestana] = useState("roles");
   const consulta = usePermiso(id);
-  const roles = useRolesPermiso(id);
+  const roles = useRolesPermiso(idValido ? id : null);
   const acciones = useAccionesPermiso({ enDetalle: true, alEliminar: () => navegar("/permisos") });
   const p = consulta.data;
 
-  useMarcoPagina({ migas: [{ text: p?.nombre ?? `#${id}`, href: `/permisos/${id}` }] });
+  useMarcoPagina({ migas: idValido ? [{ text: p?.nombre ?? `#${id}`, href: `/permisos/${id}` }] : [] });
 
+  if (!idValido) return <NoEncontrada />;
   if (consulta.isPending) return <CargandoPagina />;
   if (!p) {
     const noExiste = consulta.error instanceof ErrorApi && consulta.error.status === 404;
@@ -58,7 +61,11 @@ export function DetallePermiso() {
     tabs.push({
       id: "roles",
       label: `Roles que lo conceden (${roles.data?.length ?? 0})`,
-      content: (
+      content: roles.isError ? (
+        <Alert type="error" action={<Button onClick={() => void roles.refetch()}>Reintentar</Button>}>
+          {mensajeDeError(roles.error, "No se pudieron cargar los roles.")}
+        </Alert>
+      ) : (
         <Table
           variant="borderless"
           items={roles.data ?? []}
@@ -95,9 +102,16 @@ export function DetallePermiso() {
           info={<InfoAyuda />}
           description={<Box variant="code">{p.nombre}</Box>}
           actions={
-            <ButtonDropdown items={acciones.items(p)} onItemClick={({ detail }) => acciones.ejecutar(detail.id, p)}>
-              Acciones
-            </ButtonDropdown>
+            <SpaceBetween direction="horizontal" size="xs">
+              <ButtonDropdown items={acciones.items(p)} onItemClick={({ detail }) => acciones.ejecutar(detail.id, p)}>
+                Acciones
+              </ButtonDropdown>
+              {puede(PERMISOS.MODIFICAR_PERMISOS) && (
+                <Button variant="primary" disabled={!!p.protegido} disabledReason={MOTIVO_PROTEGIDO} onClick={() => acciones.ejecutar("editar", p)}>
+                  Editar
+                </Button>
+              )}
+            </SpaceBetween>
           }
         >
           {p.descripcion || p.nombre}

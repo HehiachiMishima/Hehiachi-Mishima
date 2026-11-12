@@ -8,7 +8,6 @@ import SegmentedControl from "@cloudscape-design/components/segmented-control";
 import SpaceBetween from "@cloudscape-design/components/space-between";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
-import { CategoriaAccion } from "@/compartido/componentes/Insignias";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
 import { useSeguirEnlace } from "@/compartido/navegacion";
 import { fechaHora, haceCuanto } from "@/compartido/util/formato";
@@ -63,7 +62,6 @@ export function Historial({ relacionadoCon, actorId }: { relacionadoCon: string;
               isRowHeader: true,
               cell: (e) => <StatusIndicator type={resultadoDe(e.resultado).tipo}>{etiquetaAccion(e.accion)}</StatusIndicator>,
             },
-            { id: "categoria", header: "Categoría", cell: (e) => <CategoriaAccion accion={e.accion} /> },
             { id: "quien", header: modo === "actor" ? "Sobre" : "Quién", cell: (e) => (modo === "actor" ? objetivoDeEvento(e) : actorDeEvento(e)) },
             {
               id: "cuando",

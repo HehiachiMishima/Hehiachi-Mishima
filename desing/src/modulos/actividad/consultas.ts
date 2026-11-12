@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { actividadApi } from "./api";
 import type { FiltroPeticiones } from "./tipos";
 
@@ -12,4 +12,11 @@ export const useActividadUsuario = (actorId: number | null, dias: number, zona: 
     enabled: actorId !== null,
   });
 
-export const useCerrarSesiones = () => useMutation({ mutationFn: (p: { id: number; motivo?: string }) => actividadApi.cerrarSesiones(p.id, p.motivo) });
+/** Tras cerrar sesiones, la traza, el resumen y "Conectados" de Monitoreo cambian. */
+export function useCerrarSesiones() {
+  const cliente = useQueryClient();
+  return useMutation({
+    mutationFn: (p: { id: number; motivo?: string }) => actividadApi.cerrarSesiones(p.id, p.motivo),
+    onSettled: () => Promise.all(["actividad", "monitoreo", "historial"].map((k) => cliente.invalidateQueries({ queryKey: [k] }))),
+  });
+}

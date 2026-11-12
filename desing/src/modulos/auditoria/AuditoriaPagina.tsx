@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
 import ButtonDropdown from "@cloudscape-design/components/button-dropdown";
@@ -10,10 +10,9 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
 import TokenGroup from "@cloudscape-design/components/token-group";
-import { actorDeEvento, etiquetaAccion, etiquetaEntidad, LIMITE_EXPORTACION, objetivoDeEvento, resultadoDe } from "@/compartido/auditoria/etiquetas";
+import { actorDeEvento, categoriaDe, etiquetaAccion, etiquetaEntidad, LIMITE_EXPORTACION, objetivoDeEvento, resultadoDe } from "@/compartido/auditoria/etiquetas";
 import type { AuditoriaEvento } from "@/compartido/auditoria/tipos";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
-import { CategoriaAccion } from "@/compartido/componentes/Insignias";
 import { ModalConfirmacion } from "@/compartido/componentes/ModalConfirmacion";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
 import { PanelDividido } from "@/compartido/marco/PanelDividido";
@@ -36,6 +35,18 @@ export default function AuditoriaPagina() {
   const { notificar } = useNotificaciones();
   const directorio = useDirectorioUsuarios();
   const [ancla, setAncla] = useState(() => Date.now());
+  const [limpiezas, setLimpiezas] = useState(0);
+  /**
+   * Cambio de filtros: reancla el periodo relativo a "ahora" (salvo al paginar) y cierra el detalle
+   * de un evento que puede no estar en el nuevo resultado.
+   */
+  const cambiarFiltros = useCallback(
+    (c: Record<string, string | number | null | undefined>) => {
+      if (!("pagina" in c) && !("tamano" in c)) setAncla(Date.now());
+      cambiar({ evento: null, ...c });
+    },
+    [cambiar],
+  );
   const [exportando, setExportando] = useState(false);
   const [confirmarExportar, setConfirmarExportar] = useState(false);
 
@@ -63,10 +74,13 @@ export default function AuditoriaPagina() {
   };
 
   const abrir = (e: AuditoriaEvento) => cambiar({ evento: e.id }, { conservarPagina: true });
-  const verActor = (e: AuditoriaEvento) => cambiar({ actorId: e.actorId, evento: null, rango: "30d", desde: null, hasta: null });
-  const verEntidad = (e: AuditoriaEvento) => cambiar({ relacionadoCon: `${e.entidad}:${e.entidadId?.split(":")[0]}`, evento: null, rango: "30d", desde: null, hasta: null });
-  const verPeticion = (id: string) => cambiar({ ...Object.fromEntries(CLAVES_URL.map((c) => [c, null])), q: id, rango: "30d", evento: null });
-  const limpiar = () => cambiar({ ...Object.fromEntries(CLAVES_URL.map((c) => [c, null])), evento: null });
+  const verActor = (e: AuditoriaEvento) => cambiarFiltros({ actorId: e.actorId, evento: null, rango: "30d", desde: null, hasta: null });
+  const verEntidad = (e: AuditoriaEvento) => cambiarFiltros({ relacionadoCon: `${e.entidad}:${e.entidadId?.split(":")[0]}`, evento: null, rango: "30d", desde: null, hasta: null });
+  const verPeticion = (id: string) => cambiarFiltros({ ...Object.fromEntries(CLAVES_URL.map((c) => [c, null])), q: id, rango: "30d", evento: null });
+  const limpiar = () => {
+    setLimpiezas((n) => n + 1);
+    cambiarFiltros(Object.fromEntries(CLAVES_URL.map((c) => [c, null])));
+  };
 
   const exportar = async () => {
     setConfirmarExportar(false);
@@ -115,7 +129,7 @@ export default function AuditoriaPagina() {
                 <Button iconName="refresh" ariaLabel="Actualizar" loading={consulta.isFetching} onClick={actualizar} />
                 <ButtonDropdown
                   items={Object.entries(VISTAS).map(([id, v]) => ({ id, text: v.etiqueta }))}
-                  onItemClick={({ detail }) => cambiar({ vista: detail.id })}
+                  onItemClick={({ detail }) => cambiarFiltros({ vista: detail.id })}
                 >
                   Vistas guardadas
                 </ButtonDropdown>
@@ -137,17 +151,17 @@ export default function AuditoriaPagina() {
         filter={
           <SpaceBetween size="s">
             <FiltrosAuditoria
-              key={`${params.get("actorId") ?? ""}-${directorio.lista.length > 0}`}
+              key={`${params.get("actorId") ?? ""}-${directorio.lista.length > 0}-${limpiezas}`}
               filtros={filtros}
               actores={directorio.lista}
-              onCambio={(c) => cambiar(c)}
+              onCambio={cambiarFiltros}
             />
             {(fichas.length > 0 || hayFiltros(params)) && (
               <SpaceBetween direction="horizontal" size="xs" alignItems="center">
                 {fichas.length > 0 && (
                   <TokenGroup
                     items={fichas.map((f) => ({ label: f.label, dismissLabel: `Quitar ${f.label}` }))}
-                    onDismiss={({ detail }) => cambiar({ [fichas[detail.itemIndex].clave]: null })}
+                    onDismiss={({ detail }) => cambiarFiltros({ [fichas[detail.itemIndex].clave]: null })}
                   />
                 )}
                 <Button variant="inline-link" onClick={limpiar}>
@@ -191,7 +205,7 @@ export default function AuditoriaPagina() {
                 <Box color="text-body-secondary">{actorDeEvento(e)}</Box>
               ),
           },
-          { id: "categoria", header: "Categoría", cell: (e) => <CategoriaAccion accion={e.accion} />, width: 140 },
+          { id: "categoria", header: "Categoría", cell: (e) => categoriaDe(e.accion), width: 140 },
           { id: "objetivo", header: "Objetivo", cell: (e) => objetivoDeEvento(e), minWidth: 200 },
           { id: "ip", header: "IP", cell: (e) => e.ip ?? "—" },
         ]}
@@ -204,7 +218,7 @@ export default function AuditoriaPagina() {
               texto="Amplía el periodo o quita algún filtro."
               accion={
                 <SpaceBetween direction="horizontal" size="xs">
-                  <Button onClick={() => cambiar({ rango: "30d", desde: null, hasta: null })}>Ampliar a 30 días</Button>
+                  <Button onClick={() => cambiarFiltros({ rango: "30d", desde: null, hasta: null })}>Ampliar a 30 días</Button>
                   <Button onClick={limpiar}>Limpiar filtros</Button>
                 </SpaceBetween>
               }
@@ -217,7 +231,7 @@ export default function AuditoriaPagina() {
           <Pagination
             currentPageIndex={pagina}
             pagesCount={Math.max(1, consulta.data?.totalPaginas ?? 1)}
-            onChange={({ detail }) => cambiar({ pagina: detail.currentPageIndex })}
+            onChange={({ detail }) => cambiarFiltros({ pagina: detail.currentPageIndex })}
             disabled={consulta.isFetching}
           />
         }
@@ -228,7 +242,7 @@ export default function AuditoriaPagina() {
             cancelLabel="Cancelar"
             preferences={{ pageSize: tamano }}
             pageSizePreference={{ title: "Eventos por página", options: TAMANOS.map((n) => ({ value: n, label: `${n} eventos` })) }}
-            onConfirm={({ detail }) => cambiar({ tamano: detail.pageSize ?? TAMANOS[0] })}
+            onConfirm={({ detail }) => cambiarFiltros({ tamano: detail.pageSize ?? TAMANOS[0] })}
           />
         }
       />

@@ -1,5 +1,4 @@
 import { useCollection } from "@cloudscape-design/collection-hooks";
-import Badge from "@cloudscape-design/components/badge";
 import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
 import Cards from "@cloudscape-design/components/cards";
@@ -13,7 +12,7 @@ import SpaceBetween from "@cloudscape-design/components/space-between";
 import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
 import TextFilter from "@cloudscape-design/components/text-filter";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
 import { useSeguirEnlace } from "@/compartido/navegacion";
@@ -23,7 +22,6 @@ import { PERMISOS } from "@/core/sesion/permisos";
 import { useSesion } from "@/core/sesion/useSesion";
 import { useAccionesRol } from "../acciones";
 import { useConteoUsuarios, useRoles } from "../consultas";
-import type { Rol } from "../tipos";
 import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
 
 type Estado = "todos" | "activos" | "inactivos";
@@ -56,7 +54,14 @@ export function ListaRoles() {
     pagination: { pageSize: 20 },
     selection: { trackBy: "id" },
   });
-  const elegido = collectionProps.selectedItems?.[0] as Rol | undefined;
+  // La selección se resuelve contra los datos actuales: tras activar, editar o eliminar, el menú
+  // "Acciones" refleja el estado nuevo y nunca apunta a un elemento que ya no existe.
+  const idElegido = collectionProps.selectedItems?.[0]?.id;
+  const elegido = filas.find((f) => f.id === idElegido);
+  useEffect(() => {
+    if (idElegido !== undefined && consulta.data && !elegido) actions.setSelectedItems([]);
+    // oxlint-disable-next-line react/exhaustive-deps -- `actions` cambia en cada render
+  }, [idElegido, elegido, consulta.data]);
   const por = (id: number | null) => (id === null ? "—" : id === 0 ? "Sistema" : login(directorio.porId.get(id)?.usuario ?? `#${id}`));
 
   const cabecera = (
@@ -142,7 +147,7 @@ export function ListaRoles() {
               {
                 id: "usuarios",
                 header: "Usuarios",
-                content: (r) => (r.usuarios === null ? "—" : <Badge color={r.usuarios ? "blue" : "grey"}>{r.usuarios ? plural(r.usuarios, "usuario", "usuarios") : "Sin usuarios"}</Badge>),
+                content: (r) => (r.usuarios === null ? "—" : (r.usuarios ? plural(r.usuarios, "usuario", "usuarios") : "Sin usuarios")),
                 width: 50,
               },
               { id: "cambio", header: "Último cambio", content: (r) => `${haceCuanto(r.cambio)} por ${por(r.actualizadoPor ?? r.creadoPor)}` },

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import Alert from "@cloudscape-design/components/alert";
 import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
 import FormField from "@cloudscape-design/components/form-field";
@@ -19,6 +20,7 @@ export function ModalConfirmacion({
   boton,
   procesando,
   conMotivo = false,
+  error,
   onConfirmar,
   onCancelar,
 }: {
@@ -27,6 +29,8 @@ export function ModalConfirmacion({
   boton: string;
   procesando: boolean;
   conMotivo?: boolean;
+  /** Error de la última confirmación: se muestra dentro del modal (no detrás, en la barra de avisos). */
+  error?: string | null;
   onConfirmar: (motivo: string | undefined) => void;
   onCancelar: () => void;
 }) {
@@ -50,6 +54,11 @@ export function ModalConfirmacion({
       }
     >
       <SpaceBetween size="m">
+        {error && (
+          <Alert type="error" header="No se pudo completar">
+            {error}
+          </Alert>
+        )}
         <Box variant="p">{children}</Box>
         {conMotivo && (
           <FormField label="Motivo" description="Opcional. Queda registrado en la auditoría." constraintText={`${motivo.length}/${MAX_MOTIVO}`}>

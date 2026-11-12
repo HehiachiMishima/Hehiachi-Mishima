@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useCollection } from "@cloudscape-design/collection-hooks";
 import Button from "@cloudscape-design/components/button";
@@ -16,7 +16,7 @@ import { mensajeDeError } from "@/core/api/errores";
 import { PERMISOS } from "@/core/sesion/permisos";
 import { useSesion } from "@/core/sesion/useSesion";
 import { useAccionesUsuario } from "../acciones";
-import { aFila, columnas, PREFERENCIAS_INICIALES, PROPIEDADES_FILTRO, type FilaUsuario } from "../columnas";
+import { aFila, columnas, PREFERENCIAS_INICIALES, PROPIEDADES_FILTRO } from "../columnas";
 import { PreferenciasUsuarios } from "../componentes/PreferenciasUsuarios";
 import { useResumenAccesos, useUsuarios } from "../consultas";
 import { InfoAyuda } from "@/compartido/marco/InfoAyuda";
@@ -77,7 +77,14 @@ export function ListaUsuarios() {
     selection: { trackBy: "id" },
   });
 
-  const elegido = collectionProps.selectedItems?.[0] as FilaUsuario | undefined;
+  // La selección se resuelve contra los datos actuales: tras activar, editar o eliminar, el menú
+  // "Acciones" refleja el estado nuevo y nunca apunta a un elemento que ya no existe.
+  const idElegido = collectionProps.selectedItems?.[0]?.id;
+  const elegido = filas.find((f) => f.id === idElegido);
+  useEffect(() => {
+    if (idElegido !== undefined && consulta.data && !elegido) actions.setSelectedItems([]);
+    // oxlint-disable-next-line react/exhaustive-deps -- `actions` cambia en cada render
+  }, [idElegido, elegido, consulta.data]);
   const cols = columnas((u) => (
     <Link href={`/usuarios/${u.id}`} onFollow={seguir}>
       {login(u.usuario)}

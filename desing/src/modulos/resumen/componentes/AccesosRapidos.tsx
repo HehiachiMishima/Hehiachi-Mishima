@@ -26,7 +26,7 @@ export function AccesosRapidos({ accesos }: { accesos: Acceso[] }) {
             onFollow={(e) => (e.preventDefault(), navegar(a.href))}
             header={a.titulo}
             description={a.descripcion}
-            icon={<Icon name={a.icono} variant="link" size="medium" />}
+            icon={<Icon name={a.icono} size="medium" />}
             iconVerticalAlignment="top"
             variant="embedded"
           />

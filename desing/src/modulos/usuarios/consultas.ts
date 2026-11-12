@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInvalidarGestion } from "@/compartido/datos/invalidacion";
 import { PERMISOS } from "@/core/sesion/permisos";
 import { useSesion } from "@/core/sesion/useSesion";
 import { usuariosApi } from "./api";
-import type { Ajuste, Permiso, PermisoEfectivo, Rol, UsuarioGuardar } from "./tipos";
+import type { Ajuste, Permiso, PermisoEfectivo, Rol, Usuario, UsuarioGuardar } from "./tipos";
 
 export const claves = {
   todo: ["usuarios"] as const,
@@ -14,11 +15,6 @@ export const claves = {
   catalogoRoles: ["usuarios", "catalogo-roles"] as const,
 };
 
-/** Tras cualquier cambio se refresca el módulo y el directorio compartido de usuarios. */
-function useInvalidar() {
-  const cliente = useQueryClient();
-  return () => Promise.all([cliente.invalidateQueries({ queryKey: claves.todo }), cliente.invalidateQueries({ queryKey: ["directorio-usuarios"] })]);
-}
 
 export const useUsuarios = () => useQuery({ queryKey: claves.lista, queryFn: ({ signal }) => usuariosApi.listar(signal) });
 
@@ -33,11 +29,16 @@ export function useCatalogoRoles() {
   return useQuery({
     queryKey: claves.catalogoRoles,
     queryFn: ({ signal }) => usuariosApi.catalogoRoles(signal),
-    enabled: puede(PERMISOS.ASIGNAR_ROLES) || puede(PERMISOS.VER_ROLES),
+    // GET /roles exige VER_ROLES (asignar sin poder ver el catálogo no es posible).
+    enabled: puede(PERMISOS.VER_ROLES),
   });
 }
 
-export const useRolesUsuario = (id: number) => useQuery({ queryKey: claves.roles(id), queryFn: ({ signal }) => usuariosApi.roles(id, signal) });
+/** GET /usuarios/{id}/roles exige VER_USUARIOS y VER_ROLES. */
+export function useRolesUsuario(id: number) {
+  const { puede } = useSesion();
+  return useQuery({ queryKey: claves.roles(id), queryFn: ({ signal }) => usuariosApi.roles(id, signal), enabled: id > 0 && puede(PERMISOS.VER_ROLES) });
+}
 
 /** Fila de la tabla de permisos de un usuario: resultado, ajuste y la explicación del porqué. */
 export interface FilaPermisoUsuario {
@@ -70,8 +71,10 @@ async function rolesDeOrigen(id: number, efectivos: PermisoEfectivo[], signal: A
   return mapa;
 }
 
-export const usePermisosUsuario = (id: number) =>
+/** Catálogo + ajustes + resolución: exige VER_USUARIOS y VER_PERMISOS. */
+export const usePermisosUsuario = (id: number, habilitado: boolean) =>
   useQuery({
+    enabled: id > 0 && habilitado,
     queryKey: claves.permisos(id),
     queryFn: async ({ signal }) => {
       const [catalogo, ajustes, finales, efectivos] = await Promise.all([
@@ -93,49 +96,63 @@ export const usePermisosUsuario = (id: number) =>
     },
   });
 
-/** Alta (con roles iniciales opcionales) o edición. Devuelve el usuario guardado. */
+/**
+ * Alta (con roles iniciales opcionales) o edición. Si la cuenta se creó pero algún rol no se pudo
+ * asignar, NO falla (la cuenta ya existe: reintentar daría "usuario duplicado"); devuelve los
+ * roles que fallaron para avisarlo.
+ */
 export function useGuardarUsuario() {
-  const invalidar = useInvalidar();
+  const invalidar = useInvalidarGestion();
   return useMutation({
-    mutationFn: async (p: { id?: number; datos: UsuarioGuardar; rolesIniciales?: number[] }) => {
-      if (p.id) return usuariosApi.actualizar(p.id, p.datos);
-      const creado = await usuariosApi.crear(p.datos);
-      for (const rolId of p.rolesIniciales ?? []) await usuariosApi.asignarRol(creado.id, rolId);
-      return creado;
+    mutationFn: async (p: { id?: number; datos: Partial<UsuarioGuardar>; rolesIniciales?: number[] }): Promise<{ usuario: Usuario; rolesFallidos: number[] }> => {
+      if (p.id) return { usuario: await usuariosApi.actualizar(p.id, p.datos), rolesFallidos: [] };
+      const usuario = await usuariosApi.crear(p.datos as UsuarioGuardar);
+      const rolesFallidos: number[] = [];
+      for (const rolId of p.rolesIniciales ?? []) {
+        try {
+          await usuariosApi.asignarRol(usuario.id, rolId);
+        } catch {
+          rolesFallidos.push(rolId);
+        }
+      }
+      return { usuario, rolesFallidos };
     },
-    onSettled: invalidar,
+    onSettled: () => invalidar(),
   });
 }
 
 export function useCambiarEstadoUsuario() {
-  const invalidar = useInvalidar();
-  return useMutation({ mutationFn: (p: { id: number; activo: boolean; motivo?: string }) => usuariosApi.cambiarActivo(p.id, p.activo, p.motivo), onSettled: invalidar });
+  const invalidar = useInvalidarGestion();
+  return useMutation({ mutationFn: (p: { id: number; activo: boolean; motivo?: string }) => usuariosApi.cambiarActivo(p.id, p.activo, p.motivo), onSettled: () => invalidar() });
 }
 
-export const useCerrarSesionesUsuario = () => useMutation({ mutationFn: (p: { id: number; motivo?: string }) => usuariosApi.cerrarSesiones(p.id, p.motivo) });
+export function useCerrarSesionesUsuario() {
+  const invalidar = useInvalidarGestion();
+  return useMutation({ mutationFn: (p: { id: number; motivo?: string }) => usuariosApi.cerrarSesiones(p.id, p.motivo), onSettled: () => invalidar() });
+}
 
 export function useEliminarUsuario() {
-  const invalidar = useInvalidar();
-  return useMutation({ mutationFn: (id: number) => usuariosApi.eliminar(id), onSettled: invalidar });
+  const invalidar = useInvalidarGestion();
+  return useMutation({ mutationFn: (id: number) => usuariosApi.eliminar(id), onSettled: (_r, _e, id) => void invalidar(["usuarios", id]) });
 }
 
 export const useRestablecerContrasena = () => useMutation({ mutationFn: (p: { id: number; contrasena: string }) => usuariosApi.actualizar(p.id, { contrasena: p.contrasena }) });
 
 export function useAlternarRol() {
-  const invalidar = useInvalidar();
+  const invalidar = useInvalidarGestion();
   return useMutation({
     mutationFn: (p: { id: number; rolId: number; asignar: boolean }) => (p.asignar ? usuariosApi.asignarRol(p.id, p.rolId) : usuariosApi.quitarRol(p.id, p.rolId)),
-    onSettled: invalidar,
+    onSettled: () => invalidar(),
   });
 }
 
 export function useAplicarAjuste() {
-  const invalidar = useInvalidar();
+  const invalidar = useInvalidarGestion();
   return useMutation({
     mutationFn: async (p: { id: number; permisoId: number; ajuste: Ajuste }): Promise<void> => {
       if (p.ajuste === "heredar") await usuariosApi.quitarAjuste(p.id, p.permisoId);
       else await usuariosApi.fijarAjuste(p.id, p.permisoId, p.ajuste === "conceder");
     },
-    onSettled: invalidar,
+    onSettled: () => invalidar(),
   });
 }

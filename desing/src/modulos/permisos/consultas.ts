@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInvalidarGestion } from "@/compartido/datos/invalidacion";
 import { PERMISOS } from "@/core/sesion/permisos";
 import { useSesion } from "@/core/sesion/useSesion";
 import { permisosApi } from "./api";
@@ -11,13 +12,9 @@ export const claves = {
   roles: (id: number) => ["permisos", "roles", id] as const,
 };
 
-function useInvalidar() {
-  const cliente = useQueryClient();
-  return () => Promise.all(["permisos", "roles", "usuarios"].map((k) => cliente.invalidateQueries({ queryKey: [k] })));
-}
 
 export const usePermisos = () => useQuery({ queryKey: claves.lista, queryFn: ({ signal }) => permisosApi.listar(signal) });
-export const usePermiso = (id: number) => useQuery({ queryKey: claves.uno(id), queryFn: ({ signal }) => permisosApi.obtener(id, signal) });
+export const usePermiso = (id: number) => useQuery({ queryKey: claves.uno(id), queryFn: ({ signal }) => permisosApi.obtener(id, signal), enabled: Number.isInteger(id) && id > 0 });
 
 export function useRolesPermiso(id: number | null) {
   const { puede } = useSesion();
@@ -25,16 +22,16 @@ export function useRolesPermiso(id: number | null) {
 }
 
 export function useGuardarPermiso() {
-  const invalidar = useInvalidar();
-  return useMutation({ mutationFn: (p: { id?: number; datos: PermisoGuardar }) => (p.id ? permisosApi.actualizar(p.id, p.datos) : permisosApi.crear(p.datos)), onSettled: invalidar });
+  const invalidar = useInvalidarGestion();
+  return useMutation({ mutationFn: (p: { id?: number; datos: PermisoGuardar }) => (p.id ? permisosApi.actualizar(p.id, p.datos) : permisosApi.crear(p.datos)), onSettled: () => invalidar() });
 }
 
 export function useCambiarEstadoPermiso() {
-  const invalidar = useInvalidar();
-  return useMutation({ mutationFn: (p: { id: number; activo: boolean; motivo?: string }) => permisosApi.cambiarActivo(p.id, p.activo, p.motivo), onSettled: invalidar });
+  const invalidar = useInvalidarGestion();
+  return useMutation({ mutationFn: (p: { id: number; activo: boolean; motivo?: string }) => permisosApi.cambiarActivo(p.id, p.activo, p.motivo), onSettled: () => invalidar() });
 }
 
 export function useEliminarPermiso() {
-  const invalidar = useInvalidar();
-  return useMutation({ mutationFn: (id: number) => permisosApi.eliminar(id), onSettled: invalidar });
+  const invalidar = useInvalidarGestion();
+  return useMutation({ mutationFn: (id: number) => permisosApi.eliminar(id), onSettled: (_r, _e, id) => void invalidar(["permisos", id]) });
 }

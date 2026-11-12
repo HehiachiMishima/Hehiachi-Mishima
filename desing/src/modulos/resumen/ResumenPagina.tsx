@@ -40,12 +40,10 @@ export default function ResumenPagina() {
     .map((m) => ({ id: m.id, titulo: m.titulo, descripcion: m.descripcion, href: rutaDe(m), icono: m.icono }));
 
   const estadoGraficos = analitica.isError && !analitica.data ? "error" : analitica.data ? "finished" : "loading";
-  const tercio = { colspan: { default: 12, s: 4 } };
-  const seccionesMedias = seguridad.length ? [tercio, tercio, tercio] : [{ colspan: { default: 12, s: 6 } }, { colspan: { default: 12, s: 6 } }];
+  const mitad = { colspan: { default: 12, s: 6 } };
 
   return (
     <ContentLayout
-      headerVariant="high-contrast"
       header={
         <Header
           variant="h1"
@@ -68,11 +66,11 @@ export default function ResumenPagina() {
           </Alert>
         )}
         <IndicadoresAcceso kpis={analitica.data?.kpis} />
-        <Grid gridDefinition={seccionesMedias}>
+        <Grid gridDefinition={[mitad, mitad]}>
           <RequiereAtencion kpis={analitica.data?.kpis} eventos={eventos.data} />
           <EstadoCuentas kpis={analitica.data?.kpis} estado={estadoGraficos} onReintentar={actualizar} />
-          {seguridad.length > 0 && <IndicadoresSeguridad indicadores={seguridad} />}
         </Grid>
+        {seguridad.length > 0 && <IndicadoresSeguridad indicadores={seguridad} />}
         <GraficosAcceso datos={analitica.data} estado={estadoGraficos} onReintentar={actualizar} />
         {accesos.length > 0 && <AccesosRapidos accesos={accesos} />}
       </SpaceBetween>

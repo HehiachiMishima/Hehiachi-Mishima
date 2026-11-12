@@ -8,6 +8,13 @@ describe("rangos de fechas", () => {
     expect(rangoDesdeUrl({ desde: "2026-11-01T00:00:00Z", hasta: "2026-11-02T00:00:00Z" })).toMatchObject({ type: "absolute" });
   });
 
+  it("conserva un periodo personalizado y lo convierte bien", () => {
+    const v = rangoDesdeUrl({ rango: rangoAUrl({ type: "relative", amount: 3, unit: "day" }).rango }, "7d");
+    expect(v).toMatchObject({ type: "relative", amount: 3, unit: "day" });
+    expect(rangoAInstantes({ type: "relative", amount: 1, unit: "month" }, Date.UTC(2026, 10, 30)).desde).toBe("2026-10-31T00:00:00.000Z");
+    expect(textoRango({ type: "relative", amount: 1, unit: "hour" })).toBe("Última hora");
+  });
+
   it("ida y vuelta con la URL", () => {
     expect(rangoAUrl({ type: "relative", amount: 30, unit: "day" })).toEqual({ rango: "30d", desde: null, hasta: null });
     expect(rangoAUrl({ type: "absolute", startDate: "a", endDate: "b" })).toEqual({ rango: null, desde: "a", hasta: "b" });

@@ -19,6 +19,10 @@ export const ENTORNO = {
     /** Inactividad máxima en la pestaña para renovar sin preguntar (el servidor tiene su propio límite). */
     inactividadMaxMs: 30 * 60_000,
   },
+  avisos: {
+    /** Tiempo que un aviso de éxito o informativo permanece antes de retirarse solo. */
+    duracionMs: 6_000,
+  },
   monitoreo: {
     /** Refresco automático del tablero. */
     intervaloMs: 15_000,

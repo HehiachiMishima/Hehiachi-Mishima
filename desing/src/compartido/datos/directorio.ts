@@ -9,6 +9,8 @@ export interface EntradaDirectorio {
   usuario: string;
   nombre: string;
   apellido: string;
+  /** Cuenta protegida o la propia: no admite acciones sobre ella. */
+  protegido?: boolean;
 }
 
 /**

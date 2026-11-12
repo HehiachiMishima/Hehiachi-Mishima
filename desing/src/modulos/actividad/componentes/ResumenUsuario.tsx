@@ -1,4 +1,5 @@
 import Box from "@cloudscape-design/components/box";
+import Alert from "@cloudscape-design/components/alert";
 import AreaChart from "@cloudscape-design/components/area-chart";
 import PieChart from "@cloudscape-design/components/pie-chart";
 import BarChart from "@cloudscape-design/components/bar-chart";
@@ -29,12 +30,16 @@ export function ResumenUsuario({
   nombre,
   actividad,
   cargando,
+  error,
+  onReintentar,
   onAuditoria,
   onCerrarSesiones,
 }: {
   nombre: string;
   actividad: ActividadUsuario | undefined;
   cargando: boolean;
+  error: string | null;
+  onReintentar: () => void;
   onAuditoria?: () => void;
   onCerrarSesiones?: () => void;
 }) {
@@ -48,7 +53,7 @@ export function ResumenUsuario({
       header={
         <Header
           variant="h2"
-          description={a ? (a.dias === 1 ? "Últimas 24 horas" : `Últimos ${a.dias} días`) : undefined}
+          description={a ? `${a.dias === 1 ? "Últimas 24 horas" : `Últimos ${a.dias} días`} · resumen agrupado por días` : undefined}
           actions={
             <SpaceBetween direction="horizontal" size="xs">
               {onAuditoria && <Button onClick={onAuditoria}>Cambios en auditoría</Button>}
@@ -60,7 +65,11 @@ export function ResumenUsuario({
         </Header>
       }
     >
-      {!a ? (
+      {!a && error ? (
+        <Alert type="error" action={<Button onClick={onReintentar}>Reintentar</Button>}>
+          {error}
+        </Alert>
+      ) : !a ? (
         <StatusIndicator type="loading">Cargando resumen del usuario</StatusIndicator>
       ) : (
         <SpaceBetween size="l">

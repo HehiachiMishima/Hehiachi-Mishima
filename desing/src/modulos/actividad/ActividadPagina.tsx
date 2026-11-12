@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import Box from "@cloudscape-design/components/box";
 import Button from "@cloudscape-design/components/button";
@@ -12,7 +12,6 @@ import StatusIndicator from "@cloudscape-design/components/status-indicator";
 import Table from "@cloudscape-design/components/table";
 import TokenGroup from "@cloudscape-design/components/token-group";
 import { EstadoVacio } from "@/compartido/componentes/EstadoVacio";
-import { MetodoHttp } from "@/compartido/componentes/Insignias";
 import { ModalConfirmacion } from "@/compartido/componentes/ModalConfirmacion";
 import { useDirectorioUsuarios } from "@/compartido/datos/directorio";
 import { PanelDividido } from "@/compartido/marco/PanelDividido";
@@ -44,6 +43,8 @@ export default function ActividadPagina() {
   const [ancla, setAncla] = useState(() => Date.now());
   const [seleccion, setSeleccion] = useState<PeticionTraza | null>(null);
   const [confirmarCierre, setConfirmarCierre] = useState(false);
+  const [errorCierre, setErrorCierre] = useState<string | null>(null);
+  const [limpiezas, setLimpiezas] = useState(0);
   const cerrar = useCerrarSesiones();
 
   const filtros = useMemo(() => leerFiltros(params), [params]);
@@ -61,7 +62,22 @@ export default function ActividadPagina() {
     void consulta.refetch();
     if (filtros.actorId) void actividad.refetch();
   };
-  const limpiar = () => cambiar(Object.fromEntries(CLAVES_URL.map((c) => [c, null])));
+  /**
+   * Todo cambio de filtros pasa por aquí: reancla el periodo relativo a "ahora" (salvo al paginar,
+   * para que las páginas sean estables) y cierra el detalle de una petición que puede no estar ya.
+   */
+  const cambiarFiltros = useCallback(
+    (c: Record<string, string | number | null | undefined>) => {
+      if (!("pagina" in c) && !("tamano" in c)) setAncla(Date.now());
+      setSeleccion(null);
+      cambiar(c);
+    },
+    [cambiar],
+  );
+  const limpiar = () => {
+    setLimpiezas((n) => n + 1);
+    cambiarFiltros(Object.fromEntries(CLAVES_URL.map((c) => [c, null])));
+  };
 
   const cerrarSesiones = (motivo: string | undefined) =>
     cerrar.mutate(
@@ -69,17 +85,9 @@ export default function ActividadPagina() {
       {
         onSuccess: () => {
           setConfirmarCierre(false);
-          notificar({
-            type: "success",
-            content: `Se cerraron las sesiones de ${nombreUsuario}. Deberá iniciar sesión de nuevo.`,
-          });
+          notificar({ type: "success", content: `Se cerraron las sesiones de ${nombreUsuario}. Deberá iniciar sesión de nuevo.` });
         },
-        onError: (e) =>
-          notificar({
-            type: "error",
-            header: "No se pudieron cerrar las sesiones",
-            content: mensajeDeError(e),
-          }),
+        onError: (e) => setErrorCierre(mensajeDeError(e)),
       },
     );
 
@@ -108,9 +116,11 @@ export default function ActividadPagina() {
             <ResumenUsuario
               nombre={nombreUsuario}
               actividad={actividad.data}
+              error={actividad.isError ? mensajeDeError(actividad.error, "No se pudo cargar el resumen del usuario.") : null}
+              onReintentar={() => void actividad.refetch()}
               cargando={actividad.isFetching}
               onAuditoria={puede(PERMISOS.VER_AUDITORIA) ? () => navegar(`/auditoria?actorId=${filtros.actorId}&rango=30d`) : undefined}
-              onCerrarSesiones={puede(PERMISOS.MODIFICAR_USUARIOS) ? () => setConfirmarCierre(true) : undefined}
+              onCerrarSesiones={puede(PERMISOS.MODIFICAR_USUARIOS) && usuario && !usuario.protegido ? () => (setErrorCierre(null), setConfirmarCierre(true)) : undefined}
             />
           )}
           <Table
@@ -143,14 +153,14 @@ export default function ActividadPagina() {
             filter={
               <SpaceBetween size="s">
                 <FiltrosActividad
-                  key={`${params.get("actorId") ?? ""}-${directorio.lista.length > 0}`}
+                  key={`${params.get("actorId") ?? ""}-${directorio.lista.length > 0}-${limpiezas}`}
                   filtros={filtros}
                   usuarios={directorio.lista}
-                  onCambio={(c) => cambiar(c)}
+                  onCambio={cambiarFiltros}
                 />
                 {(fichas.length > 0 || hayFiltros(params)) && (
                   <SpaceBetween direction="horizontal" size="xs" alignItems="center">
-                    {fichas.length > 0 && <TokenGroup items={fichas} onDismiss={() => cambiar({ ruta: null })} />}
+                    {fichas.length > 0 && <TokenGroup items={fichas} onDismiss={() => cambiarFiltros({ ruta: null })} />}
                     <Button variant="inline-link" onClick={limpiar}>
                       Limpiar filtros
                     </Button>
@@ -177,12 +187,9 @@ export default function ActividadPagina() {
                 isRowHeader: true,
                 minWidth: 260,
                 cell: (p) => (
-                <SpaceBetween direction="horizontal" size="xs" alignItems="center">
-                  <MetodoHttp metodo={p.metodo} />
-                  <Link href="#" onFollow={(e) => (e.preventDefault(), setSeleccion(p))}>
-                    {p.uri}
-                  </Link>
-                </SpaceBetween>
+                <Link href="#" onFollow={(e) => (e.preventDefault(), setSeleccion(p))}>
+                  {`${p.metodo} ${p.uri}`}
+                </Link>
               ),
               },
               {
@@ -190,7 +197,7 @@ export default function ActividadPagina() {
                 header: "Usuario",
                 cell: (p) =>
                   p.actorId ? (
-                    <Link variant="secondary" href={`?actorId=${p.actorId}`} onFollow={(e) => (e.preventDefault(), cambiar({ actorId: p.actorId }))}>
+                    <Link variant="secondary" href={`?actorId=${p.actorId}`} onFollow={(e) => (e.preventDefault(), cambiarFiltros({ actorId: p.actorId }))}>
                       {login(p.actorUsuario ?? `#${p.actorId}`)}
                     </Link>
                   ) : (
@@ -218,7 +225,7 @@ export default function ActividadPagina() {
                   texto="Amplía el periodo o quita algún filtro."
                   accion={
                     <SpaceBetween direction="horizontal" size="xs">
-                      <Button onClick={() => cambiar({ rango: "30d", desde: null, hasta: null })}>Ampliar a 30 días</Button>
+                      <Button onClick={() => cambiarFiltros({ rango: "30d", desde: null, hasta: null })}>Ampliar a 30 días</Button>
                       <Button onClick={limpiar}>Limpiar filtros</Button>
                     </SpaceBetween>
                   }
@@ -231,7 +238,7 @@ export default function ActividadPagina() {
               <Pagination
                 currentPageIndex={pagina}
                 pagesCount={Math.max(1, consulta.data?.totalPaginas ?? 1)}
-                onChange={({ detail }) => cambiar({ pagina: detail.currentPageIndex })}
+                onChange={({ detail }) => cambiarFiltros({ pagina: detail.currentPageIndex })}
                 disabled={consulta.isFetching}
               />
             }
@@ -248,7 +255,7 @@ export default function ActividadPagina() {
                     label: `${n} peticiones`,
                   })),
                 }}
-                onConfirm={({ detail }) => cambiar({ tamano: detail.pageSize ?? TAMANOS[0] })}
+                onConfirm={({ detail }) => cambiarFiltros({ tamano: detail.pageSize ?? TAMANOS[0] })}
               />
             }
           />
@@ -266,7 +273,7 @@ export default function ActividadPagina() {
             peticion={seleccion}
             onFiltrarEndpoint={(ruta) => {
               setSeleccion(null);
-              cambiar({ ruta });
+              cambiarFiltros({ ruta });
             }}
             onVerAuditoria={puede(PERMISOS.VER_AUDITORIA) ? (id) => navegar(`/auditoria?q=${encodeURIComponent(id)}&rango=30d`) : undefined}
           />
@@ -275,14 +282,15 @@ export default function ActividadPagina() {
 
       {confirmarCierre && (
         <ModalConfirmacion
-          titulo={`¿Cerrar las sesiones de ${nombreUsuario}?`}
+          titulo={`¿Cerrar las sesiones de ${usuario ? `${usuario.nombre} ${usuario.apellido} (${nombreUsuario})` : nombreUsuario}?`}
           boton="Cerrar sesiones"
           conMotivo
+          error={errorCierre}
           procesando={cerrar.isPending}
           onConfirmar={cerrarSesiones}
           onCancelar={() => setConfirmarCierre(false)}
         >
-          Sus sesiones dejarán de funcionar al instante y tendrá que iniciar sesión de nuevo. Su cuenta, roles y permisos no cambian.
+          Sus sesiones abiertas dejarán de funcionar al instante y tendrá que iniciar sesión de nuevo. La cuenta, sus roles y permisos no cambian.
         </ModalConfirmacion>
       )}
     </>

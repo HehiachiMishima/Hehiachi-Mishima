@@ -12,7 +12,6 @@ import Table from "@cloudscape-design/components/table";
 import Toggle from "@cloudscape-design/components/toggle";
 import { actorDeEvento, objetivoDeEvento, resultadoDe } from "@/compartido/auditoria/etiquetas";
 import type { AuditoriaEvento } from "@/compartido/auditoria/tipos";
-import { CategoriaAccion } from "@/compartido/componentes/Insignias";
 import { fechaCompleta, haceCuanto } from "@/compartido/util/formato";
 import { navegador } from "@/compartido/util/navegador";
 
@@ -56,7 +55,6 @@ export function DetalleEvento({
   return (
     <SpaceBetween size="l">
       <SpaceBetween direction="horizontal" size="xs" alignItems="center">
-        <CategoriaAccion accion={evento.accion} />
         <StatusIndicator type={r.tipo}>{r.etiqueta}</StatusIndicator>
       </SpaceBetween>
       <SpaceBetween direction="horizontal" size="xs">

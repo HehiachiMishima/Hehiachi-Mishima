@@ -39,9 +39,12 @@ export const hayFiltros = (p: URLSearchParams): boolean => CLAVES_URL.some((c) =
 
 /** Días del resumen del usuario según el periodo (1, 7 o 30). */
 export function diasDe(f: FiltrosUi): number {
-  if (f.rango.type === "absolute") return 30;
-  const ms = f.rango.unit === "day" ? f.rango.amount : f.rango.unit === "week" ? f.rango.amount * 7 : 1;
-  return Math.min(30, Math.max(1, ms));
+  if (f.rango.type === "absolute") {
+    const ms = new Date(f.rango.endDate).getTime() - new Date(f.rango.startDate).getTime();
+    return Math.min(30, Math.max(1, Math.ceil(ms / 86_400_000) || 30));
+  }
+  const dias = { second: 1 / 86_400, minute: 1 / 1_440, hour: 1 / 24, day: 1, week: 7, month: 30, year: 365 }[f.rango.unit] ?? 1;
+  return Math.min(30, Math.max(1, Math.ceil(f.rango.amount * dias)));
 }
 
 export function aConsulta(f: FiltrosUi, ancla: number, pagina: number, tamano: number): FiltroPeticiones {
